@@ -34,6 +34,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of it. A workspace package still wins over an alias sharing its prefix, and
   an alias that matches a pattern but names no indexed file is now reported as
   `unresolved` instead of being counted as an external package.
+- **Package `exports` maps are now read**, closing the second under-selection
+  gap. A bare import of a sibling workspace package consults that package's
+  `exports` — conditional exports, fallback arrays and `*` subpath patterns
+  included — before falling back to the conventional `src/index.*` guesses.
+
+  Because `exports` names published entry points that usually do not exist in a
+  source checkout, a target of `./dist/entry.js` is also probed as `src/entry`,
+  `lib/entry`, `source/entry` and `entry`. Reproduced before fixing: a workspace
+  package exporting `.` as `./dist/entry.js` with its source at `lib/entry.ts`
+  selected 0 of 2 test files.
+
+  The layer is strictly additive — a package with no `exports`, or whose targets
+  name no indexed file, resolves exactly as it did before.
 
 
 ## [0.2.0] - 2026-09-17

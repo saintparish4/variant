@@ -22,6 +22,12 @@ export interface WorkspacePackage {
 		dependencies?: Record<string, string>;
 		devDependencies?: Record<string, string>;
 		peerDependencies?: Record<string, string>;
+		/**
+		 * Kept unparsed: the shape is a recursive union of strings, arrays and
+		 * condition objects, and `core/graph/package-exports.ts` is the one
+		 * place that interprets it.
+		 */
+		exports?: unknown;
 	};
 }
 

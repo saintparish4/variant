@@ -146,7 +146,11 @@ export async function traceBlastRadius(
 			),
 			options.pathAliases ?? readPathAliases(cwd),
 		]);
-		importGraph = buildImportGraph(symbolGraph, { packageDirs, pathAliases });
+		importGraph = buildImportGraph(symbolGraph, {
+			packageDirs,
+			pathAliases,
+			packageExports: packageExportsFrom(options.packageGraph),
+		});
 	}
 
 	const files = changedFiles.map(toPosix).sort();
@@ -321,6 +325,19 @@ export function packageDirsFrom(
 	const out: Record<string, string> = {};
 	for (const pkg of packageGraph?.packages ?? []) {
 		out[pkg.manifest.name] = toPosix(path.relative(cwd, pkg.dir));
+	}
+	return out;
+}
+
+/** Package name -> its `exports` field, for bare-import resolution. */
+export function packageExportsFrom(
+	packageGraph: PackageGraph | undefined,
+): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const pkg of packageGraph?.packages ?? []) {
+		if (pkg.manifest.exports !== undefined) {
+			out[pkg.manifest.name] = pkg.manifest.exports;
+		}
 	}
 	return out;
 }

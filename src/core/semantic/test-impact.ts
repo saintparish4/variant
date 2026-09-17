@@ -23,7 +23,11 @@ import type { ImportGraph } from "../graph/import-graph.js";
 import { buildImportGraph } from "../graph/import-graph.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
 import type { BlastRadius, TraceBlastRadiusOptions } from "./blast-radius.js";
-import { packageDirsFrom, traceBlastRadius } from "./blast-radius.js";
+import {
+	packageDirsFrom,
+	packageExportsFrom,
+	traceBlastRadius,
+} from "./blast-radius.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
 
 /** test file -> every workspace file in its static import closure (incl. itself). */
@@ -195,6 +199,7 @@ export async function traceTestImpact(
 		importGraph = buildImportGraph(symbolGraph, {
 			packageDirs: packageDirsFrom(cwd, options.packageGraph),
 			pathAliases,
+			packageExports: packageExportsFrom(options.packageGraph),
 		});
 	}
 

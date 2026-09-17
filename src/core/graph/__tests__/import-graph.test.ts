@@ -365,3 +365,137 @@ describe("buildImportGraph with tsconfig paths", () => {
 		expect(sorted(graph.externals.get("src/app.ts"))).toEqual(["@/lib/date"]);
 	});
 });
+
+describe("buildImportGraph with package exports", () => {
+	const packageDirs = { "@org/utils": "packages/utils" };
+
+	it("follows an exports map that points at build output, back to source", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/date.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils/date")],
+			}),
+			{
+				packageDirs,
+				packageExports: {
+					"@org/utils": { "./date": "./dist/date.js" },
+				},
+			},
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/src/date.ts",
+		]);
+	});
+
+	it("takes an exports target that already names a source file", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/lib/main.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils")],
+			}),
+			{
+				packageDirs,
+				packageExports: { "@org/utils": { ".": "./lib/main.ts" } },
+			},
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/lib/main.ts",
+		]);
+	});
+
+	it("prefers a source condition over the published one", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/index.ts": [],
+				"packages/utils/dist/index.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils")],
+			}),
+			{
+				packageDirs,
+				packageExports: {
+					"@org/utils": {
+						".": { source: "./src/index.ts", import: "./dist/index.js" },
+					},
+				},
+			},
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/src/index.ts",
+		]);
+	});
+
+	it("expands a wildcard export subpath", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/nested/date.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils/nested/date")],
+			}),
+			{
+				packageDirs,
+				packageExports: { "@org/utils": { "./*": "./dist/*.js" } },
+			},
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/src/nested/date.ts",
+		]);
+	});
+
+	it("still finds the conventional entry point when exports misses", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/index.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils")],
+			}),
+			{
+				packageDirs,
+				packageExports: { "@org/utils": { ".": "./nowhere/index.js" } },
+			},
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/src/index.ts",
+		]);
+	});
+
+	it("resolves a package with no exports exactly as before", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/index.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils")],
+			}),
+			{ packageDirs },
+		);
+
+		expect(sorted(graph.imports.get("packages/app/src/index.ts"))).toEqual([
+			"packages/utils/src/index.ts",
+		]);
+	});
+
+	it("propagates a change through an exports-only edge", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/utils/src/date.ts": [],
+				"packages/app/src/index.ts": [staticImport("@org/utils/date")],
+				"packages/app/src/index.test.ts": [staticImport("./index.js")],
+			}),
+			{
+				packageDirs,
+				packageExports: { "@org/utils": { "./date": "./dist/date.js" } },
+			},
+		);
+
+		expect(
+			[
+				...computeAffectedFiles(new Set(["packages/utils/src/date.ts"]), graph),
+			].sort(),
+		).toEqual([
+			"packages/app/src/index.test.ts",
+			"packages/app/src/index.ts",
+			"packages/utils/src/date.ts",
+		]);
+	});
+});

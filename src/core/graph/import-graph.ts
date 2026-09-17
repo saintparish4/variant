@@ -25,6 +25,7 @@
 
 import path from "node:path";
 import type { ImportEntry, SymbolGraph } from "../semantic/symbol-graph.js";
+import { exportsCandidates } from "./package-exports.js";
 import type { PackageGraph } from "./package-graph.js";
 import type { PathAlias } from "./tsconfig-paths.js";
 import { matchPathAlias } from "./tsconfig-paths.js";
@@ -69,6 +70,11 @@ export interface ImportGraphOptions {
 	 * name always wins over an alias that happens to share its prefix.
 	 */
 	pathAliases?: readonly PathAlias[];
+	/**
+	 * Workspace package name -> its `package.json` `exports` field. Consulted
+	 * before the conventional entry-point guesses, which remain the fallback.
+	 */
+	packageExports?: Record<string, unknown>;
 }
 
 const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"] as const;
@@ -88,6 +94,7 @@ export function buildImportGraph(
 	const files = new Set(Object.keys(symbolGraph.files));
 	const packageDirs = options.packageDirs ?? {};
 	const pathAliases = options.pathAliases ?? [];
+	const packageExports = options.packageExports ?? {};
 
 	const imports = new Map<string, Set<string>>();
 	const dependents = new Map<string, Set<string>>();
@@ -133,7 +140,12 @@ export function buildImportGraph(
 			}
 			const pkg = matchWorkspacePackage(spec, packageDirs);
 			if (pkg !== undefined) {
-				const resolved = resolvePackageImport(pkg.dir, pkg.subpath, files);
+				const resolved = resolvePackageImport(
+					pkg.dir,
+					pkg.subpath,
+					files,
+					packageExports[pkg.name],
+				);
 				if (resolved === undefined) unresolved.get(file)?.add(spec);
 				else addEdge(file, resolved, imp);
 				continue;
@@ -189,12 +201,16 @@ export async function loadImportGraph(
 	]);
 
 	const packageDirs: Record<string, string> = {};
+	const packageExports: Record<string, unknown> = {};
 	for (const pkg of options.packageGraph?.packages ?? []) {
 		packageDirs[pkg.manifest.name] = path
 			.relative(cwd, pkg.dir)
 			.replace(/\\/g, "/");
+		if (pkg.manifest.exports !== undefined) {
+			packageExports[pkg.manifest.name] = pkg.manifest.exports;
+		}
 	}
-	return buildImportGraph(graph, { packageDirs, pathAliases });
+	return buildImportGraph(graph, { packageDirs, pathAliases, packageExports });
 }
 
 /** Files that directly import `file`. Empty set for unknown files. */
@@ -256,23 +272,30 @@ function resolvePackageImport(
 	pkgDir: string,
 	subpath: string,
 	files: ReadonlySet<string>,
+	exportsField?: unknown,
 ): string | undefined {
+	// `exports` names the published entry point, so it is the most direct
+	// evidence of what a bare import means. The conventional guesses below stay
+	// as the fallback: a package without `exports`, or one whose targets name
+	// no indexed file, must resolve exactly as it did before.
+	const fromExports = exportsCandidates(exportsField, subpath);
+	const candidates = fromExports.flatMap((base) =>
+		candidatePaths(path.posix.join(pkgDir, base)),
+	);
+
 	if (subpath === "") {
-		return firstExisting(
-			[
-				...candidatePaths(`${pkgDir}/src/index`),
-				...candidatePaths(`${pkgDir}/index`),
-			],
-			files,
+		candidates.push(
+			...candidatePaths(`${pkgDir}/src/index`),
+			...candidatePaths(`${pkgDir}/index`),
 		);
-	}
-	return firstExisting(
-		[
+	} else {
+		candidates.push(
 			...candidatePaths(path.posix.join(pkgDir, subpath)),
 			...candidatePaths(path.posix.join(pkgDir, "src", subpath)),
-		],
-		files,
-	);
+		);
+	}
+
+	return firstExisting(candidates, files);
 }
 
 function resolveAliasImport(
@@ -290,14 +313,18 @@ function resolveAliasImport(
 function matchWorkspacePackage(
 	spec: string,
 	packageDirs: Record<string, string>,
-): { dir: string; subpath: string } | undefined {
+): { name: string; dir: string; subpath: string } | undefined {
 	const segments = spec.split("/");
 	const nameLength = spec.startsWith("@") ? 2 : 1;
 	if (segments.length < nameLength) return undefined;
 	const name = segments.slice(0, nameLength).join("/");
 	const dir = packageDirs[name];
 	if (dir === undefined) return undefined;
-	return { dir: toPosix(dir), subpath: segments.slice(nameLength).join("/") };
+	return {
+		name,
+		dir: toPosix(dir),
+		subpath: segments.slice(nameLength).join("/"),
+	};
 }
 
 /**
