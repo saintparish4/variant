@@ -1,4 +1,5 @@
 import type { ImpactReport } from "../../core/impact/predict.js";
+import type { VerifyResult } from "../../core/impact/verify.js";
 import { verdictText } from "../../core/semantic/verdict.js";
 import type { Printer } from "../visuals/printer.js";
 import { getPrinter } from "../visuals/printer.js";
@@ -9,6 +10,9 @@ import { lines } from "./writer.js";
 const MAX_LISTED_FILES = 20;
 
 const count = (value: number): string => value.toLocaleString("en-US");
+
+export const NO_PREDICTION_MESSAGE =
+	"impact verify: no logged prediction to reconcile against. Run `variant impact` before the test run, or pass --head-sha for a specific commit.";
 
 export const NO_CHANGED_FILES_MESSAGE =
 	"impact: could not determine changed files (is this a git repository with at least one prior commit?). Pass --base <ref> against a valid ref.";
@@ -91,6 +95,82 @@ export function renderImpact(
 			printer,
 			"",
 			"(warning: could not write .variant/history/impact.jsonl — shadow-mode logging skipped)",
+		);
+	}
+}
+
+export function renderImpactVerifyJson(
+	result: VerifyResult,
+	printer: Printer = getPrinter(),
+): void {
+	const { prediction, ...rest } = result;
+	lines(
+		printer,
+		JSON.stringify(
+			{ ...rest, predictedAt: prediction.at, baseRef: prediction.baseRef },
+			null,
+			2,
+		),
+	);
+}
+
+export function renderImpactVerify(
+	result: VerifyResult,
+	printer: Printer = getPrinter(),
+): void {
+	const { prediction } = result;
+
+	lines(
+		printer,
+		"",
+		`Prediction: ${prediction.at} (${prediction.headSha ?? "no commit recorded"})`,
+		`Matched by: ${result.matchedBy === "head-sha" ? "head SHA" : "most recent — verify this is the right run"}`,
+		"",
+		`Predicted:  ${count(prediction.affectedTests.length)} of ${count(prediction.totalTests)} test files${prediction.selectAll ? " (selected all)" : ""}`,
+		`Failed:     ${plural(result.failedTests.length, "test file")}`,
+	);
+
+	if (result.failedTests.length === 0) {
+		lines(
+			printer,
+			"",
+			"No failures in this run, so it neither confirms nor refutes the prediction.",
+		);
+		return;
+	}
+
+	lines(
+		printer,
+		"",
+		`Caught:      ${count(result.caught.length)} (inside the predicted set)`,
+		`False skips: ${count(result.falseSkips.length)} (would have been missed)`,
+	);
+
+	if (result.falseSkips.length > 0) {
+		lines(printer, "", "False skips:");
+		for (const test of result.falseSkips.slice(0, MAX_LISTED_FILES)) {
+			lines(printer, `  ${test}`);
+		}
+		if (result.falseSkips.length > MAX_LISTED_FILES) {
+			lines(
+				printer,
+				`  … and ${count(result.falseSkips.length - MAX_LISTED_FILES)} more`,
+			);
+		}
+	}
+
+	lines(
+		printer,
+		"",
+		`False-skip rate this run: ${(result.falseSkipRate * 100).toFixed(1)}%`,
+		"One run is not a rate. Reconcile many before reading anything into it.",
+	);
+
+	if (!result.historyLogged) {
+		lines(
+			printer,
+			"",
+			"(warning: could not write .variant/history/reconciliation.jsonl)",
 		);
 	}
 }

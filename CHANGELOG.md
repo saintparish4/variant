@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`variant impact verify <report>`** — reconciles a logged prediction against
+  a Vitest (`--reporter=json`) or Jest (`--json`) report and reports **false
+  skips**: tests that failed and that the prediction did not select. This closes
+  the shadow-mode loop. `readImpactPredictions` finally has a caller outside its
+  own tests, and each reconciliation is appended to
+  `.variant/history/reconciliation.jsonl` so a rate accumulates across runs.
+- Predictions now record `headSha`, the commit they were made against, so a
+  prediction can be matched to the test run that actually happened. Without it
+  the log recorded what variant thought with nothing to check it against.
+  `impact verify --head-sha <sha>` selects a specific run.
+- `ImpactReportError` (`IMPACT_REPORT_ERROR`), for a test report that cannot be
+  read as one.
+
+
 ## [0.2.0] - 2026-09-17
 
 Cut to the part nobody else does. variant is a change-intelligence tool for

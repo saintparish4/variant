@@ -20,6 +20,7 @@ import type { TestImpactResult } from "../semantic/test-impact.js";
 import { traceTestImpact } from "../semantic/test-impact.js";
 import type { BuildVerdict } from "../semantic/verdict.js";
 import { deriveVerdict } from "../semantic/verdict.js";
+import { readHeadSha } from "../vcs/git.js";
 
 export const DEFAULT_IMPACT_BASE_REF = "HEAD~1";
 
@@ -29,6 +30,8 @@ export interface ImpactOptions {
 	changedFiles?: string[];
 	/** DI for tests: content of a file at baseRef. */
 	readBefore?: TraceBlastRadiusOptions["readBefore"];
+	/** DI for tests: the head SHA to record, instead of asking git. */
+	headSha?: string | null;
 }
 
 export interface ImpactReport {
@@ -65,9 +68,13 @@ export async function predictImpact(
 		{ forceBuild: result.tests.selectAll },
 	);
 
+	const headSha =
+		options.headSha !== undefined ? options.headSha : await readHeadSha(cwd);
+
 	const historyLogged = await appendImpactPrediction(defaultHistoryDir(cwd), {
 		at: new Date().toISOString(),
 		baseRef,
+		headSha,
 		changedFiles: result.radius.changed.map((change) => change.filePath),
 		affectedFiles: result.radius.affectedFiles.length,
 		affectedPackages: result.radius.affectedPackages,

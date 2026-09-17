@@ -61,7 +61,7 @@ const program = new Command()
 		);
 	});
 
-program
+const impactCmd = program
 	.command("impact")
 	.description(
 		"Predict which tests a change requires — report-only; the full suite should still run",
@@ -75,6 +75,25 @@ program
 			...(opts.json === true && { json: true }),
 		});
 	});
+
+impactCmd
+	.command("verify <report>")
+	.description(
+		"Reconcile a logged prediction against a Vitest/Jest JSON report — reports false skips",
+	)
+	.option("--head-sha <sha>", "reconcile the prediction made at this commit")
+	.option("--json", "output the reconciliation as JSON")
+	.action(
+		async (report: string, opts: { headSha?: string; json?: boolean }) => {
+			const { registerImpactVerifyAction } = await import(
+				"./commands/impact.js"
+			);
+			await registerImpactVerifyAction(report, {
+				...(opts.headSha !== undefined && { headSha: opts.headSha }),
+				...(opts.json === true && { json: true }),
+			});
+		},
+	);
 
 program
 	.command("diff <file>")

@@ -158,6 +158,17 @@ function parseCatFileBatch(
 }
 
 /**
+ * The commit a prediction was made against, so a logged prediction can be
+ * matched to the test run that actually happened. Null outside a repository,
+ * or on a repository with no commits yet.
+ */
+export async function readHeadSha(cwd: string): Promise<string | null> {
+	const stdout = await git(cwd, ["rev-parse", "HEAD"]);
+	const sha = stdout?.trim();
+	return sha === undefined || sha === "" ? null : sha;
+}
+
+/**
  * Files differing between `ref` and the working tree.
  *
  * The trailing `--` terminates option parsing so a crafted ref (one starting

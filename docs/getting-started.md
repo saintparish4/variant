@@ -68,6 +68,17 @@ Reading it:
 Add `--json` for the machine-readable form, which includes the full blast
 radius and every note.
 
+To check a prediction against reality, keep the test runner's JSON report and
+reconcile it:
+
+```bash
+npx vitest run --reporter=json --outputFile=report.json
+variant impact verify report.json
+```
+
+That reports **false skips** — tests that failed and that the prediction did not
+select. See [impact-and-workspace.md](./impact-and-workspace.md).
+
 ## 3. Use it on a PR
 
 ```bash

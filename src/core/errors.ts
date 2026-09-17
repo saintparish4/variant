@@ -66,6 +66,14 @@ export class GraphError extends VariantError {
 	}
 }
 
+export class ImpactReportError extends VariantError {
+	constructor(message: string) {
+		super("IMPACT_REPORT_ERROR", `Could not read the test report: ${message}`);
+		this.hint =
+			"Pass a Vitest `--reporter=json --outputFile=<path>` or Jest `--json --outputFile=<path>` report.";
+	}
+}
+
 export class CliUsageError extends VariantError {
 	constructor(message: string) {
 		super("CLI_USAGE", message);

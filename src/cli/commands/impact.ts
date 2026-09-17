@@ -1,9 +1,13 @@
 import type { ImpactOptions } from "../../core/impact/predict.js";
 import { predictImpact } from "../../core/impact/predict.js";
+import { verifyImpact } from "../../core/impact/verify.js";
 import {
 	NO_CHANGED_FILES_MESSAGE,
+	NO_PREDICTION_MESSAGE,
 	renderImpact,
 	renderImpactJson,
+	renderImpactVerify,
+	renderImpactVerifyJson,
 } from "../render/impact.js";
 import { lines } from "../render/writer.js";
 import { getPrinter } from "../visuals/printer.js";
@@ -29,4 +33,31 @@ export async function registerImpactAction(
 	}
 
 	renderImpact(report);
+}
+
+export interface ImpactVerifyActionOptions {
+	/** Reconcile against the prediction for this commit. */
+	headSha?: string;
+	json?: boolean;
+}
+
+export async function registerImpactVerifyAction(
+	reportPath: string,
+	opts: ImpactVerifyActionOptions = {},
+): Promise<void> {
+	const result = await verifyImpact(process.cwd(), reportPath, {
+		...(opts.headSha !== undefined && { headSha: opts.headSha }),
+	});
+
+	if (result === null) {
+		lines(getPrinter(), NO_PREDICTION_MESSAGE);
+		return;
+	}
+
+	if (opts.json === true) {
+		renderImpactVerifyJson(result);
+		return;
+	}
+
+	renderImpactVerify(result);
 }

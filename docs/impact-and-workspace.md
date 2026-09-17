@@ -77,6 +77,65 @@ Certain changed paths invalidate the whole test suite regardless of import closu
 - `tsconfig*.json`
 - Test/build runner configs (`vitest.config.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`)
 
+## `variant impact verify`
+
+`impact` records what variant thought. `impact verify` reads what actually
+happened and diffs the two, which is the only thing that can ever earn the
+right to skip a test.
+
+```bash
+# 1. predict, before the run
+variant impact --base origin/main
+
+# 2. run the full suite, keeping the machine-readable report
+npx vitest run --reporter=json --outputFile=report.json
+# (or: npx jest --json --outputFile=report.json)
+
+# 3. reconcile
+variant impact verify report.json
+```
+
+```
+Prediction: 2026-09-17T22:38:46.120Z (2db3ee3f2de6d9344a099915a0fa229536216d03)
+Matched by: head SHA
+
+Predicted:  1 of 2 test files
+Failed:     1 test file
+
+Caught:      0 (inside the predicted set)
+False skips: 1 (would have been missed)
+
+False skips:
+  src/__tests__/format.test.ts
+
+False-skip rate this run: 100.0%
+One run is not a rate. Reconcile many before reading anything into it.
+```
+
+A **false skip** is a test that failed and that the prediction did not select.
+Had skipping been enabled, that failure would have shipped. This is the number
+that gates test skipping; everything else `impact` prints describes a graph.
+
+Each prediction records the commit it was made against, so `--head-sha <sha>`
+reconciles a specific run rather than the most recent one — which is what CI
+needs when several predictions are in flight. Each reconciliation is appended to
+`.variant/history/reconciliation.jsonl` as counts, so a rate accumulates across
+runs.
+
+Two things this deliberately does not do:
+
+- **It does not fail your build.** It reports; the suite you already ran decides
+  the exit code.
+- **It does not treat a clean run as evidence.** A run with no failures cannot
+  confirm a prediction, so it is recorded with a rate of zero and says so.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| `--head-sha <sha>` | most recent prediction | Reconcile the prediction made at this commit |
+| `--json` | off | Print the reconciliation as JSON |
+
 ## `variant workspace check`
 
 A CI gate for monorepos: compares what each package actually imports against what its `package.json` declares, and flags three kinds of drift.

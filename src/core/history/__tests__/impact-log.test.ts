@@ -31,6 +31,7 @@ function makePrediction(at: string): ImpactPrediction {
 	return {
 		at,
 		baseRef: "HEAD~1",
+		headSha: "0".repeat(40),
 		changedFiles: ["src/a.ts"],
 		affectedFiles: 2,
 		affectedPackages: [],
