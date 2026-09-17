@@ -1,6 +1,6 @@
 /**
- * Boundary: `core/pr` meeting a real git repository and a real trace file on
- * disk, plus the commands that render what it returns.
+ * Boundary: `core/pr` meeting a real git repository on disk, plus the commands
+ * that render what it returns.
  */
 
 import { readFile } from "node:fs/promises";
@@ -8,11 +8,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	registerPrCheckAction,
-	registerPrReplayAction,
 	registerPrReportAction,
 } from "../../cli/commands/pr.js";
 import { runPrCheck } from "../../core/pr/check.js";
-import { runPrReplay } from "../../core/pr/replay.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
@@ -21,25 +19,6 @@ import {
 	withCwd,
 	writeFiles,
 } from "../helpers/cli-harness.js";
-
-function writeTrace(
-	dir: string,
-	sessionId: string,
-	modules: Array<{ file: string }> = [],
-	routes: Array<{ path: string; modules: string[] }> = [],
-): void {
-	writeFiles(dir, {
-		[`.variant/traces/${sessionId}.json`]: JSON.stringify({
-			schemaVersion: 1,
-			sessionId,
-			startedAt: Date.now(),
-			endedAt: Date.now() + 100,
-			framework: "next",
-			modules,
-			routes,
-		}),
-	});
-}
 
 afterEach(() => {
 	cleanupTempWorkspaces();
@@ -99,70 +78,6 @@ describe("runPrCheck", () => {
 	});
 });
 
-describe("runPrReplay", () => {
-	it("returns null when no trace session exists", async () => {
-		const dir = createTempWorkspace("pr");
-		expect(await runPrReplay(dir, { base: "main" })).toBeNull();
-	});
-
-	it("returns session metadata for an existing trace file", async () => {
-		const dir = createTempWorkspace("pr");
-		writeTrace(dir, "session-abc");
-
-		const result = await runPrReplay(dir, {
-			base: "main",
-			session: "session-abc",
-		});
-
-		expect(result?.sessionId).toBe("session-abc");
-		expect(result?.framework).toBe("next");
-		expect(result?.baseRef).toBe("main");
-	});
-
-	it("touches nothing when git cannot supply a changed set", async () => {
-		const dir = createTempWorkspace("pr");
-		writeTrace(dir, "session-xyz");
-
-		const result = await runPrReplay(dir, {
-			base: "main",
-			session: "session-xyz",
-		});
-
-		expect(result?.changedFiles).toHaveLength(0);
-		expect(result?.touchedModules).toHaveLength(0);
-		expect(result?.touchedRoutes).toHaveLength(0);
-		expect(result?.touchedPackages).toHaveLength(0);
-	});
-
-	it("defaults to the last recorded session", async () => {
-		const dir = createTempWorkspace("pr");
-		writeTrace(dir, "session-last");
-		expect((await runPrReplay(dir, { base: "main" }))?.sessionId).toBe(
-			"session-last",
-		);
-	});
-
-	it("intersects changed files with traced routes", async () => {
-		const dir = createTempWorkspace("pr");
-		const touched = path.join(dir, "src", "page.ts");
-		writeTrace(
-			dir,
-			"session-routes",
-			[{ file: touched }],
-			[{ path: "/home", modules: [touched] }],
-		);
-
-		const result = await runPrReplay(dir, {
-			base: "main",
-			session: "session-routes",
-			changedFiles: ["src/page.ts"],
-		});
-
-		expect(result?.touchedModules).toEqual([touched]);
-		expect(result?.touchedRoutes.map((r) => r.path)).toEqual(["/home"]);
-	});
-});
-
 describe("pr check command", () => {
 	it("prints the base ref, file count, and verdict", async () => {
 		const dir = createTempWorkspace("pr");
@@ -176,30 +91,6 @@ describe("pr check command", () => {
 	});
 });
 
-describe("pr replay command", () => {
-	it("explains itself when no session has been recorded", async () => {
-		const dir = createTempWorkspace("pr");
-		const output = captureGlobalOutput();
-
-		await withCwd(dir, () => registerPrReplayAction({ base: "main" }));
-
-		expect(output.stdout()).toContain("No trace session found");
-	});
-
-	it("prints session metadata when a trace file exists", async () => {
-		const dir = createTempWorkspace("pr");
-		writeTrace(dir, "session-print");
-		const output = captureGlobalOutput();
-
-		await withCwd(dir, () =>
-			registerPrReplayAction({ base: "main", session: "session-print" }),
-		);
-
-		expect(output.stdout()).toContain("session-print");
-		expect(output.stdout()).toContain("No traced routes");
-	});
-});
-
 describe("pr report command", () => {
 	it("emits parseable JSON by default", async () => {
 		const dir = createTempWorkspace("pr");
@@ -209,11 +100,9 @@ describe("pr report command", () => {
 
 		const parsed = JSON.parse(output.stdout()) as {
 			check: { verdict: string };
-			replay: unknown;
 			generatedAt: string;
 		};
 		expect(parsed.check.verdict).toBe("safe-to-skip");
-		expect(parsed.replay).toBeNull();
 		expect(parsed.generatedAt).toBeTruthy();
 	});
 

@@ -155,10 +155,6 @@ variant build --affected
 variant build
 ```
 
-## Remote cache in CI
-
-To share cache hits between CI runs and local dev, configure a remote backend. See [remote-cache.md](./remote-cache.md).
-
 ## Troubleshooting
 
 See [troubleshooting.md](./troubleshooting.md) — workspace-specific issues are covered in items 4–6.

@@ -106,21 +106,7 @@ Run `git diff --name-only origin/main` manually to verify the diff is what you e
 
 ---
 
-## 7. Remote cache never gets a hit
-
-**Cause:** The input hashes may differ between machines (e.g. different file timestamps, OS line endings, or locale-sensitive file ordering).
-
-**Fix:** Hashing is content-based (file contents only), not timestamp-based, so timestamps shouldn't matter. Check:
-
-- Both machines are using the same `inputs` globs
-- Line endings are consistent (`git config core.autocrlf`)
-- The remote backend is reachable (`curl -I <url>/<any-hash>` should return 404, not a network error)
-
-Run `variant doctor` to check for obvious config issues.
-
----
-
-## 8. `variant doctor` reports a validation error
+## 7. `variant doctor` reports a validation error
 
 **Cause:** The config failed Zod validation, usually due to an unknown task referenced in `dependsOn` or a typo in a field name.
 
@@ -135,42 +121,7 @@ Check that every task name in `dependsOn` matches a key in `tasks`.
 
 ---
 
-## 9. Lint-only mode not activating
-
-**Cause:** `lintOnlyForNonCritical` requires both the flag to be `true` and `criticalPaths` to be non-empty. It also requires at least one recorded trace session.
-
-**Fix:**
-
-1. Verify config:
-   ```typescript
-   performance: {
-     lintOnlyForNonCritical: true,
-     criticalPaths: ["/checkout"],  // must be non-empty
-   },
-   ```
-2. Record a trace session if none exists:
-   ```bash
-   variant trace
-   ```
-3. Run `variant doctor` — it warns if `criticalPaths` is configured but no trace sessions exist.
-
----
-
-## 10. `pr replay` prints "No trace session found"
-
-**Cause:** No trace sessions have been recorded under `.variant/traces/`.
-
-**Fix:** Record a session first:
-
-```bash
-variant trace
-```
-
-Then re-run `pr replay`. If you're in CI and don't have a trace session, either commit a recorded session to the repo or skip `pr replay` (the `pr check` command works without traces).
-
----
-
-## 11. A failure prints "ran because:" — what is it telling me?
+## 8. A failure prints "ran because:" — what is it telling me?
 
 When a task fails, variant adds a short block explaining why that task was selected to run:
 

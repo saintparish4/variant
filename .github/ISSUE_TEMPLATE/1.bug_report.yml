@@ -75,6 +75,9 @@ body:
       multiple: true
       options:
         - "Not sure"
+        - "Semantic diff (AST classifier)"
+        - "Blast radius / test impact selection"
+        - "Workspace check"
         - "Config loading (variant.config.ts)"
         - "Task DAG / ordering"
         - "Concurrency / execution"
@@ -83,8 +86,6 @@ body:
         - "Workspace / package detection"
         - "Framework adapter — Next.js"
         - "Framework adapter — Vite"
-        - "Tracer plugin (webpack / Vite)"
-        - "Semantic diff (AST classifier)"
         - "CLI / commands"
         - "TypeScript types / public API"
         - "Performance"
@@ -97,10 +98,13 @@ body:
       label: Which command or stage is affected? (select all that apply)
       multiple: true
       options:
-        - "variant run <task>"
+        - "variant impact"
+        - "variant diff <file>"
+        - "variant pr check / pr report"
+        - "variant workspace check"
         - "variant build"
-        - "Tracer plugin — Next.js (webpack)"
-        - "Tracer plugin — Vite"
+        - "variant run <task>"
+        - "variant doctor / env / insight / check"
         - "Config load / validation"
         - "Other / not command-specific"
     validations:

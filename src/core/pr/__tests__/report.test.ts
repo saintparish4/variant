@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { ClassifyResult } from "../../semantic/differ.js";
 import type { BuildVerdict } from "../../semantic/verdict.js";
 import type { PrCheckResult } from "../check.js";
-import type { PrReplayResult } from "../replay.js";
 import type { PrReportResult } from "../report.js";
 import { formatPrReportJson, formatPrReportMarkdown } from "../report.js";
 
@@ -26,11 +25,7 @@ function classified(
 }
 
 function report(
-	overrides: {
-		verdict?: BuildVerdict;
-		files?: ClassifyResult[];
-		replay?: PrReplayResult | null;
-	} = {},
+	overrides: { verdict?: BuildVerdict; files?: ClassifyResult[] } = {},
 ): PrReportResult {
 	const files = overrides.files ?? [];
 	const check: PrCheckResult = {
@@ -42,29 +37,14 @@ function report(
 	return {
 		generatedAt: "2026-01-01T00:00:00.000Z",
 		check,
-		replay: overrides.replay ?? null,
 	};
 }
-
-const replayResult = (
-	overrides: Partial<PrReplayResult> = {},
-): PrReplayResult => ({
-	baseRef: "main",
-	sessionId: "sess-1",
-	framework: "next",
-	changedFiles: [],
-	touchedModules: [],
-	touchedRoutes: [],
-	touchedPackages: [],
-	...overrides,
-});
 
 describe("formatPrReportJson", () => {
 	it("round-trips through JSON.parse", () => {
 		const parsed = JSON.parse(formatPrReportJson(report())) as PrReportResult;
 
 		expect(parsed.check.baseRef).toBe("main");
-		expect(parsed.replay).toBeNull();
 	});
 });
 
@@ -110,32 +90,5 @@ describe("formatPrReportMarkdown", () => {
 		);
 
 		expect(markdown).toContain("| `src/impl.ts` | internal | — |");
-	});
-
-	it("notes the absence of a trace session", () => {
-		expect(formatPrReportMarkdown(report())).toContain(
-			"_No trace session available._",
-		);
-	});
-
-	it("lists touched routes and packages from a replay", () => {
-		const markdown = formatPrReportMarkdown(
-			report({
-				replay: replayResult({
-					touchedRoutes: [{ path: "/checkout", modules: ["a.ts"] }],
-					touchedPackages: ["web", "utils"],
-				}),
-			}),
-		);
-
-		expect(markdown).toContain("**Touched routes (1):**");
-		expect(markdown).toContain("- `/checkout`");
-		expect(markdown).toContain("**Touched packages:** `web`, `utils`");
-	});
-
-	it("says no routes were touched when a session exists but matched nothing", () => {
-		const markdown = formatPrReportMarkdown(report({ replay: replayResult() }));
-
-		expect(markdown).toContain("_No traced routes are touched by this PR._");
 	});
 });

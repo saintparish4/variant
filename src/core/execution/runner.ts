@@ -10,7 +10,6 @@ import type {
 	TaskProvenance,
 } from "../../types/index.js";
 import { hashTaskInputs } from "../cache/hashing.js";
-import type { RemoteCacheAdapter } from "../cache/remote-adapter.js";
 import type { CacheFile } from "../cache/store.js";
 import {
 	evictStaleEntries,
@@ -47,8 +46,6 @@ export interface RunOptions {
 	 * recorded as skipped (durationMs 0, cacheHit false, skipped true).
 	 */
 	taskFilter?: (taskName: string) => boolean;
-	/** Optional remote cache backend for cross-machine cache sharing. */
-	remoteCache?: RemoteCacheAdapter;
 	/**
 	 * Called on each task lifecycle change (running/cached/done/failed) —
 	 * drive live output from these events. The CLI bridges them onto a spinner
@@ -76,52 +73,10 @@ export interface TaskRunResult {
 	cacheHit: boolean;
 	/** True when the task was filtered out by taskFilter (not actually run). */
 	skipped?: boolean;
-	/** True when the cache hit came from the remote backend (not local). */
-	remoteHit?: boolean;
 }
 
 export function defaultConcurrency(): number {
 	return Math.max(1, os.cpus().length - 1);
-}
-
-interface RemoteEntry {
-	lastRun: number;
-	lastDurationMs?: number;
-}
-
-const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
-
-function serializeRemoteEntry(entry: RemoteEntry): Uint8Array {
-	return textEncoder.encode(JSON.stringify(entry));
-}
-
-/**
- * Parses bytes fetched from a remote cache backend. Remote data is untrusted:
- * a malformed payload (corrupt bytes, a hostile server, a schema change) must
- * never crash the run, so this returns `null` — treated as a cache miss — for
- * anything that doesn't match the expected shape rather than throwing.
- */
-function parseRemoteEntry(bytes: Uint8Array): RemoteEntry | null {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(textDecoder.decode(bytes));
-	} catch {
-		return null;
-	}
-	if (typeof parsed !== "object" || parsed === null) return null;
-	const obj = parsed as Record<string, unknown>;
-	if (typeof obj["lastRun"] !== "number" || !Number.isFinite(obj["lastRun"])) {
-		return null;
-	}
-	const entry: RemoteEntry = { lastRun: obj["lastRun"] };
-	if (
-		typeof obj["lastDurationMs"] === "number" &&
-		Number.isFinite(obj["lastDurationMs"])
-	) {
-		entry.lastDurationMs = obj["lastDurationMs"];
-	}
-	return entry;
 }
 
 async function runOneTask(
@@ -189,31 +144,6 @@ async function runOneTask(
 		// with the boolean.
 		recordCacheMiss(options.provenance, taskName, cached?.hash ?? null, hash);
 
-		// Local miss — check remote cache before running the task. A remote
-		// read failure is non-fatal (symmetric with the write path below): we
-		// fall through and run the task locally instead of breaking the build.
-		if (options.remoteCache !== undefined) {
-			let remoteEntry: RemoteEntry | null = null;
-			try {
-				const remoteBytes = await options.remoteCache.get(hash);
-				if (remoteBytes !== null) remoteEntry = parseRemoteEntry(remoteBytes);
-			} catch {
-				remoteEntry = null;
-			}
-			if (remoteEntry !== null) {
-				cache.tasks[taskName] = { hash, ...remoteEntry };
-				const result: TaskRunResult = {
-					task: taskName,
-					durationMs: 0,
-					cacheHit: true,
-					remoteHit: true,
-				};
-				options.onTaskEvent?.({ task: taskName, status: "cached" });
-				if (plugins) await plugins.runOnAfterExecute(taskName, result);
-				return result;
-			}
-		}
-
 		options.onTaskEvent?.({ task: taskName, status: "running" });
 		const start = Date.now();
 		try {
@@ -226,15 +156,6 @@ async function runOneTask(
 
 		const entry = { hash, lastRun: Date.now(), lastDurationMs: durationMs };
 		cache.tasks[taskName] = entry;
-
-		// Push to remote so other machines benefit from this run.
-		if (options.remoteCache !== undefined) {
-			try {
-				await options.remoteCache.set(hash, serializeRemoteEntry(entry));
-			} catch {
-				// Remote write failure is non-fatal; local cache is already updated.
-			}
-		}
 
 		const result: TaskRunResult = {
 			task: taskName,

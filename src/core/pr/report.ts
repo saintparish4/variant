@@ -1,32 +1,26 @@
 /**
  * @module
- * `variant pr report` — the combined check + replay artifact, in the two
- * shapes CI consumes: JSON for machines and markdown for a PR comment.
+ * `variant pr report` — the `pr check` verdict in the two shapes CI consumes:
+ * JSON for machines and markdown for a PR comment.
  */
 
 import type { BuildVerdict } from "../semantic/verdict.js";
 import type { PrCheckOptions, PrCheckResult } from "./check.js";
 import { runPrCheck } from "./check.js";
-import type { PrReplayOptions, PrReplayResult } from "./replay.js";
-import { runPrReplay } from "./replay.js";
 
-export interface PrReportOptions extends PrCheckOptions, PrReplayOptions {}
+export interface PrReportOptions extends PrCheckOptions {}
 
 export interface PrReportResult {
 	generatedAt: string;
 	check: PrCheckResult;
-	replay: PrReplayResult | null;
 }
 
 export async function buildPrReport(
 	cwd: string,
 	options: PrReportOptions = {},
 ): Promise<PrReportResult> {
-	const [check, replay] = await Promise.all([
-		runPrCheck(cwd, options),
-		runPrReplay(cwd, options),
-	]);
-	return { generatedAt: new Date().toISOString(), check, replay };
+	const check = await runPrCheck(cwd, options);
+	return { generatedAt: new Date().toISOString(), check };
 }
 
 const VERDICT_EMOJI: Record<BuildVerdict, string> = {
@@ -58,7 +52,7 @@ export function formatPrReportJson(report: PrReportResult): string {
 }
 
 export function formatPrReportMarkdown(report: PrReportResult): string {
-	const { check, replay } = report;
+	const { check } = report;
 	const lines: string[] = [
 		"## Variant PR Report",
 		"",
@@ -85,25 +79,6 @@ export function formatPrReportMarkdown(report: PrReportResult): string {
 		lines.push("");
 	} else {
 		lines.push("_No TypeScript files changed._", "");
-	}
-
-	lines.push("### Trace Replay", "");
-	if (replay === null) {
-		lines.push("_No trace session available._", "");
-		return lines.join("\n");
-	}
-
-	if (replay.touchedRoutes.length > 0) {
-		lines.push(`**Touched routes (${replay.touchedRoutes.length}):**`, "");
-		for (const route of replay.touchedRoutes) lines.push(`- \`${route.path}\``);
-		lines.push("");
-	} else {
-		lines.push("_No traced routes are touched by this PR._", "");
-	}
-
-	if (replay.touchedPackages.length > 0) {
-		const packages = replay.touchedPackages.map((p) => `\`${p}\``).join(", ");
-		lines.push(`**Touched packages:** ${packages}`, "");
 	}
 
 	return lines.join("\n");

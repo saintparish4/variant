@@ -9,7 +9,7 @@ export default defineConfig({
 		// the CI coverage job), which is the only place it gates anything.
 		coverage: {
 			provider: "v8",
-			include: ["src/core/**", "src/tracer/**", "src/cli/**"],
+			include: ["src/core/**", "src/cli/**"],
 			exclude: ["**/__tests__/**", "**/types.ts", "src/types/**"],
 			thresholds: {
 				lines: 70,

@@ -32,13 +32,11 @@ export async function executeTarget(
 	}
 }
 
-/** The post-run summary table: timings, cache hit rate, remote savings. */
+/** The post-run summary table: timings and cache hit rate. */
 export async function reportRunInsights(
 	ctx: VariantContext,
 	results: TaskRunResult[],
 ): Promise<void> {
 	const cache = await readCache(ctx.cacheDir);
-	renderInsights(
-		computeInsights(results, cache, ctx.config.cache.costPerMissMs),
-	);
+	renderInsights(computeInsights(results, cache));
 }

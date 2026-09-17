@@ -62,145 +62,6 @@ const program = new Command()
 	});
 
 program
-	.command("build")
-	.description("Run the build task")
-	.option("-c, --concurrency <n>", "max tasks per DAG level")
-	.option("--scope <sessionId>", "restrict build to packages in trace")
-	.option("--trace <which>", "shorthand for --scope=last")
-	.option(
-		"--affected",
-		"run only packages affected by changes since baseRef (includes cascade dependents)",
-	)
-	.option("--dry-run", "print the task plan without executing")
-	.action(
-		async (
-			opts: ConcurrencyOpts & {
-				scope?: string;
-				trace?: string;
-				affected?: boolean;
-				dryRun?: boolean;
-			},
-		) => {
-			const { registerBuildAction } = await import("./commands/build.js");
-			const concurrency = parseConcurrency(opts);
-			const scope = opts.scope ?? (opts.trace === "last" ? "last" : undefined);
-			await registerBuildAction({
-				...(concurrency !== undefined && { concurrency }),
-				...(scope !== undefined && { scope }),
-				...(opts.affected && { affected: true }),
-				...(opts.dryRun && { dryRun: true }),
-			});
-		},
-	);
-
-const traceCmd = program
-	.command("trace")
-	.description("Run dev with tracing enabled (writes .variant/traces/)")
-	.action(async () => {
-		const { registerTraceAction } = await import("./commands/trace.js");
-		await registerTraceAction();
-	});
-
-traceCmd
-	.command("analyze [sessionId]")
-	.description(
-		"Analyze a trace file — show modules, routes, and package breakdown (default: last session)",
-	)
-	.action(async (sessionId?: string) => {
-		const { registerTraceAnalyzeAction } = await import("./commands/trace.js");
-		await registerTraceAnalyzeAction(sessionId);
-	});
-
-program
-	.command("dev")
-	.description("Start the dev server")
-	.option(
-		"-c, --concurrency <n>",
-		"max tasks to run concurrently per DAG level",
-	)
-	.option("--dry-run", "print the task plan without executing")
-	.action(async (opts: ConcurrencyOpts & { dryRun?: boolean }) => {
-		const { registerDevAction } = await import("./commands/dev.js");
-		const concurrency = parseConcurrency(opts);
-		await registerDevAction({
-			...(concurrency !== undefined && { concurrency }),
-			...(opts.dryRun && { dryRun: true }),
-		});
-	});
-
-program
-	.command("run <task>")
-	.description("Run a named task")
-	.option(
-		"-c, --concurrency <n>",
-		"max tasks to run concurrently per DAG level",
-	)
-	.option("--dry-run", "print the task plan without executing")
-	.action(
-		async (taskName: string, opts: ConcurrencyOpts & { dryRun?: boolean }) => {
-			const { registerRunAction } = await import("./commands/run.js");
-			const concurrency = parseConcurrency(opts);
-			await registerRunAction(taskName, {
-				...(concurrency !== undefined && { concurrency }),
-				...(opts.dryRun && { dryRun: true }),
-			});
-		},
-	);
-
-program
-	.command("init")
-	.description("Scaffold variant.config.ts in the current directory")
-	.action(async () => {
-		const { registerInitAction } = await import("./commands/init.js");
-		await registerInitAction();
-	});
-
-program
-	.command("doctor")
-	.description("Validate config, check traces, and diagnose common issues")
-	.action(async () => {
-		const { registerDoctorAction } = await import("./commands/doctor.js");
-		await registerDoctorAction();
-	});
-
-program
-	.command("insight")
-	.description("Show task timing and cache hit stats")
-	.action(async () => {
-		const { registerInsightAction } = await import("./commands/insight.js");
-		await registerInsightAction();
-	});
-
-program
-	.command("env")
-	.description(
-		"Show detected environment (runtime, package manager, framework)",
-	)
-	.action(async () => {
-		const { registerEnvAction } = await import("./commands/env.js");
-		await registerEnvAction();
-	});
-
-program
-	.command("check")
-	.description("Validate config and task graph (no execution)")
-	.action(async () => {
-		const { registerCheckAction } = await import("./commands/check.js");
-		await registerCheckAction();
-	});
-
-program
-	.command("diff <file>")
-	.description(
-		"Classify a TypeScript file change as non-impacting / internal / breaking",
-	)
-	.option("--base <ref>", "git ref to compare against", "HEAD~1")
-	.action(async (file: string, opts: { base: string }) => {
-		const { registerDiffAction } = await import("./commands/diff.js");
-		await registerDiffAction(file, { base: opts.base });
-	});
-
-program
 	.command("impact")
 	.description(
 		"Predict which tests a change requires — report-only; the full suite should still run",
@@ -213,6 +74,17 @@ program
 			base: opts.base,
 			...(opts.json === true && { json: true }),
 		});
+	});
+
+program
+	.command("diff <file>")
+	.description(
+		"Classify a TypeScript file change as non-impacting / internal / breaking",
+	)
+	.option("--base <ref>", "git ref to compare against", "HEAD~1")
+	.action(async (file: string, opts: { base: string }) => {
+		const { registerDiffAction } = await import("./commands/diff.js");
+		await registerDiffAction(file, { base: opts.base });
 	});
 
 const workspaceCmd = program
@@ -248,37 +120,101 @@ prCmd
 	});
 
 prCmd
-	.command("replay")
-	.description(
-		"Intersect PR-changed files with the last trace session to find touched routes",
-	)
-	.option("--base <ref>", "base branch or ref for the PR diff", "main")
-	.option("--session <id>", "trace session ID to replay (default: last)")
-	.action(async (opts: { base: string; session?: string }) => {
-		const { registerPrReplayAction } = await import("./commands/pr.js");
-		await registerPrReplayAction(opts);
-	});
-
-prCmd
 	.command("report")
-	.description(
-		"Combine pr check + pr replay into a structured JSON or markdown report",
-	)
+	.description("Render `pr check` as a structured JSON or markdown report")
 	.option("--base <ref>", "base branch or ref for the PR diff", "main")
-	.option("--session <id>", "trace session ID to replay (default: last)")
 	.option("--markdown", "output a markdown summary instead of JSON")
 	.option("--output <file>", "write report to file instead of stdout")
 	.action(
-		async (opts: {
-			base: string;
-			session?: string;
-			markdown?: boolean;
-			output?: string;
-		}) => {
+		async (opts: { base: string; markdown?: boolean; output?: string }) => {
 			const { registerPrReportAction } = await import("./commands/pr.js");
 			await registerPrReportAction(opts);
 		},
 	);
+
+program
+	.command("build")
+	.description("Run the build task")
+	.option("-c, --concurrency <n>", "max tasks per DAG level")
+	.option(
+		"--affected",
+		"run only packages affected by changes since baseRef (includes cascade dependents)",
+	)
+	.option("--dry-run", "print the task plan without executing")
+	.action(
+		async (
+			opts: ConcurrencyOpts & { affected?: boolean; dryRun?: boolean },
+		) => {
+			const { registerBuildAction } = await import("./commands/build.js");
+			const concurrency = parseConcurrency(opts);
+			await registerBuildAction({
+				...(concurrency !== undefined && { concurrency }),
+				...(opts.affected && { affected: true }),
+				...(opts.dryRun && { dryRun: true }),
+			});
+		},
+	);
+
+program
+	.command("run <task>")
+	.description("Run a named task")
+	.option(
+		"-c, --concurrency <n>",
+		"max tasks to run concurrently per DAG level",
+	)
+	.option("--dry-run", "print the task plan without executing")
+	.action(
+		async (taskName: string, opts: ConcurrencyOpts & { dryRun?: boolean }) => {
+			const { registerRunAction } = await import("./commands/run.js");
+			const concurrency = parseConcurrency(opts);
+			await registerRunAction(taskName, {
+				...(concurrency !== undefined && { concurrency }),
+				...(opts.dryRun && { dryRun: true }),
+			});
+		},
+	);
+
+program
+	.command("init")
+	.description("Scaffold variant.config.ts in the current directory")
+	.action(async () => {
+		const { registerInitAction } = await import("./commands/init.js");
+		await registerInitAction();
+	});
+
+program
+	.command("doctor")
+	.description("Validate config and diagnose common issues")
+	.action(async () => {
+		const { registerDoctorAction } = await import("./commands/doctor.js");
+		await registerDoctorAction();
+	});
+
+program
+	.command("insight")
+	.description("Show task timing and cache hit stats")
+	.action(async () => {
+		const { registerInsightAction } = await import("./commands/insight.js");
+		await registerInsightAction();
+	});
+
+program
+	.command("env")
+	.description(
+		"Show detected environment (runtime, package manager, framework)",
+	)
+	.action(async () => {
+		const { registerEnvAction } = await import("./commands/env.js");
+		await registerEnvAction();
+	});
+
+program
+	.command("check")
+	.description("Validate config and task graph (no execution)")
+	.action(async () => {
+		const { registerCheckAction } = await import("./commands/check.js");
+		await registerCheckAction();
+	});
 
 // The only place the process exits on error: typed VariantErrors are the
 // expected failure mode (exit 1); anything else escaped a typed path and is a

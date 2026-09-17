@@ -73,8 +73,8 @@ export function renderImpact(
 	lines(
 		printer,
 		"",
-		`Run:   ${count(tests.affectedTests.length)} test files`,
-		`Skip:  ${count(skipped)} test files (of ${count(tests.totalTests)} total)`,
+		`Run:   ${plural(tests.affectedTests.length, "test file")}`,
+		`Skip:  ${plural(skipped, "test file")} (of ${count(tests.totalTests)} total)`,
 		"",
 		`Verdict:    ${verdictText(report.verdict)}`,
 		`Confidence: ${Math.round(tests.confidence * 100)}%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)`,

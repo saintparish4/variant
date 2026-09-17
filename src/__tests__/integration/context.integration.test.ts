@@ -1,3 +1,9 @@
+/**
+ * Boundary: `createContext()` meeting real config loading, a real workspace on
+ * disk, and a real git repository. It shells out to git and globs the
+ * filesystem, so it cannot answer anything true at the unit tier.
+ */
+
 import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,7 +29,7 @@ describe("createContext", () => {
 	it("returns a valid context with all defaults (no config file)", async () => {
 		const dir = makeTmpDir();
 		writeFileSync(path.join(dir, "package.json"), "{}");
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 		expect(ctx.cwd).toBe(dir);
 		expect(ctx.config.strategy).toBe("adaptive");
@@ -35,7 +41,7 @@ describe("createContext", () => {
 	it("loads JSON config file and applies it", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir, { strategy: "strict", tasks: { build: {} } });
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 		expect(ctx.config.strategy).toBe("strict");
 	});
@@ -55,7 +61,7 @@ describe("createContext", () => {
 			path.join(dir, "packages/lib/package.json"),
 			JSON.stringify({ name: "lib", scripts: { build: "tsc" } }),
 		);
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 		expect(ctx.config.tasks["lib:build"]).toBeDefined();
 	});
@@ -63,7 +69,7 @@ describe("createContext", () => {
 	it("registers framework plugins in correct order", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir);
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 		const names = ctx.plugins.list().map((p) => p.name);
 		expect(names).toContain("framework:next");
@@ -76,7 +82,9 @@ describe("toRunOptions", () => {
 	it("maps context fields to RunOptions", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir, { tasks: { build: {} } });
-		const { createContext, toRunOptions } = await import("../context.js");
+		const { createContext, toRunOptions } = await import(
+			"../../cli/context.js"
+		);
 		const ctx = await createContext(dir);
 		const opts = toRunOptions(ctx, { concurrency: 4 });
 		expect(opts.cwd).toBe(dir);
@@ -88,7 +96,9 @@ describe("toRunOptions", () => {
 	it("does not include useScheduler when scheduler policy is undefined", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir, { tasks: {} });
-		const { createContext, toRunOptions } = await import("../context.js");
+		const { createContext, toRunOptions } = await import(
+			"../../cli/context.js"
+		);
 		const ctx = await createContext(dir);
 		const opts = toRunOptions(ctx);
 		expect(opts.useScheduler).toBeUndefined();
@@ -100,7 +110,9 @@ describe("toRunOptions", () => {
 			scheduler: { policy: "critical-path" },
 			tasks: {},
 		});
-		const { createContext, toRunOptions } = await import("../context.js");
+		const { createContext, toRunOptions } = await import(
+			"../../cli/context.js"
+		);
 		const ctx = await createContext(dir);
 		const opts = toRunOptions(ctx);
 		expect(opts.useScheduler).toBe(true);
@@ -109,23 +121,13 @@ describe("toRunOptions", () => {
 	it("includes packageScopes when they exist on context", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir, { tasks: {} });
-		const { createContext, toRunOptions } = await import("../context.js");
+		const { createContext, toRunOptions } = await import(
+			"../../cli/context.js"
+		);
 		const ctx = await createContext(dir);
 		ctx.packageScopes = ["/some/dir"];
 		const opts = toRunOptions(ctx);
 		expect(opts.packageScopes).toEqual(["/some/dir"]);
-	});
-
-	it("adds taskFilter to RunOptions when ctx.lintOnly is true", async () => {
-		const dir = makeTmpDir();
-		writeMinimalConfig(dir, { tasks: {} });
-		const { createContext, toRunOptions } = await import("../context.js");
-		const ctx = await createContext(dir);
-		ctx.lintOnly = true;
-		const opts = toRunOptions(ctx);
-		expect(opts.taskFilter).toBeDefined();
-		expect(opts.taskFilter?.("lint")).toBe(true);
-		expect(opts.taskFilter?.("build")).toBe(false);
 	});
 });
 
@@ -181,7 +183,7 @@ describe("createContext (cascade / affectedPackages)", () => {
 	it("affectedPackages is undefined when no git repo exists", async () => {
 		const dir = makeTmpDir();
 		writeMinimalConfig(dir, { tasks: {} });
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 		expect(ctx.affectedPackages).toBeUndefined();
 	});
@@ -189,7 +191,7 @@ describe("createContext (cascade / affectedPackages)", () => {
 	it("affectedPackages cascades to dependents when git detects a direct change", async () => {
 		const dir = workspaceRepoWithChangedUtils();
 
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir);
 
 		// utils directly changed; web depends on utils → both in affectedPackages
@@ -202,7 +204,7 @@ describe("createContext (cascade / affectedPackages)", () => {
 	it("scope: false skips the git diff but still builds the workspace graph", async () => {
 		const dir = workspaceRepoWithChangedUtils();
 
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const ctx = await createContext(dir, { scope: false });
 
 		expect(ctx.affectedPackages).toBeUndefined();
@@ -215,40 +217,11 @@ describe("createContext (cascade / affectedPackages)", () => {
 	it("scope: false leaves provenance without a changed-file reason", async () => {
 		const dir = workspaceRepoWithChangedUtils();
 
-		const { createContext } = await import("../context.js");
+		const { createContext } = await import("../../cli/context.js");
 		const scoped = await createContext(dir);
 		const unscoped = await createContext(dir, { scope: false });
 
 		expect(scoped.provenance).toBeDefined();
 		expect(unscoped.provenance).toBeDefined();
-	});
-});
-
-describe("createContext (lintOnly / performance config)", () => {
-	it("enters lintOnly code path when lintOnlyForNonCritical is configured", async () => {
-		const dir = makeTmpDir();
-		// Write a trace session so loadTrace does not throw
-		const tracesDir = path.join(dir, ".variant", "traces");
-		mkdirSync(tracesDir, { recursive: true });
-		writeFileSync(
-			path.join(tracesDir, "last.json"),
-			JSON.stringify({
-				schemaVersion: 1,
-				sessionId: "last",
-				startedAt: Date.now(),
-				endedAt: Date.now() + 100,
-				framework: "next",
-				modules: [],
-				routes: [],
-			}),
-		);
-		writeMinimalConfig(dir, {
-			performance: { lintOnlyForNonCritical: true, criticalPaths: ["/home"] },
-			tasks: { lint: {} },
-		});
-		const { createContext } = await import("../context.js");
-		const ctx = await createContext(dir);
-		// git is unavailable in tmpDir, so changedFiles is null and lintOnly stays false
-		expect(ctx.lintOnly).toBeFalsy();
 	});
 });

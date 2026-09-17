@@ -3,7 +3,6 @@ import {
 	affectedTaskFilter,
 	bothFilters,
 	taskPackage,
-	tracedPackagePriority,
 } from "../task-filter.js";
 
 describe("taskPackage", () => {
@@ -53,23 +52,5 @@ describe("bothFilters", () => {
 		const combined = bothFilters(undefined, isWeb);
 		expect(combined("web:build")).toBe(true);
 		expect(combined("docs:build")).toBe(false);
-	});
-});
-
-describe("tracedPackagePriority", () => {
-	it("puts traced packages first", () => {
-		expect(tracedPackagePriority(new Set(["web"]))("web:build")).toBe(0);
-	});
-
-	it("deprioritizes untraced packages", () => {
-		expect(tracedPackagePriority(new Set(["web"]))("docs:build")).toBe(
-			Number.POSITIVE_INFINITY,
-		);
-	});
-
-	it("deprioritizes root-level tasks, which no trace attributes", () => {
-		expect(tracedPackagePriority(new Set(["web"]))("build")).toBe(
-			Number.POSITIVE_INFINITY,
-		);
 	});
 });

@@ -3,11 +3,34 @@
 [![npm version](https://img.shields.io/npm/v/vrnt.svg)](https://www.npmjs.com/package/vrnt)
 [![CI](https://github.com/saintparish4/variant/actions/workflows/ci.yml/badge.svg)](https://github.com/saintparish4/variant/actions/workflows/ci.yml)
 
-Change intelligence for TypeScript monorepos: an AST-level view of what a change affects and which tests it needs, on top of a task DAG with content-based caching.
+Change intelligence for TypeScript monorepos. variant reads a diff at the AST level and answers one question: **which tests does this change actually need, and how sure are we?**
 
-Published to npm as **`vrnt`**; the command it installs is **`variant`**.
+```console
+$ npx vrnt impact --base HEAD~1
 
-This README is for working **on** variant. Using it in your own project is documented in [docs/](./docs/getting-started.md).
+Base ref: HEAD~1
+
+You changed 1 file.
+  internal       src/math.ts
+
+Impact: 1 file
+
+Run:   1 test file
+Skip:  1 test file (of 2 total)
+
+Verdict:    build recommended
+Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+```
+
+`internal` means the exported signature did not change — only the body — so a dependent that never imports the changed names is not selected. That distinction is the point: test runners and build orchestrators decide "affected" from the file or package graph; variant decides it from the exported surface.
+
+No config file is required. Published to npm as **`vrnt`**; the command it installs is **`variant`**.
+
+**`impact` is report-only and stays that way until it is measured.** Every prediction is appended to `.variant/history/impact.jsonl` so a false-skip rate can be reconciled against real test results. The printed confidence is a graph-resolution score, not a safety number. Until that rate is published, run the full suite.
+
+A cached task DAG (`build`, `run`, `insight`) sits underneath, and dogfoods the repo.
+
+The rest of this README is for working **on** variant. Using it in your own project is documented in [docs/](./docs/getting-started.md).
 
 ---
 
@@ -19,10 +42,7 @@ This README is for working **on** variant. Using it in your own project is docum
 | pnpm | ≥ 10 | Pinned by `packageManager` |
 | git | any recent | Needed to exercise `--affected`, `diff`, `impact`, and `pr *` — they no-op without a repo |
 
-Optional, only if you touch the matching area:
-
-- **`@aws-sdk/client-s3`** — dynamically imported by the S3 remote-cache backend (`s3-adapter.ts:49`) and deliberately not a declared dependency. Install it locally to exercise that path.
-- **[hyperfine](https://github.com/sharkdp/hyperfine)** — required by `pnpm bench`.
+Optional: **[hyperfine](https://github.com/sharkdp/hyperfine)**, required by `pnpm bench`.
 
 ---
 
@@ -86,7 +106,7 @@ Unit tests never shell out — `runTasksWithDeps` takes a `TaskExecutor`, so tes
 
 ## Environment Variables
 
-Link takes no configuration from the environment — that lives in `variant.config.ts`. What it reads are standard terminal and CI signals:
+variant takes no configuration from the environment — that lives in `variant.config.ts`. What it reads are standard terminal and CI signals:
 
 | Variable | Read by | Effect |
 |---|---|---|
@@ -96,11 +116,8 @@ Link takes no configuration from the environment — that lives in `variant.conf
 | `CI` | picocolors, indirectly | Nothing in `src/` reads `CI`. picocolors counts it as color *support*, so CI logs keep color unless `NO_COLOR` is set. Animated progress stops in CI because stderr is not a TTY (`printer.ts:82`), not because of this variable. |
 | `JPY_SESSION_NAME` | `visuals/progress.ts` | Detects a Jupyter session and falls back to line-based output. |
 | `VARIANT_TEST_NO_CLI_PROGRESS` | `visuals/printer.ts`, `visuals/progress.ts` | Test-only. Suppresses progress bars so concurrent output stays assertable. |
-| `VARIANT_TRACE` | Set by `variant trace` | Exported to the spawned dev process. Nothing in Link reads it back — the tracer plugins are unconditional once installed. |
 
 Color precedence: `--color <when>` → `--no-color` → `NO_COLOR` → `FORCE_COLOR`/`CLICOLOR_FORCE` → TTY detection. All of it resolves once in `visuals/color.ts:resolveColorChoice()`, applied process-wide by `writeGlobalColorChoice()`; renderers call `getColors()` and never consult the environment themselves. Adding a second color path is the mistake this design exists to prevent.
-
-To exercise the S3 remote-cache backend locally, note that the config schema has no credential fields — `cli/context.ts` passes only `bucket`, `prefix`, `region`, and `endpoint`, so authentication comes entirely from the AWS SDK default chain (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_PROFILE`, `AWS_REGION`) or an instance/OIDC role. Keep credentials out of config files; they are committed.
 
 ---
 
@@ -111,12 +128,11 @@ Layered, dependencies pointing one way: `cli → core → adapters`. Ports are o
 | Directory | Role |
 |---|---|
 | `src/cli/` | Commander wiring, option parsing, terminal rendering |
-| `src/core/` | Orchestration logic, grouped by capability — `cache`, `graph`, `execution`, `semantic`, `scope`, `detection`, `plugins` |
+| `src/core/` | Orchestration logic, grouped by capability — `semantic`, `impact`, `pr`, `cache`, `graph`, `execution`, `detection`, `plugins` |
 | `src/adapters/` | The outside world — package managers, runtimes, frameworks |
-| `src/tracer/` | Webpack and Vite plugins that record module resolution |
 | `src/types/` | Contracts shared across layers |
 
-`tsup` builds three entry points: `dist/index.js` (library API), `dist/cli.js` (the `variant` binary), and `dist/tracer.js` (framework plugins).
+`tsup` builds two entry points: `dist/index.js` (library API) and `dist/cli.js` (the `variant` binary).
 
 The request path for most commands: `cli/context.ts:createContext()` loads config, detects PM/runtime/framework, builds the task DAG, and computes git-diff scoping — then `core/execution:runTasksWithDeps()` walks DAG levels while `core/cache` hashes inputs against `.variant/cache/cache.json`.
 
@@ -136,11 +152,11 @@ variant ships as an npm package; there is no server to deploy.
 pnpm publish            # prepublishOnly runs `pnpm test:all && pnpm build`
 ```
 
-Only `dist/` is published (`files: ["dist"]`). The package exposes `.` and `./tracer` through the `exports` map, both ESM-only (`"type": "module"`).
+Only `dist/` is published (`files: ["dist"]`). The package exposes `.` through the `exports` map, ESM-only (`"type": "module"`).
 
 Releases are **manual**; the only workflows in the repository are `ci.yml` and `benchmark.yml`. Before publishing: bump the version, update [CHANGELOG.md](./CHANGELOG.md), and confirm CI is green on `master`.
 
-The package is `0.x` and makes no semver stability promise yet. Breaking changes to `vrnt` or `vrnt/tracer` can ship in any minor release; each one is recorded in [CHANGELOG.md](./CHANGELOG.md).
+The package is `0.x` and makes no semver stability promise yet. Breaking changes to the `vrnt` public API can ship in any minor release; each one is recorded in [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 

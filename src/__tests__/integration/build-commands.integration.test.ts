@@ -1,6 +1,6 @@
 /**
- * Boundary: the `build`/`dev`/`run` commands meeting real config loading, a
- * real task graph, and real child processes. These need a workspace on disk to
+ * Boundary: the `build`/`run` commands meeting real config loading, a real
+ * task graph, and real child processes. These need a workspace on disk to
  * say anything true, which is what puts them in this tier rather than beside
  * their sources.
  */
@@ -10,7 +10,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { registerBuildAction } from "../../cli/commands/build.js";
-import { registerDevAction } from "../../cli/commands/dev.js";
 import { registerRunAction } from "../../cli/commands/run.js";
 import { VariantError } from "../../core/errors.js";
 import {
@@ -72,30 +71,6 @@ describe("build command", () => {
 		expect(output.stdout()).toContain('[dry-run] Task plan for "build"');
 		expect(output.stdout()).toContain("Level 1: lint");
 		expect(output.stdout()).toContain("Level 2: build");
-	});
-
-	it("accepts --scope when the named trace session exists", async () => {
-		const dir = createTempWorkspace("build");
-		writeConfig(dir, { tasks: { build: { command: "echo scoped" } } });
-		const traceDir = path.join(dir, ".variant", "traces");
-		mkdirSync(traceDir, { recursive: true });
-		writeFileSync(
-			path.join(traceDir, "scope-sess.json"),
-			JSON.stringify({
-				schemaVersion: 1,
-				sessionId: "scope-sess",
-				startedAt: Date.now(),
-				endedAt: Date.now() + 100,
-				framework: "next",
-				modules: [],
-				routes: [],
-			}),
-		);
-		captureGlobalOutput();
-
-		await expect(
-			withCwd(dir, () => registerBuildAction({ scope: "scope-sess" })),
-		).resolves.toBeUndefined();
 	});
 
 	it("treats --affected as a no-op when git is unavailable", async () => {
@@ -177,27 +152,6 @@ describe("build command", () => {
 		await expect(
 			withCwd(dir, () => registerBuildAction({ concurrency: 1 })),
 		).resolves.toBeUndefined();
-	});
-});
-
-describe("dev command", () => {
-	it("runs the dev task to completion", async () => {
-		const dir = createTempWorkspace("dev");
-		writeConfig(dir, { tasks: { dev: { command: "echo dev-ok" } } });
-		captureGlobalOutput();
-
-		await expect(
-			withCwd(dir, () => registerDevAction()),
-		).resolves.toBeUndefined();
-	});
-
-	it("fails with an VariantError when no dev task is configured", async () => {
-		const dir = createTempWorkspace("dev");
-		writeConfig(dir, { tasks: { build: { command: "echo build-ok" } } });
-
-		await expect(
-			withCwd(dir, () => registerDevAction()),
-		).rejects.toBeInstanceOf(VariantError);
 	});
 });
 

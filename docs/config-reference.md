@@ -69,49 +69,6 @@ cache: {
 },
 ```
 
-### `cache.costPerMissMs`
-
-| | |
-|-|-|
-| Type | `number` |
-| Default | `undefined` |
-
-Expected duration of a cache miss in milliseconds. When set, `variant insight` uses this value to calculate "estimated time saved" from remote cache hits instead of using the raw last-run duration.
-
-### `cache.remote`
-
-Remote cache backend. See [remote-cache.md](./remote-cache.md) for full setup instructions.
-
-#### `cache.remote.type`
-
-| | |
-|-|-|
-| Type | `"http" \| "s3"` |
-| Required | yes |
-
-#### HTTP backend options
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `url` | `string` | — | Base URL (`{url}/{hash}` for each entry) |
-| `headers` | `Record<string, string>` | `{}` | Request headers (e.g. `Authorization`) |
-| `timeout` | `number` | `10000` | Per-request timeout in ms |
-| `maxResponseBytes` | `number` | `1048576` | Max GET response body (1 MiB); oversized responses are rejected |
-
-> **Never hard-code secrets here.** `headers` values such as `Authorization`
-> tokens must be read from environment variables — see the security note in
-> [remote-cache.md](./remote-cache.md). The config file is committed to source
-> control.
-
-#### S3 backend options
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `bucket` | `string` | — | S3 bucket name |
-| `region` | `string` | — | AWS region |
-| `prefix` | `string` | `"variant/"` | Key prefix for all objects |
-| `endpoint` | `string` | — | Custom endpoint for R2 / MinIO / localstack |
-
 ---
 
 ## `tasks`
@@ -246,35 +203,6 @@ Controls how the event-driven scheduler orders task execution within a DAG level
 
 ---
 
-## `performance`
-
-### `performance.lintOnlyForNonCritical`
-
-| | |
-|-|-|
-| Type | `boolean` |
-| Default | `false` |
-
-When `true`, variant loads the last trace session, diffs changed files against `performance.criticalPaths`, and restricts execution to lint-named tasks when no critical route is touched. Requires at least one recorded trace session.
-
-### `performance.criticalPaths`
-
-| | |
-|-|-|
-| Type | `string[]` |
-| Default | `[]` |
-
-Route paths considered critical. If any changed file is part of a module loaded by one of these routes (as recorded in a trace session), the lint-only optimization is disabled and builds run normally.
-
-```typescript
-performance: {
-  lintOnlyForNonCritical: true,
-  criticalPaths: ["/checkout", "/login", "/api/payment"],
-},
-```
-
----
-
 ## Full example
 
 ```typescript
@@ -286,12 +214,6 @@ export default defineConfig({
   cache: {
     directory: ".variant/cache",
     ttlDays: 14,
-    costPerMissMs: 45000,
-    remote: {
-      type: "s3",
-      bucket: "my-cache",
-      region: "us-east-1",
-    },
   },
 
   tasks: {
@@ -327,11 +249,6 @@ export default defineConfig({
 
   scheduler: {
     policy: "auto",
-  },
-
-  performance: {
-    lintOnlyForNonCritical: true,
-    criticalPaths: ["/checkout", "/login"],
   },
 });
 ```

@@ -135,8 +135,8 @@ describe("impact command", () => {
 
 		expect(output.stdout()).toContain("You changed 1 file.");
 		expect(output.stdout()).toContain("breaking");
-		expect(output.stdout()).toContain("Run:   1 test files");
-		expect(output.stdout()).toContain("Skip:  1 test files (of 2 total)");
+		expect(output.stdout()).toContain("Run:   1 test file");
+		expect(output.stdout()).toContain("Skip:  1 test file (of 2 total)");
 		expect(output.stdout()).toContain("Verdict:    build required");
 		expect(output.stdout()).toContain("report-only");
 	});

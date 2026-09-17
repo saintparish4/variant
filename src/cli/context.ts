@@ -2,16 +2,12 @@ import { genericAdapter } from "../adapters/frameworks/generic.js";
 import { nextAdapter, nextPlugin } from "../adapters/frameworks/next.js";
 import { wrapFrameworkAsPlugin } from "../adapters/frameworks/plugin.js";
 import { viteAdapter } from "../adapters/frameworks/vite.js";
-import { createHttpCacheAdapter } from "../core/cache/adapters/http-adapter.js";
-import { createS3CacheAdapter } from "../core/cache/adapters/s3-adapter.js";
 import {
 	changedFilesToPackages,
 	getChangedFiles,
 } from "../core/cache/git-diff.js";
-import type { RemoteCacheAdapter } from "../core/cache/remote-adapter.js";
 import { loadConfig } from "../core/config/loader.js";
 import { detectProject } from "../core/detection/project.js";
-import { ConfigError } from "../core/errors.js";
 import type { RunOptions } from "../core/execution/runner.js";
 import { priorityFromConfig } from "../core/execution/scheduler.js";
 import {
@@ -22,57 +18,18 @@ import {
 import { buildGraph } from "../core/graph/planner.js";
 import { PluginRegistry } from "../core/plugins/registry.js";
 import { buildProvenance } from "../core/provenance/capture.js";
-import { isCriticalChange } from "../core/scope/critical-path.js";
-import { loadTrace } from "../core/scope/trace-loader.js";
-import type { ResolvedVariantConfig, VariantContext } from "../types/index.js";
+import type { VariantContext } from "../types/index.js";
 import { reportPluginError } from "./render/plugin-errors.js";
-import { errorLines } from "./render/writer.js";
-import { getPrinter } from "./visuals/printer.js";
-
-function buildRemoteAdapter(
-	config: ResolvedVariantConfig,
-): RemoteCacheAdapter | undefined {
-	const remote = config.cache.remote;
-	if (remote === undefined) return undefined;
-
-	if (remote.type === "http") {
-		if (remote.url === undefined) {
-			throw new ConfigError(
-				'cache.remote.url is required when cache.remote.type is "http"',
-			);
-		}
-		return createHttpCacheAdapter({
-			url: remote.url,
-			...(remote.headers !== undefined ? { headers: remote.headers } : {}),
-			...(remote.timeout !== undefined ? { timeout: remote.timeout } : {}),
-			...(remote.maxResponseBytes !== undefined
-				? { maxResponseBytes: remote.maxResponseBytes }
-				: {}),
-		});
-	}
-
-	if (remote.bucket === undefined) {
-		throw new ConfigError(
-			'cache.remote.bucket is required when cache.remote.type is "s3"',
-		);
-	}
-	return createS3CacheAdapter({
-		bucket: remote.bucket,
-		...(remote.prefix !== undefined ? { prefix: remote.prefix } : {}),
-		...(remote.region !== undefined ? { region: remote.region } : {}),
-		...(remote.endpoint !== undefined ? { endpoint: remote.endpoint } : {}),
-	});
-}
 
 export interface CreateContextOptions {
 	/**
 	 * Compute the git-diff scoping (`packageScopes`, `affectedPackages`,
-	 * `changedFiles`) and the lint-only critical-path check. Default true.
+	 * `changedFiles`). Default true.
 	 *
 	 * Commands that never run a task and never render provenance — `env`,
-	 * `check`, `insight` — pass false, which drops two git subprocesses and a
-	 * trace load from their startup. Anything consuming `packageScopes`, or
-	 * rendering why a task ran, must leave it on.
+	 * `check`, `insight` — pass false, which drops two git subprocesses from
+	 * their startup. Anything consuming `packageScopes`, or rendering why a
+	 * task ran, must leave it on.
 	 */
 	scope?: boolean;
 }
@@ -159,45 +116,7 @@ export async function createContext(
 		}
 	}
 
-	// Both a trace and a changed-file list are required to prove a change is
-	// non-critical. Without either, the safe answer is to run everything --
-	// this optimization must never skip work on an unproven assumption.
-	let lintOnly = false;
-	const perf = config.performance;
-	if (
-		options.scope !== false &&
-		perf?.lintOnlyForNonCritical &&
-		(perf.criticalPaths?.length ?? 0) > 0
-	) {
-		const trace = await loadTrace(cwd, "last").catch(() => null);
-		if (trace !== null) {
-			// Reuse the diff already in hand instead of spawning git twice.
-			const criticalFiles =
-				changedFiles ??
-				(await getChangedFiles({
-					cwd,
-					...(config.git?.baseRef !== undefined
-						? { baseRef: config.git.baseRef }
-						: {}),
-				}).catch(() => null));
-			if (criticalFiles !== null) {
-				lintOnly = !isCriticalChange(
-					criticalFiles,
-					trace,
-					perf.criticalPaths ?? [],
-				);
-				if (lintOnly) {
-					errorLines(
-						getPrinter(),
-						"[variant] No critical-path changes detected — running lint tasks only",
-					);
-				}
-			}
-		}
-	}
-
 	const cacheDir = config.cache.directory;
-	const remoteCache = buildRemoteAdapter(config);
 
 	const plugins = new PluginRegistry(reportPluginError);
 	plugins.register(wrapFrameworkAsPlugin(nextAdapter));
@@ -234,8 +153,6 @@ export async function createContext(
 		provenance,
 		...(packageScopes !== undefined ? { packageScopes } : {}),
 		...(affectedPackages !== undefined ? { affectedPackages } : {}),
-		...(lintOnly ? { lintOnly: true } : {}),
-		...(remoteCache !== undefined ? { remoteCache } : {}),
 	};
 }
 
@@ -271,9 +188,5 @@ export function toRunOptions(
 		...(overrides.concurrency !== undefined
 			? { concurrency: overrides.concurrency }
 			: {}),
-		...(ctx.lintOnly
-			? { taskFilter: (name: string) => /lint/i.test(name) }
-			: {}),
-		...(ctx.remoteCache !== undefined ? { remoteCache: ctx.remoteCache } : {}),
 	};
 }

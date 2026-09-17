@@ -2,15 +2,13 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { PrCheckOptions } from "../../core/pr/check.js";
 import { runPrCheck } from "../../core/pr/check.js";
-import type { PrReplayOptions } from "../../core/pr/replay.js";
-import { runPrReplay } from "../../core/pr/replay.js";
 import type { PrReportOptions } from "../../core/pr/report.js";
 import {
 	buildPrReport,
 	formatPrReportJson,
 	formatPrReportMarkdown,
 } from "../../core/pr/report.js";
-import { renderPrCheck, renderPrReplay } from "../render/pr.js";
+import { renderPrCheck } from "../render/pr.js";
 import { lines } from "../render/writer.js";
 import { getPrinter } from "../visuals/printer.js";
 
@@ -18,12 +16,6 @@ export async function registerPrCheckAction(
 	opts: PrCheckOptions,
 ): Promise<void> {
 	renderPrCheck(await runPrCheck(process.cwd(), opts));
-}
-
-export async function registerPrReplayAction(
-	opts: PrReplayOptions,
-): Promise<void> {
-	renderPrReplay(await runPrReplay(process.cwd(), opts));
 }
 
 export interface PrReportActionOptions extends PrReportOptions {

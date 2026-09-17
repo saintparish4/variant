@@ -1,6 +1,6 @@
 {
   "name": "vrnt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Change intelligence for TypeScript monorepos — AST-level blast radius, test impact, and a cached task DAG",
   "type": "module",
   "main": "dist/index.js",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./tracer": {
-      "types": "./dist/tracer.d.ts",
-      "import": "./dist/tracer.js"
     }
   },
   "bin": {

@@ -1,6 +1,6 @@
 # PR commands
 
-variant's `pr` subcommands help you understand what a pull request actually changes — both at the TypeScript AST level and in terms of which routes and packages your running app loads.
+variant's `pr` subcommands classify what a pull request actually changes at the TypeScript AST level, and render the result for a human or for CI.
 
 ## Commands
 
@@ -43,38 +43,9 @@ Verdict: build required
 | `build recommended` | At least one file is `internal` |
 | `build required` | At least one file is `breaking` |
 
-### `pr replay`
-
-Loads the last recorded trace session and intersects the list of changed files with the modules recorded during that session:
-
-```bash
-variant pr replay
-variant pr replay --base origin/main --session <sessionId>
-```
-
-Output:
-
-```
-Base ref:        main
-Trace session:   abc123
-Framework:       next
-Changed files:   6
-Touched modules: 2
-
-Touched routes:
-  /checkout  (44 modules)
-  /cart      (31 modules)
-
-Touched packages:
-  @myapp/ui
-  @myapp/checkout
-```
-
-This tells you which user-facing routes are affected by the PR — useful for deciding what to manually test.
-
 ### `pr report`
 
-Runs both `pr check` and `pr replay` and produces a combined report:
+Renders the `pr check` verdict as a report artifact:
 
 ```bash
 # JSON to stdout
@@ -97,15 +68,6 @@ JSON output shape:
     "tsFilesChanged": 4,
     "files": [...],
     "verdict": "build-required"
-  },
-  "replay": {
-    "baseRef": "main",
-    "sessionId": "abc123",
-    "framework": "next",
-    "changedFiles": [...],
-    "touchedModules": [...],
-    "touchedRoutes": [...],
-    "touchedPackages": [...]
   }
 }
 ```
@@ -122,17 +84,11 @@ Feed `pr-report.md` to `actions/github-script` (or `peter-evans/create-or-update
 
 ## Options
 
-All three `pr` commands accept:
+Both `pr` commands accept:
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--base <ref>` | `main` | Git ref to diff against |
-
-`pr replay` and `pr report` also accept:
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--session <id>` | last recorded | Trace session to use for replay |
 
 `pr report` also accepts:
 

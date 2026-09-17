@@ -60,15 +60,6 @@ export function renderInsights(
 			`Total: ${summary.totalDurationMs}ms  Cache hit rate: ${percent}%`,
 		),
 	);
-
-	if (summary.remoteHits > 0) {
-		lines(
-			printer,
-			colors.dim(
-				`Remote cache hits: ${summary.remoteHits}  Estimated time saved: ${summary.estimatedTimeSavedByRemoteMs}ms`,
-			),
-		);
-	}
 }
 
 export function renderEnv(

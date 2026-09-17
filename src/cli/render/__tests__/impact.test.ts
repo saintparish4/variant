@@ -149,7 +149,7 @@ describe("renderImpact", () => {
 			capture.printer,
 		);
 
-		expect(capture.stdout()).toContain("Run:   1 test files");
+		expect(capture.stdout()).toContain("Run:   1 test file");
 		expect(capture.stdout()).toContain("Skip:  3 test files (of 4 total)");
 	});
 

@@ -86,42 +86,6 @@ export async function checkCacheSize(
 	return { level: "ok", label };
 }
 
-export async function checkTraces(cwd: string): Promise<Diagnostic> {
-	const traceDir = path.resolve(cwd, ".variant/traces");
-	let sessions: string[];
-	try {
-		sessions = (await readdir(traceDir)).filter((f) => f.endsWith(".json"));
-	} catch {
-		return {
-			level: "warn",
-			label: "No trace sessions found",
-			detail:
-				"Run `variant trace` to record a session (needed for scope/criticalPaths features).",
-		};
-	}
-	if (sessions.length === 0) {
-		return {
-			level: "warn",
-			label: "Trace directory exists but contains no sessions",
-			detail: "Run `variant trace` to record a session.",
-		};
-	}
-	return { level: "ok", label: `${sessions.length} trace session(s) found` };
-}
-
-/**
- * Traces are only required when `lintOnlyForNonCritical` can actually fire,
- * which needs critical paths too — this mirrors the condition in
- * `cli/context.ts`, so the two must change together.
- */
-function requiresTrace(config: ResolvedVariantConfig): boolean {
-	const performance = config.performance;
-	return (
-		(performance?.lintOnlyForNonCritical ?? false) &&
-		(performance?.criticalPaths?.length ?? 0) > 0
-	);
-}
-
 async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 	const configPath = findVariantConfigPath(cwd);
 	if (!configPath) {
@@ -152,18 +116,6 @@ async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 
 	diagnostics.push({ level: "ok", label: "Config is valid" });
 	diagnostics.push(await checkCacheSize(cwd, config.cache.directory));
-
-	if (requiresTrace(config)) {
-		const trace = await checkTraces(cwd);
-		diagnostics.push(
-			trace.level === "ok"
-				? trace
-				: {
-						...trace,
-						label: `performance.criticalPaths configured but ${trace.label.toLowerCase()}`,
-					},
-		);
-	}
 
 	return diagnostics;
 }

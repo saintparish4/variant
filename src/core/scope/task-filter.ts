@@ -33,15 +33,3 @@ export function bothFilters(
 	if (first === undefined) return second;
 	return (taskName) => first(taskName) && second(taskName);
 }
-
-/**
- * Scheduler priority that front-loads packages a trace session actually
- * exercised: lower runs sooner, so traced packages go first and everything
- * else waits for a free slot.
- */
-export function tracedPackagePriority(
-	traced: ReadonlySet<string>,
-): (taskName: string) => number {
-	return (taskName) =>
-		traced.has(taskPackage(taskName) ?? "") ? 0 : Number.POSITIVE_INFINITY;
-}

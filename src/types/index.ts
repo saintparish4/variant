@@ -1,5 +1,4 @@
 import type * as z from "zod";
-import type { RemoteCacheAdapter } from "../core/cache/remote-adapter.js";
 import type {
 	taskConfigSchema,
 	variantConfigSchema,
@@ -51,14 +50,6 @@ export interface VariantContext {
 	 * Used by --affected to filter task execution.
 	 */
 	affectedPackages?: ReadonlySet<string>;
-	/**
-	 * True when lintOnlyForNonCritical is enabled and the current changes do
-	 * not affect any critical route. Commands should restrict execution to
-	 * lint tasks only when this flag is set.
-	 */
-	lintOnly?: boolean;
-	/** Optional remote cache adapter created from `config.cache.remote`. */
-	remoteCache?: RemoteCacheAdapter;
 	/**
 	 * Why each task would run this invocation, keyed by task name. Seeded here
 	 * from the DAG and the git diff; the runner refines a task's reason to

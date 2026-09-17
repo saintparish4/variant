@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-17
+
+Cut to the part nobody else does. variant is a change-intelligence tool for
+TypeScript monorepos: what a change affects, and which tests it needs. The task
+runner stays, frozen, because it carries the cache-key invariants and dogfoods
+the repo — but it is no longer what the project is about.
+
+Everything below is a breaking removal. There is no shim; delete the
+corresponding config keys.
+
+### Removed
+
+- **The tracer.** `src/tracer/`, the `vrnt/tracer` export and its `tsup` entry
+  point, the `trace` and `trace analyze` commands, and `.variant/traces/`. It
+  needed a plugin inside the user's dev server, only covered Next and Vite, and
+  fed nothing into the impact pipeline.
+- **Everything that read a trace session**: `pr replay`, `build --scope` and
+  `--trace`, `performance.criticalPaths`, `performance.lintOnlyForNonCritical`
+  (and with it `VariantContext.lintOnly`), and the `doctor` trace check.
+- **The remote cache.** The HTTP and S3 backends, `cache.remote`,
+  `cache.costPerMissMs`, `RunOptions.remoteCache`, `TaskRunResult.remoteHit`,
+  and the remote hit/time-saved fields on `InsightSummary`. It only mattered to
+  someone using variant as their build orchestrator. `@aws-sdk/client-s3` is no
+  longer referenced at all.
+- **The `dev` command.**
+
+### Changed
+
+- `pr report` no longer embeds a `replay` object; it renders the `pr check`
+  verdict alone, and drops `--session`.
+- `--help` leads with `impact`, `diff`, `workspace` and `pr`; the task-runner
+  commands follow.
+- The CLI description is now "Change intelligence and task orchestration for
+  TypeScript monorepos".
+- `README.md` and `docs/getting-started.md` lead with `variant impact` against
+  a real repository, with no config file.
+- Removed `docs/nextjs.md`, `docs/vite.md` and `docs/remote-cache.md`.
+
+### Fixed
+
+- `impact` said "1 test files"; test-file counts are pluralized.
+
 ## [0.1.0] - 2026-09-17
 
 Renamed to **variant** and republished under a new npm name, so the version
@@ -453,7 +495,8 @@ semver stability guarantee: no breaking changes in minor or patch releases.
   Bun / Deno), and framework (Next.js / Vite / generic).
 - Lazy command registration so `link --help` stays under 100 ms.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/saintparish4/variant/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/saintparish4/variant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/saintparish4/variant/releases/tag/v0.1.0
 [2.0.0]: https://github.com/saintparish4/variant/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/saintparish4/variant/compare/v1.1.0...v1.1.1

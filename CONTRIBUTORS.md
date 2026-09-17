@@ -42,7 +42,7 @@ src/
 ├── cli/                  # Commander-based CLI entry and commands
 │   ├── index.ts          # Program definition, lazy command registration
 │   ├── context.ts        # createContext() — DRY bootstrap for all commands
-│   ├── execute.ts        # Shared run path for build/dev/run (progress + insights)
+│   ├── execute.ts        # Shared run path for build/run (progress + insights)
 │   ├── commands/         # One file per command — parse, delegate, render
 │   ├── render/           # All terminal output; writes through the Printer
 │   └── visuals/          # Printer, colors, spinners, prompts, ANSI primitives
@@ -87,8 +87,7 @@ src/
 │   │
 │   ├── pr/
 │   │   ├── check.ts      # Classify a PR's TypeScript changes into a verdict
-│   │   ├── replay.ts     # Intersect PR changes with a recorded trace session
-│   │   └── report.ts     # Combined check + replay, as JSON or markdown
+│   │   └── report.ts     # The check verdict as JSON or markdown
 │   │
 │   ├── impact/
 │   │   └── predict.ts    # Test-impact prediction plus shadow-mode logging
@@ -104,11 +103,7 @@ src/
 │   │   └── reporter.ts   # The progress port; every renderer lives in cli/
 │   │
 │   ├── scope/
-│   │   ├── trace-loader.ts   # Reads recorded trace sessions
-│   │   ├── trace-summary.ts  # Reduces a session to the `trace analyze` numbers
-│   │   ├── trace-scope.ts    # Resolves --scope to the packages a session hit
-│   │   ├── task-filter.ts    # Package sets -> runner predicates and priorities
-│   │   └── critical-path.ts  # Checks changed files against critical routes
+│   │   └── task-filter.ts    # Package sets -> runner predicates
 │   │
 │   ├── semantic/
 │   │   ├── differ.ts     # AST-based diff classifier via ts-morph
@@ -124,11 +119,6 @@ src/
 │   ├── pm/               # npm.ts, yarn.ts, pnpm.ts
 │   ├── runtimes/         # node.ts, bun.ts, deno.ts
 │   └── frameworks/       # next.ts, vite.ts, generic.ts, plugin.ts
-│
-├── tracer/               # Module tracing plugins
-│   ├── next-plugin.ts    # Webpack plugin for Next.js
-│   ├── vite-plugin.ts    # Vite plugin
-│   └── writer.ts         # Writes trace sessions to .variant/traces/
 │
 └── types/
     └── index.ts          # Shared type definitions (VariantContext, TaskGraph, etc.)
@@ -235,7 +225,7 @@ All commits must follow the conventional commit format:
 
 | Type | Purpose | Example |
 |------|---------|---------|
-| `feat` | New feature | `feat: add critical-path route scoping to trace analyze` |
+| `feat` | New feature | `feat: resolve tsconfig paths aliases in the symbol graph` |
 | `fix` | Bug fix | `fix: prevent cache miss when packageScopes is empty` |
 | `perf` | Performance improvement | `perf: short-circuit DAG level computation on cache hit` |
 | `refactor` | Code refactoring | `refactor: simplify createContext workspace wiring` |

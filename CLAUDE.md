@@ -4,9 +4,10 @@ A general guide for working in a codebase. Fill in **Stack** and **Commands** pe
 
 ## Project status and naming
 
-- **The project is `variant`; the npm package is `vrnt`.** `variant` and `variant-ts` are taken by unrelated packages (rechecked 2026-09-17). Everything a user reads or types is `variant` — bin, `variant.config.ts`, `.variant/`, `VARIANT_*`, `VariantConfig`/`VariantError`, tracer plugin names, S3 prefix. `vrnt` appears only where a package is addressed: `package.json` `name`, `import … from "vrnt"`, `npm install -D vrnt`, `npx vrnt <cmd>`. Never write `npx variant` — that fetches the unrelated package.
+- **The project is `variant`; the npm package is `vrnt`.** `variant` and `variant-ts` are taken by unrelated packages (rechecked 2026-09-17). Everything a user reads or types is `variant` — bin, `variant.config.ts`, `.variant/`, `VARIANT_*`, `VariantConfig`/`VariantError`. `vrnt` appears only where a package is addressed: `package.json` `name`, `import … from "vrnt"`, `npm install -D vrnt`, `npx vrnt <cmd>`. Never write `npx variant` — that fetches the unrelated package.
 - **Name history:** `antiscaler` (published 0.1.0–1.1.1) → `link` (never published; the npm name is taken, and a global `link` bin shadows the `/usr/bin/link` coreutil) → `linkctl` (published 2.0.0) → `variant`, published as `vrnt` from 0.1.0. The version reset with the package name. Old names in CHANGELOG entries are history; do not rewrite them.
 - **Breaking changes are acceptable.** The package is live on npm with no known users, and `0.x` says so. Do not add compatibility shims, deprecation periods, or migration code, but do record every breaking change in CHANGELOG.
+- **The product is the change-intelligence half.** `impact`, `diff`, `pr check`, `pr report`, `workspace check`, `doctor` and `env` are what variant is for; `build`, `run`, the local content cache and `insight` are frozen — they carry the cache-key invariants and dogfood the repo, but get no new work. The tracer, trace commands, `pr replay`, `--scope`, `performance.*`, the remote cache and `dev` were deleted in 0.2.0; do not reintroduce them.
 - **Status and plan** live in `base/current-state.md` and `base/next-steps.md`. `base/` is gitignored, so they exist only in the local checkout.
 
 ## Stack
@@ -14,7 +15,7 @@ A general guide for working in a codebase. Fill in **Stack** and **Commands** pe
 `variant` — AST-level change intelligence for TypeScript monorepos (`diff`, `impact`, `pr check`, `workspace check`) on top of an adaptive dev orchestration CLI (task DAG, content caching, runtime detection).
 
 - **Language**: TypeScript, ESM only (`"type": "module"`). Node ≥ 20, pnpm ≥ 10.
-- **Build**: tsup — three entry points: `src/index.ts` (library), `src/cli/index.ts` (`variant` binary), `src/tracer/index.ts` (webpack/Vite tracer plugins).
+- **Build**: tsup — two entry points: `src/index.ts` (library) and `src/cli/index.ts` (`variant` binary).
 - **CLI**: Commander.js.
 - **Key libraries**: zod (config schema and defaults), jiti (loads `variant.config.ts` with no build step), execa (process execution), fast-glob (input hashing), ts-morph (semantic change analysis), picocolors, string-argv.
 - **Tooling**: Biome (format + lint + import organization), Vitest with v8 coverage, TypeScript (`tsc --noEmit`).
@@ -26,7 +27,6 @@ Layered, with dependencies pointing one way: `cli → core → adapters`. Interf
 - `src/cli/` — Commander wiring, option parsing, terminal rendering. The user-facing surface.
 - `src/core/` — orchestration logic, grouped by capability (`cache`, `config`, `detection`, `doctor`, `execution`, `graph`, `history`, `impact`, `insight`, `plugins`, `pr`, `progress`, `provenance`, `scaffold`, `scope`, `semantic`, `vcs`) rather than by technical kind. No `utils/`, `helpers/`, or `services/` buckets. Despite its name, `core/progress/reporter.ts` is a port (a bare `TaskEvent` interface); everything that draws lives in `cli/visuals/` (printer, progress, spinners, prompts, color) and `cli/render/` (command output, errors).
 - `src/adapters/` — the outside world: `pm/` (npm/pnpm/yarn command builders), `runtimes/` (Node/Bun/Deno detection), `frameworks/` (Next.js/Vite/generic, each wrapped as a plugin via `wrapFrameworkAsPlugin`). One file per implementation.
-- `src/tracer/` — separate `tsup` entry point; webpack (`next-plugin.ts`) and Vite (`vite-plugin.ts`) plugins that intercept module resolution and write session JSON to `.variant/traces/`.
 - `src/types/` — contracts shared across layers.
 
 Rules:
@@ -42,7 +42,7 @@ Rules:
 
 ### Core pipeline
 
-The request path most commands follow: `createContext()` → `core/graph` builds the `TaskGraph` (Kahn's algorithm, cycle detection) → `core/execution:runTasksWithDeps()` resolves DAG levels and runs each task (concurrency-limited, or via the event-driven `scheduler.ts` when `useScheduler` is set) → `core/cache` hashes inputs and reads/writes `.variant/cache/cache.json`, narrowed by `core/cache/git-diff.ts` to changed packages. `core/plugins` fans out `onDetect`/`onHash`/`onBeforeExecute`/`onAfterExecute` hooks to registered `BuildPlugin`s (framework adapters are wrapped as plugins). `core/scope` and `core/semantic` (ts-morph-based signature/body diffing, symbol graph, blast-radius, test-impact selection) drive change-intelligence features (`variant diff`, `pr check`, `variant impact`); predictions are logged to `.variant/history/impact.jsonl` for shadow-mode validation before test skipping is ever enabled.
+The request path most commands follow: `createContext()` → `core/graph` builds the `TaskGraph` (Kahn's algorithm, cycle detection) → `core/execution:runTasksWithDeps()` resolves DAG levels and runs each task (concurrency-limited, or via the event-driven `scheduler.ts` when `useScheduler` is set) → `core/cache` hashes inputs and reads/writes `.variant/cache/cache.json`, narrowed by `core/cache/git-diff.ts` to changed packages. `core/plugins` fans out `onDetect`/`onHash`/`onBeforeExecute`/`onAfterExecute` hooks to registered `BuildPlugin`s (framework adapters are wrapped as plugins). `core/semantic` (ts-morph-based signature/body diffing, symbol graph, blast-radius, test-impact selection) drives the change-intelligence features (`variant diff`, `pr check`, `variant impact`); predictions are logged to `.variant/history/impact.jsonl` for shadow-mode validation before test skipping is ever enabled.
 
 ### Invariants worth knowing before you "optimize" them
 
@@ -63,8 +63,7 @@ The request path most commands follow: `createContext()` → `core/graph` builds
   - Task `inputs` reject absolute patterns and any `..` segment (`cache/hashing.ts:assertSafePattern`).
   - Commands run through execa with a string-argv array, never a shell.
   - Git invocations put `--` before paths so a ref cannot become an option.
-  - Remote cache bytes are untrusted: `runner.ts:parseRemoteEntry` treats a malformed entry as a miss, and the HTTP adapter caps body size.
-  - The config schema has no credential fields; S3 auth comes from the AWS SDK default chain, and `@aws-sdk/client-s3` is dynamically imported and deliberately not a dependency.
+  - The config schema has no credential fields.
 
 ## Code Style
 
@@ -148,7 +147,7 @@ The `.husky/pre-commit` hook gates every commit through `pnpm format:check` → 
 - Do not expose secrets.
 - Make the code obvious: good names, clear control flow, small functions, strong types, clear abstractions, tests.
 - Use tests to document behavior (`test_cache_hit`, `test_cache_miss`, `test_incremental_invalidation`).
-- Use documentation for system-level concepts. User-facing guides live in `docs/` (`getting-started`, `monorepo`, `impact-and-workspace`, `remote-cache`, `pr-commands`, `nextjs`, `vite`, `config-reference`, `troubleshooting`); architectural rules live here.
+- Use documentation for system-level concepts. User-facing guides live in `docs/` (`getting-started`, `impact-and-workspace`, `pr-commands`, `monorepo`, `config-reference`, `troubleshooting`); architectural rules live here.
 
 ### Comments
 

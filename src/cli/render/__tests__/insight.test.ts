@@ -122,28 +122,6 @@ describe("renderInsights with run results", () => {
 		expect(capture.stdout()).toContain("Cache hit rate: 0%");
 	});
 
-	it("adds a remote-cache line only when a remote hit occurred", () => {
-		const withRemote = captureOutput();
-		renderInsights(
-			computeInsights(
-				[{ task: "build", durationMs: 0, cacheHit: true, remoteHit: true }],
-				{ tasks: { build: { lastRun: 1, lastDurationMs: 900 } } },
-			),
-			withRemote.printer,
-		);
-		expect(withRemote.stdout()).toContain("Remote cache hits: 1");
-		expect(withRemote.stdout()).toContain("900ms");
-
-		const withoutRemote = captureOutput();
-		renderInsights(
-			computeInsights([{ task: "build", durationMs: 5, cacheHit: false }], {
-				tasks: {},
-			}),
-			withoutRemote.printer,
-		);
-		expect(withoutRemote.stdout()).not.toContain("Remote cache hits");
-	});
-
 	it("pads the task column to the longest name so statuses line up", () => {
 		const capture = captureOutput();
 

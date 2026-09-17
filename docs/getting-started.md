@@ -1,33 +1,99 @@
 # Getting started
 
-This guide takes you from zero to a working variant setup with a cache hit on the second run.
+variant reads a TypeScript diff at the AST level and tells you which tests that
+change actually needs. This guide runs it against your own repository — no
+config file, no setup — and then covers the task runner underneath it.
 
 ## Prerequisites
 
 - Node.js ≥ 20
-- An existing project with at least one script in `package.json` (e.g. `build`, `test`, `lint`)
+- A git repository with at least one prior commit
+- TypeScript sources (`.ts`/`.tsx`)
 
-## 1. Install
+## 1. Run it
+
+`impact` needs no config file. Point it at a commit range:
+
+```bash
+npx vrnt impact --base HEAD~1
+```
+
+The package is `vrnt`; the command it installs is `variant`. `npx vrnt` runs it
+without installing. (`npx variant` would fetch an unrelated package of that
+name, so never write that.) To install it:
 
 ```bash
 npm install -D vrnt
 ```
 
-The package is `vrnt`; the command it installs is `variant`. To try it without
-installing, address the package: `npx vrnt --help`. (`npx variant` would fetch
-an unrelated package of that name.)
+After which the command is `variant`:
 
-## 2. Create a config
+```bash
+variant impact --base origin/main
+```
 
-Run `init` to scaffold `variant.config.ts` interactively:
+## 2. Read the output
+
+For a change that only touched the body of one exported function:
+
+```
+Base ref: HEAD~1
+
+You changed 1 file.
+  internal       src/math.ts
+
+Impact: 1 file
+
+Run:   1 test file
+Skip:  1 test file (of 2 total)
+
+Verdict:    build recommended
+Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+```
+
+Reading it:
+
+- **`internal`** — the exported signature did not change, only the body. A
+  dependent that calls `add` still compiles; one that only imports `mul` is
+  untouched. The three classifications are `non-impacting`, `internal` and
+  `breaking`; anything that is not TypeScript is `unanalyzed`.
+- **Run / Skip** — the tests whose static import closure reaches a changed
+  file, and the rest.
+- **Confidence** — how much of the import graph resolved, *not* a safety
+  number. Unresolved specifiers and dynamic `import()` lower it and add a note.
+- **Report-only.** variant never skips anything for you. Every prediction is
+  appended to `.variant/history/impact.jsonl` so the false-skip rate can be
+  measured before skipping is ever offered.
+
+Add `--json` for the machine-readable form, which includes the full blast
+radius and every note.
+
+## 3. Use it on a PR
+
+```bash
+variant pr check --base origin/main
+variant pr report --base origin/main --markdown --output pr-report.md
+```
+
+`pr check` classifies every changed TypeScript file and rolls the result into
+one verdict. `pr report` renders the same thing as JSON or as markdown suitable
+for a sticky PR comment — see [pr-commands.md](./pr-commands.md).
+
+In a monorepo, `variant workspace check` is a CI gate for undeclared
+dependencies and cross-package relative imports. Both commands are covered in
+[impact-and-workspace.md](./impact-and-workspace.md), including the cases where
+static analysis cannot see an edge.
+
+## 4. Optional: the task runner
+
+variant also runs your tasks as a cached DAG. This part needs a config file.
 
 ```bash
 variant init
 ```
 
-variant detects your package manager, framework, and existing `package.json` scripts and suggests sensible defaults. Accept the prompts or type your own values.
-
-The result is a file like this:
+`init` detects your package manager, framework, and existing `package.json`
+scripts, then writes `variant.config.ts`:
 
 ```typescript
 // variant.config.ts
@@ -49,15 +115,11 @@ export default defineConfig({
 });
 ```
 
-## 3. Verify the setup
+Check it:
 
 ```bash
 variant doctor
 ```
-
-Doctor checks Node version, validates your config against the schema, and warns if the cache is large or a required trace session is missing.
-
-Example output:
 
 ```
 [✓] Node v22.4.0 meets requirement ≥20
@@ -66,13 +128,12 @@ Example output:
 [✓] Cache directory is 0 MB
 ```
 
-## 4. First run
+First run — every input hashes to a miss, so both tasks execute in dependency
+order:
 
 ```bash
 variant build
 ```
-
-variant builds the task graph (`test` depends on `build`), hashes the inputs for each task, finds no cached hashes, and runs both tasks. You should see output like:
 
 ```
 TASK    DURATION   STATUS
@@ -81,15 +142,7 @@ build   4200ms     MISS
 test    12100ms    MISS
 ```
 
-## 5. Second run — cache hit
-
-Run the same command again without changing any source files:
-
-```bash
-variant build
-```
-
-Both tasks hit the cache and are skipped:
+Run it again without touching a source file and both are served from the cache:
 
 ```
 TASK    DURATION   STATUS
@@ -98,18 +151,15 @@ build   -          HIT
 test    -          HIT
 ```
 
-## 6. Inspect history
-
-```bash
-variant insight
-```
-
-Shows each task's last run timestamp and duration from the local cache history. If the previous run included a remote cache, also prints the remote hit count and estimated time saved.
+`variant insight` shows each task's last run timestamp and duration from the
+local cache history.
 
 ## Next steps
 
-- **Add `dependsOn`** between tasks to express ordering — e.g. `test: { dependsOn: ["build"] }`.
-- **Tune `inputs`** to be as narrow as possible. The narrower the glob, the fewer cache invalidations.
-- **Add tasks for lint and typecheck** and run them in parallel with `build` by not declaring `dependsOn`.
-- **Set up a remote cache** so CI and local dev share hits — see [remote-cache.md](./remote-cache.md).
-- **Monorepo?** See [monorepo.md](./monorepo.md).
+- **[impact-and-workspace.md](./impact-and-workspace.md)** — what `impact` can
+  and cannot see, and how `workspace check` is configured.
+- **[pr-commands.md](./pr-commands.md)** — `pr check` and `pr report` in CI.
+- **[monorepo.md](./monorepo.md)** — workspace task generation and `--affected`.
+- **[config-reference.md](./config-reference.md)** — every config key.
+- **Tune `inputs`** to be as narrow as possible: the narrower the glob, the
+  fewer cache invalidations.
