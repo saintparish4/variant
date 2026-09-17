@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ImportEntry, SymbolGraph } from "../../semantic/symbol-graph.js";
 import {
@@ -5,6 +6,7 @@ import {
 	computeAffectedFiles,
 	getDependents,
 } from "../import-graph.js";
+import { toPathAliases } from "../tsconfig-paths.js";
 
 function staticImport(module: string): ImportEntry {
 	return { module, kind: "static", typeOnly: false, names: [] };
@@ -239,5 +241,127 @@ describe("getDependents", () => {
 		expect(sorted(getDependents(graph, "src/a.ts"))).toEqual(["src/b.ts"]);
 		expect(sorted(getDependents(graph, "src\\a.ts"))).toEqual(["src/b.ts"]);
 		expect(sorted(getDependents(graph, "src/nope.ts"))).toEqual([]);
+	});
+});
+
+describe("buildImportGraph with tsconfig paths", () => {
+	const root = path.resolve("/repo");
+	const aliases = toPathAliases(
+		root,
+		{
+			"@/*": [path.resolve(root, "src/*")],
+			"#config": [path.resolve(root, "src/config/index.ts")],
+		},
+		root,
+	);
+
+	it("follows an alias to the file it names", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/lib/date.ts": [],
+				"src/app.ts": [staticImport("@/lib/date")],
+			}),
+			{ pathAliases: aliases },
+		);
+
+		expect(sorted(graph.imports.get("src/app.ts"))).toEqual([
+			"src/lib/date.ts",
+		]);
+		expect(sorted(graph.dependents.get("src/lib/date.ts"))).toEqual([
+			"src/app.ts",
+		]);
+	});
+
+	it("resolves an alias onto an index file", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/lib/index.ts": [],
+				"src/app.ts": [staticImport("@/lib")],
+			}),
+			{ pathAliases: aliases },
+		);
+
+		expect(sorted(graph.imports.get("src/app.ts"))).toEqual([
+			"src/lib/index.ts",
+		]);
+	});
+
+	it("resolves an exact alias", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/config/index.ts": [],
+				"src/app.ts": [staticImport("#config")],
+			}),
+			{ pathAliases: aliases },
+		);
+
+		expect(sorted(graph.imports.get("src/app.ts"))).toEqual([
+			"src/config/index.ts",
+		]);
+	});
+
+	it("propagates a change through an alias-only edge", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/lib/date.ts": [],
+				"src/app.ts": [staticImport("@/lib/date")],
+				"src/__tests__/app.test.ts": [staticImport("../app.js")],
+			}),
+			{ pathAliases: aliases },
+		);
+
+		expect(
+			[...computeAffectedFiles(new Set(["src/lib/date.ts"]), graph)].sort(),
+		).toEqual(["src/__tests__/app.test.ts", "src/app.ts", "src/lib/date.ts"]);
+	});
+
+	it("calls an alias naming no indexed file unresolved, not external", () => {
+		const graph = buildImportGraph(
+			makeGraph({ "src/app.ts": [staticImport("@/missing")] }),
+			{ pathAliases: aliases },
+		);
+
+		expect(sorted(graph.unresolved.get("src/app.ts"))).toEqual(["@/missing"]);
+		expect(sorted(graph.externals.get("src/app.ts"))).toEqual([]);
+	});
+
+	it("still treats a real package as external", () => {
+		const graph = buildImportGraph(
+			makeGraph({ "src/app.ts": [staticImport("react")] }),
+			{ pathAliases: aliases },
+		);
+
+		expect(sorted(graph.externals.get("src/app.ts"))).toEqual(["react"]);
+		expect(sorted(graph.unresolved.get("src/app.ts"))).toEqual([]);
+	});
+
+	it("lets a workspace package win over an alias sharing its prefix", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"packages/ui/src/index.ts": [],
+				"src/ui/index.ts": [],
+				"src/app.ts": [staticImport("@/ui")],
+			}),
+			{
+				packageDirs: { "@/ui": "packages/ui" },
+				pathAliases: aliases,
+			},
+		);
+
+		expect(sorted(graph.imports.get("src/app.ts"))).toEqual([
+			"packages/ui/src/index.ts",
+		]);
+	});
+
+	it("is unchanged when no aliases are configured", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/lib/date.ts": [],
+				"src/app.ts": [staticImport("@/lib/date")],
+			}),
+		);
+
+		expect(sorted(graph.imports.get("src/app.ts"))).toEqual([]);
+		expect(sorted(graph.externals.get("src/app.ts"))).toEqual(["@/lib/date"]);
 	});
 });

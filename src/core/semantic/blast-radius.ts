@@ -32,6 +32,8 @@ import {
 	computeAffectedFiles,
 } from "../graph/import-graph.js";
 import type { PackageGraph } from "../graph/package-graph.js";
+import type { PathAlias } from "../graph/tsconfig-paths.js";
+import { readPathAliases } from "../graph/tsconfig-paths.js";
 import { readFileAtRef, readFilesAtRef } from "../vcs/git.js";
 import type { ClassifyResult, SemanticClass } from "./differ.js";
 import { createClassifier } from "./differ.js";
@@ -106,6 +108,12 @@ export interface TraceBlastRadiusOptions {
 	graphDir?: string;
 	/** Reuse a prebuilt import graph (skips the symbol-graph update). */
 	importGraph?: ImportGraph;
+	/**
+	 * DI for tests: tsconfig `paths` aliases. Read from the workspace tsconfig
+	 * when omitted — an unresolved alias edge is a missed dependent, which is
+	 * the direction that produces a false skip.
+	 */
+	pathAliases?: readonly PathAlias[];
 	/** DI for tests: content of a file at baseRef (null = didn't exist). */
 	readBefore?: (relPath: string) => Promise<string | null>;
 	/** DI for tests: current content of a file (null = deleted). */
@@ -131,11 +139,14 @@ export async function traceBlastRadius(
 	const packageDirs = packageDirsFrom(cwd, options.packageGraph);
 	let importGraph = options.importGraph;
 	if (importGraph === undefined) {
-		const { graph: symbolGraph } = await updateSymbolGraph(
-			cwd,
-			options.graphDir === undefined ? {} : { graphDir: options.graphDir },
-		);
-		importGraph = buildImportGraph(symbolGraph, { packageDirs });
+		const [{ graph: symbolGraph }, pathAliases] = await Promise.all([
+			updateSymbolGraph(
+				cwd,
+				options.graphDir === undefined ? {} : { graphDir: options.graphDir },
+			),
+			options.pathAliases ?? readPathAliases(cwd),
+		]);
+		importGraph = buildImportGraph(symbolGraph, { packageDirs, pathAliases });
 	}
 
 	const files = changedFiles.map(toPosix).sort();

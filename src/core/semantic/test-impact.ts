@@ -21,6 +21,7 @@
 
 import type { ImportGraph } from "../graph/import-graph.js";
 import { buildImportGraph } from "../graph/import-graph.js";
+import { readPathAliases } from "../graph/tsconfig-paths.js";
 import type { BlastRadius, TraceBlastRadiusOptions } from "./blast-radius.js";
 import { packageDirsFrom, traceBlastRadius } from "./blast-radius.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
@@ -184,12 +185,16 @@ export async function traceTestImpact(
 ): Promise<TestImpactResult | null> {
 	let importGraph = options.importGraph;
 	if (importGraph === undefined) {
-		const { graph: symbolGraph } = await updateSymbolGraph(
-			cwd,
-			options.graphDir === undefined ? {} : { graphDir: options.graphDir },
-		);
+		const [{ graph: symbolGraph }, pathAliases] = await Promise.all([
+			updateSymbolGraph(
+				cwd,
+				options.graphDir === undefined ? {} : { graphDir: options.graphDir },
+			),
+			options.pathAliases ?? readPathAliases(cwd),
+		]);
 		importGraph = buildImportGraph(symbolGraph, {
 			packageDirs: packageDirsFrom(cwd, options.packageGraph),
+			pathAliases,
 		});
 	}
 

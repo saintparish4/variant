@@ -22,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ImpactReportError` (`IMPACT_REPORT_ERROR`), for a test report that cannot be
   read as one.
 
+### Fixed
+
+- **tsconfig `paths` aliases now resolve**, closing one of the two known
+  under-selection gaps. An import reaching its target only through an alias
+  (`@/lib/date`) previously landed in `unresolved`: the change did not
+  propagate to the file's real importers and `impact` under-selected the tests
+  — a false skip, reported at full confidence. `compilerOptions.paths` is read
+  through the TypeScript compiler's own config parser, so JSONC, `extends`
+  chains and `baseUrl` behave as `tsc` does rather than as a reimplementation
+  of it. A workspace package still wins over an alias sharing its prefix, and
+  an alias that matches a pattern but names no indexed file is now reported as
+  `unresolved` instead of being counted as an external package.
+
 
 ## [0.2.0] - 2026-09-17
 

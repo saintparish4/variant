@@ -16,15 +16,18 @@
  * Resolution is best-effort per NodeNext conventions: relative specifiers map
  * `.js`/`.mjs`/`.cjs`/`.jsx` to their TS sources and try index files; bare
  * specifiers resolve into sibling workspace packages when `packageDirs` is
- * provided, and count as externals otherwise. Internal-looking specifiers
- * that fail to resolve (missing files, non-TS assets, tsconfig path aliases)
- * are reported in `unresolved` so downstream consumers can lower confidence
- * instead of silently missing edges.
+ * provided, then through tsconfig `paths` aliases when `pathAliases` is, and
+ * count as externals otherwise. Internal-looking specifiers that fail to
+ * resolve (missing files, non-TS assets) are reported in `unresolved` so
+ * downstream consumers can lower confidence instead of silently missing
+ * edges.
  */
 
 import path from "node:path";
 import type { ImportEntry, SymbolGraph } from "../semantic/symbol-graph.js";
 import type { PackageGraph } from "./package-graph.js";
+import type { PathAlias } from "./tsconfig-paths.js";
+import { matchPathAlias } from "./tsconfig-paths.js";
 
 export interface ImportGraph {
 	/** file -> workspace files it imports (resolved, workspace-relative POSIX). */
@@ -61,6 +64,11 @@ export interface ImportGraphOptions {
 	 * bare imports of sibling packages (`@org/auth` -> `packages/auth/...`).
 	 */
 	packageDirs?: Record<string, string>;
+	/**
+	 * tsconfig `paths` aliases. Tried after workspace packages, so a package
+	 * name always wins over an alias that happens to share its prefix.
+	 */
+	pathAliases?: readonly PathAlias[];
 }
 
 const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"] as const;
@@ -79,6 +87,7 @@ export function buildImportGraph(
 ): ImportGraph {
 	const files = new Set(Object.keys(symbolGraph.files));
 	const packageDirs = options.packageDirs ?? {};
+	const pathAliases = options.pathAliases ?? [];
 
 	const imports = new Map<string, Set<string>>();
 	const dependents = new Map<string, Set<string>>();
@@ -123,13 +132,25 @@ export function buildImportGraph(
 				continue;
 			}
 			const pkg = matchWorkspacePackage(spec, packageDirs);
-			if (pkg === undefined) {
-				externals.get(file)?.add(spec);
+			if (pkg !== undefined) {
+				const resolved = resolvePackageImport(pkg.dir, pkg.subpath, files);
+				if (resolved === undefined) unresolved.get(file)?.add(spec);
+				else addEdge(file, resolved, imp);
 				continue;
 			}
-			const resolved = resolvePackageImport(pkg.dir, pkg.subpath, files);
-			if (resolved === undefined) unresolved.get(file)?.add(spec);
-			else addEdge(file, resolved, imp);
+			const aliased = resolveAliasImport(spec, pathAliases, files);
+			if (aliased !== undefined) {
+				addEdge(file, aliased, imp);
+				continue;
+			}
+			// An alias that matched a pattern but named no indexed file is a
+			// missed internal edge, not a third-party package — say so rather
+			// than quietly counting it as external.
+			if (matchPathAlias(spec, pathAliases).length > 0) {
+				unresolved.get(file)?.add(spec);
+				continue;
+			}
+			externals.get(file)?.add(spec);
 		}
 	}
 
@@ -158,10 +179,14 @@ export async function loadImportGraph(
 	options: { graphDir?: string; packageGraph?: PackageGraph } = {},
 ): Promise<ImportGraph> {
 	const { updateSymbolGraph } = await import("../semantic/symbol-graph.js");
-	const { graph } = await updateSymbolGraph(
-		cwd,
-		options.graphDir === undefined ? {} : { graphDir: options.graphDir },
-	);
+	const { readPathAliases } = await import("./tsconfig-paths.js");
+	const [{ graph }, pathAliases] = await Promise.all([
+		updateSymbolGraph(
+			cwd,
+			options.graphDir === undefined ? {} : { graphDir: options.graphDir },
+		),
+		readPathAliases(cwd),
+	]);
 
 	const packageDirs: Record<string, string> = {};
 	for (const pkg of options.packageGraph?.packages ?? []) {
@@ -169,7 +194,7 @@ export async function loadImportGraph(
 			.relative(cwd, pkg.dir)
 			.replace(/\\/g, "/");
 	}
-	return buildImportGraph(graph, { packageDirs });
+	return buildImportGraph(graph, { packageDirs, pathAliases });
 }
 
 /** Files that directly import `file`. Empty set for unknown files. */
@@ -248,6 +273,18 @@ function resolvePackageImport(
 		],
 		files,
 	);
+}
+
+function resolveAliasImport(
+	spec: string,
+	aliases: readonly PathAlias[],
+	files: ReadonlySet<string>,
+): string | undefined {
+	for (const base of matchPathAlias(spec, aliases)) {
+		const resolved = firstExisting(candidatePaths(base), files);
+		if (resolved !== undefined) return resolved;
+	}
+	return undefined;
 }
 
 function matchWorkspacePackage(
