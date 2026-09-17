@@ -1,6 +1,6 @@
 /**
  * @module
- * Test impact analysis (roadmap 1.4 — `TestTrace` + `CoverageMap`). Maps test
+ * Test impact analysis. Maps test
  * files to the source they import (reusing the file-level import graph) and
  * selects the tests whose import closure intersects the blast radius:
  * *run 32 tests instead of 10,000.*

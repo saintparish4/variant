@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TraceFile } from "../types.js";
-import { linkctlVitePlugin } from "../vite-plugin.js";
+import { variantVitePlugin } from "../vite-plugin.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-vite-p-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-vite-p-"));
 	tmpDirs.push(dir);
 	return dir;
 }
@@ -17,21 +17,21 @@ afterEach(() => {
 	tmpDirs.length = 0;
 });
 
-describe("linkctlVitePlugin", () => {
-	it("has name 'linkctl-tracer'", () => {
-		const plugin = linkctlVitePlugin();
-		expect(plugin.name).toBe("linkctl-tracer");
+describe("variantVitePlugin", () => {
+	it("has name 'variant-tracer'", () => {
+		const plugin = variantVitePlugin();
+		expect(plugin.name).toBe("variant-tracer");
 	});
 
 	it("transform returns null (does not modify code)", () => {
-		const plugin = linkctlVitePlugin();
+		const plugin = variantVitePlugin();
 		const result = plugin.transform?.("const x = 1;", "/app/src/main.ts");
 		expect(result).toBeNull();
 	});
 
 	it("transform collects non-node_modules ids", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s1", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s1", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 		plugin.transform?.("", "/app/src/a.ts");
 		plugin.transform?.("", "/app/src/b.ts");
@@ -52,7 +52,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("transform strips query parameters from ids", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s2", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s2", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 		plugin.transform?.("", "/app/src/comp.vue?vue&type=script");
 		return plugin.closeBundle?.().then(async () => {
@@ -67,7 +67,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("configResolved updates root used by closeBundle", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s3", outDir: "out" });
+		const plugin = variantVitePlugin({ sessionId: "s3", outDir: "out" });
 		plugin.configResolved?.({ root: cwd });
 		plugin.transform?.("", "/x.ts");
 		return plugin.closeBundle?.().then(() => {
@@ -77,7 +77,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("closeBundle writes sorted modules and correct metadata", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s4", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s4", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 		plugin.transform?.("", "/z.ts");
 		plugin.transform?.("", "/a.ts");
@@ -95,7 +95,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("options.sessionId overrides generated id", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({
+		const plugin = variantVitePlugin({
 			sessionId: "my-id",
 			outDir: "traces",
 		});
@@ -110,7 +110,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("deduplicates the same module id seen multiple times", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s5", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s5", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 		plugin.transform?.("", "/app/same.ts");
 		plugin.transform?.("", "/app/same.ts");
@@ -125,7 +125,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("generateBundle populates routes from entry chunks", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s6", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s6", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 
 		plugin.generateBundle?.(undefined, {
@@ -172,7 +172,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("generateBundle skips non-entry chunks and asset chunks", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s7", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s7", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 
 		plugin.generateBundle?.(undefined, {
@@ -197,7 +197,7 @@ describe("linkctlVitePlugin", () => {
 
 	it("generateBundle ignores entry chunks with no matching route convention", () => {
 		const cwd = makeTmpDir();
-		const plugin = linkctlVitePlugin({ sessionId: "s8", outDir: "traces" });
+		const plugin = variantVitePlugin({ sessionId: "s8", outDir: "traces" });
 		plugin.configResolved?.({ root: cwd });
 
 		// facadeModuleId is under src/ but NOT under pages/routes/views

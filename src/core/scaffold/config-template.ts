@@ -1,6 +1,6 @@
 /**
  * @module
- * The defaults and template behind `linkctl init`. The command owns the
+ * The defaults and template behind `variant init`. The command owns the
  * prompting; everything it suggests and everything it writes is decided here.
  */
 
@@ -56,7 +56,7 @@ export function defaultCommandFor(
 }
 
 /**
- * The scripts already in package.json, narrowed to ones linkctl knows how
+ * The scripts already in package.json, narrowed to ones variant knows how
  * to orchestrate. Falls back to a sensible trio when package.json is missing
  * or unreadable — init must still produce a usable config.
  */
@@ -81,7 +81,7 @@ export function renderConfigTemplate(tasks: readonly TaskScaffold[]): string {
 		)
 		.join(",\n");
 
-	return `import { defineConfig } from "linkctl";
+	return `import { defineConfig } from "vrnt";
 
 export default defineConfig({
   strategy: "adaptive",

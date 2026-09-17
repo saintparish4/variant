@@ -21,7 +21,7 @@ import {
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-symgraph-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-symgraph-"));
 	tmpDirs.push(dir);
 	return dir;
 }

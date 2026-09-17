@@ -1,4 +1,4 @@
-import type { LinkctlError } from "../../core/errors.js";
+import type { VariantError } from "../../core/errors.js";
 import { getColors } from "../visuals/color.js";
 import { provenanceLines } from "./provenance.js";
 
@@ -16,7 +16,7 @@ const writeStderr: WriteText = (text) => {
  * results, not the reason the process is about to exit non-zero.
  */
 export function renderError(
-	err: LinkctlError,
+	err: VariantError,
 	write: WriteText = writeStderr,
 ): void {
 	const colors = getColors();

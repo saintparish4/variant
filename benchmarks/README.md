@@ -1,6 +1,6 @@
 # Benchmarks
 
-Reproducible benchmark harness for the performance claims in the main README. Every number linkctl advertises should be regenerable with one command — a number without a script attached is marketing, not a measurement.
+Reproducible benchmark harness for the performance claims in the main README. Every number variant advertises should be regenerable with one command — a number without a script attached is marketing, not a measurement.
 
 ## Run it
 
@@ -18,19 +18,19 @@ Results are written to `benchmarks/results/latest.md` (paste-ready markdown tabl
 
 | Scenario | Claim it proves |
 |----------|-----------------|
-| CLI startup — `linkctl --help` | The lazy-import design keeps the binary interactive; enforced < 200 ms in CI |
+| CLI startup — `variant --help` | The lazy-import design keeps the binary interactive; enforced < 200 ms in CI |
 | Baseline — raw `node --version` | The command the fixture task wraps, measured alone so overhead can be isolated |
 | Warm run — cache hit at 100 / 1,000 / 10,000 files | Full wall time of a skipped build (process start + config load + hashing + one `cache.json` read); the build command is never spawned, and cost scales with file count, not build complexity |
 | Cold run — no cache, 1,000 files | End-to-end orchestration when every task must execute |
-| Orchestration overhead (derived) | Cold run minus baseline = what linkctl itself costs on top of your build tool |
+| Orchestration overhead (derived) | Cold run minus baseline = what variant itself costs on top of your build tool |
 
-Fixtures are generated deterministically (seeded LCG) into a temp directory, so the same tier produces byte-identical projects on every machine, and nothing inside this repository is touched or timed. The fixture task command is `node --version` — deliberately near-zero — so cold-run time is dominated by linkctl's own work rather than a build tool's.
+Fixtures are generated deterministically (seeded LCG) into a temp directory, so the same tier produces byte-identical projects on every machine, and nothing inside this repository is touched or timed. The fixture task command is `node --version` — deliberately near-zero — so cold-run time is dominated by variant's own work rather than a build tool's.
 
-Warm-run caches are primed with two untimed runs before measurement. The cold scenario deletes `.linkctl/` before every timed run (excluded from timing). The reported statistic is the **median**; mean ± σ, min, and the full run distribution are in `latest.json`.
+Warm-run caches are primed with two untimed runs before measurement. The cold scenario deletes `.variant/` before every timed run (excluded from timing). The reported statistic is the **median**; mean ± σ, min, and the full run distribution are in `latest.json`.
 
 ## CI
 
-[`.github/workflows/benchmark.yml`](../.github/workflows/benchmark.yml) runs the full harness on `ubuntu-latest` for every push to `alpha` (and on demand via workflow dispatch). It publishes the table to the job summary, uploads `results/` as an artifact, and **fails the job if CLI startup median exceeds 200 ms** — the README's startup claim is a regression gate, not a promise.
+[`.github/workflows/benchmark.yml`](../.github/workflows/benchmark.yml) runs the full harness on `ubuntu-latest` for every push to `master` (and on demand via workflow dispatch). It publishes the table to the job summary, uploads `results/` as an artifact, and **fails the job if CLI startup median exceeds 200 ms** — the README's startup claim is a regression gate, not a promise.
 
 ## Caveats
 

@@ -16,7 +16,7 @@ export async function registerTraceAction(): Promise<void> {
 	// The tracer plugins key off this variable, so it must be set before the
 	// dev task spawns its child processes. Progress rendering is deliberately
 	// left off here: a traced dev server owns the terminal for its own output.
-	process.env["LINKCTL_TRACE"] = "1";
+	process.env["VARIANT_TRACE"] = "1";
 	await runTasksWithDeps("dev", ctx.graph, toRunOptions(ctx));
 }
 

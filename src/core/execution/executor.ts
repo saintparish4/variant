@@ -21,7 +21,7 @@ export const executeTask: TaskExecutor = async (
 	cwd,
 	onOutput,
 ) => {
-	// Lazy imports keep startup fast (`linkctl --help` stays < 100ms).
+	// Lazy imports keep startup fast (`variant --help` stays < 100ms).
 	const { execa, ExecaError } = await import("execa");
 	const { default: stringArgv } = await import("string-argv");
 

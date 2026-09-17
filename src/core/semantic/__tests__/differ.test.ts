@@ -102,7 +102,7 @@ describe("classifyChange", () => {
 		});
 	});
 
-	// --- signature-level differ (roadmap 1.0) ---
+	// --- signature-level differ ---
 
 	it("body-only edit of an exported function is internal, not breaking", async () => {
 		const r = await classifyChange({

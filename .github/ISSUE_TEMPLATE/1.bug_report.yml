@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in linkctl isn't working the way it should.
+description: Something in variant isn't working the way it should.
 title: "[bug] "
 labels: ["bug", "triage"]
 type: Bug
@@ -7,10 +7,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before opening a new issue, please [search existing issues](https://github.com/saintparish4/linkctl/issues) — upvoting a duplicate is faster than filing a new report.
+        Before opening a new issue, please [search existing issues](https://github.com/saintparish4/variant/issues) — upvoting a duplicate is faster than filing a new report.
 
-        **Feature requests and ideas** → [open a discussion](https://github.com/saintparish4/linkctl/discussions/new?category=ideas)
-        **Documentation issues** → [open a discussion](https://github.com/saintparish4/linkctl/discussions/new?category=ideas)
+        **Feature requests and ideas** → [open a discussion](https://github.com/saintparish4/variant/discussions/new?category=ideas)
+        **Documentation issues** → [open a discussion](https://github.com/saintparish4/variant/discussions/new?category=ideas)
 
         A minimal reproduction is the single most important thing you can do to get your bug fixed quickly.
 
@@ -19,7 +19,7 @@ body:
     attributes:
       label: Link to a minimal reproduction
       description: |
-        A link to a **public** GitHub repository containing the smallest workspace that demonstrates the issue — typically a minimal monorepo with an `linkctl.config.ts` and only the packages needed to trigger the bug. Include only the changes that contribute to the issue.
+        A link to a **public** GitHub repository containing the smallest workspace that demonstrates the issue — typically a minimal monorepo with an `variant.config.ts` and only the packages needed to trigger the bug. Include only the changes that contribute to the issue.
 
         **Skipping this or providing a link that does not reproduce the issue will result in the issue being closed.**
       placeholder: "https://github.com/you/link-bug-repro"
@@ -33,7 +33,7 @@ body:
       description: Step-by-step commands that reproduce the issue against your linked reproduction.
       placeholder: |
         1. Clone the repo and run `pnpm install`
-        2. Run `linkctl run build`
+        2. Run `variant run build`
         3. Observe the error / unexpected output
     validations:
       required: true
@@ -56,10 +56,10 @@ body:
     attributes:
       label: Environment
       description: |
-        Fill in the values below. Run `node --version`, `pnpm --version` (or your package manager), and check your `package.json` for the installed linkctl version.
+        Fill in the values below. Run `node --version`, `pnpm --version` (or your package manager), and check your `package.json` for the installed variant version.
       render: bash
       placeholder: |
-        linkctl:    1.0.1
+        variant:    1.0.1
         Node.js:          v20.11.0
         Package manager:  pnpm 9.12.0
         OS:               Linux x64 (Ubuntu 22.04)
@@ -75,7 +75,7 @@ body:
       multiple: true
       options:
         - "Not sure"
-        - "Config loading (linkctl.config.ts)"
+        - "Config loading (variant.config.ts)"
         - "Task DAG / ordering"
         - "Concurrency / execution"
         - "Caching"
@@ -97,8 +97,8 @@ body:
       label: Which command or stage is affected? (select all that apply)
       multiple: true
       options:
-        - "linkctl run <task>"
-        - "linkctl build"
+        - "variant run <task>"
+        - "variant build"
         - "Tracer plugin — Next.js (webpack)"
         - "Tracer plugin — Vite"
         - "Config load / validation"
@@ -109,7 +109,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Narrowing down the regression:** If this worked in an earlier release, it helps us enormously if you can identify which version introduced the bug. Check the [releases page](https://github.com/saintparish4/linkctl/releases) and install an older version with `pnpm add -D linkctl@<version>` to bisect. Include your findings in "Additional context" below.
+        **Narrowing down the regression:** If this worked in an earlier release, it helps us enormously if you can identify which version introduced the bug. Check the [releases page](https://github.com/saintparish4/variant/releases) and install an older version with `pnpm add -D vrnt@<version>` to bisect. Include your findings in "Additional context" below.
 
   - type: textarea
     id: logs

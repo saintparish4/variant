@@ -1,6 +1,6 @@
 /**
  * @module
- * Workspace dependency hygiene (roadmap 1.6). Compares what each workspace
+ * Workspace dependency hygiene. Compares what each workspace
  * package actually imports — straight from the SymbolGraph's raw import
  * specifiers — against what its manifest declares, and reports three
  * violation kinds:

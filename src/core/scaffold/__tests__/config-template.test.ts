@@ -42,12 +42,12 @@ describe("inputsFor", () => {
 });
 
 describe("renderConfigTemplate", () => {
-	it("emits a defineConfig module importing from linkctl", () => {
+	it("emits a defineConfig module importing from variant", () => {
 		const template = renderConfigTemplate([
 			{ name: "build", command: "pnpm build", inputs: ["src/**/*"] },
 		]);
 
-		expect(template).toContain('import { defineConfig } from "linkctl";');
+		expect(template).toContain('import { defineConfig } from "vrnt";');
 		expect(template).toContain("export default defineConfig({");
 		expect(template).toContain('strategy: "adaptive"');
 	});

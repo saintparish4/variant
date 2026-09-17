@@ -1,6 +1,6 @@
 # PR commands
 
-linkctl's `pr` subcommands help you understand what a pull request actually changes — both at the TypeScript AST level and in terms of which routes and packages your running app loads.
+variant's `pr` subcommands help you understand what a pull request actually changes — both at the TypeScript AST level and in terms of which routes and packages your running app loads.
 
 ## Commands
 
@@ -9,8 +9,8 @@ linkctl's `pr` subcommands help you understand what a pull request actually chan
 Classifies every changed `.ts` / `.tsx` file by comparing its exported symbols before and after:
 
 ```bash
-npx linkctl pr check
-npx linkctl pr check --base origin/main
+variant pr check
+variant pr check --base origin/main
 ```
 
 Output:
@@ -48,8 +48,8 @@ Verdict: build required
 Loads the last recorded trace session and intersects the list of changed files with the modules recorded during that session:
 
 ```bash
-npx linkctl pr replay
-npx linkctl pr replay --base origin/main --session <sessionId>
+variant pr replay
+variant pr replay --base origin/main --session <sessionId>
 ```
 
 Output:
@@ -78,13 +78,13 @@ Runs both `pr check` and `pr replay` and produces a combined report:
 
 ```bash
 # JSON to stdout
-npx linkctl pr report
+variant pr report
 
 # Markdown suitable for a GitHub comment
-npx linkctl pr report --markdown
+variant pr report --markdown
 
 # Write to a file
-npx linkctl pr report --markdown --output pr-report.md
+variant pr report --markdown --output pr-report.md
 ```
 
 JSON output shape:
@@ -112,11 +112,13 @@ JSON output shape:
 
 ## GitHub Actions integration
 
-The workflow at `.github/workflows/pr-report.yml` runs `pr report --markdown` on every pull request and posts (or updates) a sticky comment with the report.
+There is no ready-made workflow to install yet. `pr report --markdown` writes a file that any commenting action can post, so the integration is a few lines in your own workflow:
 
-The workflow is already committed to the repository at `.github/workflows/pr-report.yml`. It uses `actions/github-script` to post or update a sticky comment with `## Linkctl PR Report` as the marker. No additional secrets are required — the default `GITHUB_TOKEN` is sufficient.
+```yaml
+- run: npx vrnt pr report --base ${{ github.base_ref }} --markdown --output pr-report.md
+```
 
-The workflow triggers on `pull_request` (opened, synchronize, reopened), installs dependencies with pnpm, runs `linkctl pr report --base ${{ github.base_ref }} --markdown --output pr-report.md`, then creates or updates the comment.
+Feed `pr-report.md` to `actions/github-script` (or `peter-evans/create-or-update-comment`) with a fixed marker line such as `## Variant PR Report` so each run updates the same sticky comment instead of adding a new one. The default `GITHUB_TOKEN` is enough — no extra secrets.
 
 ## Options
 

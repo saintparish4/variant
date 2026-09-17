@@ -7,8 +7,8 @@ roadmap.txt
 dist/
 *.tsbuildinfo
 
-# linkctl cache (plan: content cache lives under project)
-.linkctl/
+# variant cache (plan: content cache lives under project)
+.variant/
 .cursor/
 .claude/
 

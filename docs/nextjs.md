@@ -1,48 +1,48 @@
 # Next.js setup
 
-linkctl provides a webpack plugin for Next.js that records which modules and routes are loaded during builds and dev runs. This data powers two features:
+variant provides a webpack plugin for Next.js that records which modules and routes are loaded during builds and dev runs. This data powers two features:
 
-- **`linkctl trace analyze`** — inspect which files and routes a trace session loaded
+- **`variant trace analyze`** — inspect which files and routes a trace session loaded
 - **Lint-only fast path** — skip builds entirely when a PR touches no critical route
 
 ## 1. Install the tracer plugin
 
 ```bash
-npm install -D linkctl
+npm install -D vrnt
 ```
 
 ## 2. Add the webpack plugin
 
 ```javascript
 // next.config.js (or next.config.mjs)
-import { linkctlNextPlugin } from "linkctl/tracer";
+import { variantNextPlugin } from "vrnt/tracer";
 
 export default {
   webpack(config, { isServer }) {
     if (!isServer) {
-      config.plugins.push(linkctlNextPlugin());
+      config.plugins.push(variantNextPlugin());
     }
     return config;
   },
 };
 ```
 
-The plugin writes trace sessions to `.linkctl/traces/<sessionId>.json` during every build or `next dev` run.
+The plugin writes trace sessions to `.variant/traces/<sessionId>.json` during every build or `next dev` run.
 
 ## 3. Record a trace session
 
 ```bash
-npx linkctl trace
+variant trace
 ```
 
 This starts `next dev` (or your configured dev command) with tracing active. Browse your app or hit any routes you consider critical. Stop the server with Ctrl-C.
 
 ```bash
 # Inspect the most recent session
-npx linkctl trace analyze
+variant trace analyze
 
 # Inspect a specific session
-npx linkctl trace analyze <sessionId>
+variant trace analyze <sessionId>
 ```
 
 `trace analyze` prints:
@@ -69,11 +69,11 @@ Packages touched (3):
 
 ## 4. Enable the lint-only fast path
 
-When `lintOnlyForNonCritical` is on, linkctl checks whether any changed file intersects the modules recorded for your declared critical routes. If no critical route is touched, linkctl restricts the run to lint tasks only and skips all builds.
+When `lintOnlyForNonCritical` is on, variant checks whether any changed file intersects the modules recorded for your declared critical routes. If no critical route is touched, variant restricts the run to lint tasks only and skips all builds.
 
 ```typescript
-// linkctl.config.ts
-import { defineConfig } from "linkctl";
+// variant.config.ts
+import { defineConfig } from "vrnt";
 
 export default defineConfig({
   tasks: {
@@ -96,7 +96,7 @@ export default defineConfig({
 When a PR only touches, say, the `/about` page (stderr notice + table):
 
 ```
-[linkctl] No critical-path changes detected — running lint tasks only
+[variant] No critical-path changes detected — running lint tasks only
 
 TASK    DURATION   STATUS
 ---------------------------
@@ -118,10 +118,10 @@ lint    8200ms     MISS
 `--scope` switches to the event-driven scheduler and gives traced packages the highest priority, so they are scheduled before any non-traced packages. All packages still run; the flag controls order, not which tasks execute.
 
 ```bash
-npx linkctl build --scope <sessionId>
+variant build --scope <sessionId>
 
 # Shorthand for the most recent session
-npx linkctl build --trace last
+variant build --trace last
 ```
 
 ## Config reference

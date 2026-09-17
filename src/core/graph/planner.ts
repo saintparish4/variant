@@ -1,7 +1,7 @@
-import type { ResolvedLinkctlConfig } from "../../types/index.js";
+import type { ResolvedVariantConfig } from "../../types/index.js";
 import { TaskGraph } from "./dag.js";
 
-export function buildGraph(config: ResolvedLinkctlConfig): TaskGraph {
+export function buildGraph(config: ResolvedVariantConfig): TaskGraph {
 	const graph = new TaskGraph();
 	for (const [name, task] of Object.entries(config.tasks)) {
 		graph.addTask(name);

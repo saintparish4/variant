@@ -33,7 +33,7 @@ describe("E2E: why did this task run?", () => {
 	let cwd: string;
 
 	beforeAll(async () => {
-		cwd = copyFixture("linkctl-prov-");
+		cwd = copyFixture("variant-prov-");
 
 		// Break exactly one package's build. The fixture is shared across tiers,
 		// so the failure is introduced in the temp copy, never committed.
@@ -46,7 +46,7 @@ describe("E2E: why did this task run?", () => {
 	afterAll(() => remove(cwd));
 
 	// Each run starts uncached, so the reason tells the same story every time.
-	beforeEach(() => remove(path.join(cwd, ".linkctl")));
+	beforeEach(() => remove(path.join(cwd, ".variant")));
 
 	function build(env: Record<string, string>) {
 		return execa("node", [cli, "build"], { cwd, reject: false, env });
@@ -62,7 +62,7 @@ describe("E2E: why did this task run?", () => {
 
 	it("carries the same reason when color is suppressed", async () => {
 		const styled = await build({ FORCE_COLOR: "1" });
-		remove(path.join(cwd, ".linkctl"));
+		remove(path.join(cwd, ".variant"));
 		const plain = await build({ NO_COLOR: "1" });
 
 		expect(styled.stderr).toContain(FIRST_RUN_REASON);
@@ -77,7 +77,7 @@ describe("E2E: provenance stays invisible on success", () => {
 	let cwd: string;
 
 	beforeAll(() => {
-		cwd = copyFixture("linkctl-prov-ok-");
+		cwd = copyFixture("variant-prov-ok-");
 	});
 	afterAll(() => remove(cwd));
 

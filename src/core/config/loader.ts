@@ -2,32 +2,32 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
-	LinkctlConfig,
-	ResolvedLinkctlConfig,
+	ResolvedVariantConfig,
+	VariantConfig,
 } from "../../types/index.js";
 import { ConfigError } from "../errors.js";
-import { linkctlConfigSchema } from "./schema.js";
+import { variantConfigSchema } from "./schema.js";
 
-export function defineConfig(config: LinkctlConfig): LinkctlConfig {
+export function defineConfig(config: VariantConfig): VariantConfig {
 	return config;
 }
 
 const CANDIDATES = [
-	"linkctl.config.ts",
-	"linkctl.config.mjs",
-	"linkctl.config.js",
-	"linkctl.config.json",
+	"variant.config.ts",
+	"variant.config.mjs",
+	"variant.config.js",
+	"variant.config.json",
 ] as const;
 
 /** First matching config path under `cwd`, in the same order as `loadConfig` resolution. */
-export function findLinkctlConfigPath(cwd: string): string | undefined {
+export function findVariantConfigPath(cwd: string): string | undefined {
 	return CANDIDATES.map((f) => path.join(cwd, f)).find(existsSync);
 }
 
 export async function loadConfig(
 	cwd: string = process.cwd(),
-): Promise<ResolvedLinkctlConfig> {
-	const configPath = findLinkctlConfigPath(cwd);
+): Promise<ResolvedVariantConfig> {
+	const configPath = findVariantConfigPath(cwd);
 
 	let raw: unknown = {};
 
@@ -44,7 +44,7 @@ export async function loadConfig(
 			}
 		} else {
 			// jiti transpiles TS and resolves ESM on the fly, so a .ts config
-			// needs no build step before linkctl can read it.
+			// needs no build step before variant can read it.
 			const { createJiti } = await import("jiti");
 			const jiti = createJiti(import.meta.url);
 			const mod = await jiti.import(configPath);
@@ -52,14 +52,14 @@ export async function loadConfig(
 		}
 	}
 
-	const result = linkctlConfigSchema.safeParse(raw);
+	const result = variantConfigSchema.safeParse(raw);
 
 	if (!result.success) {
 		const messages = result.error.issues
 			.map((e) => ` ${e.path.map(String).join(".")}: ${e.message}`)
 			.join("\n");
-		throw new ConfigError(`Invalid linkctl config:\n${messages}`);
+		throw new ConfigError(`Invalid variant config:\n${messages}`);
 	}
 
-	return result.data as ResolvedLinkctlConfig;
+	return result.data as ResolvedVariantConfig;
 }

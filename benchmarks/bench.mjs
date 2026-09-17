@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Reproducible benchmark harness for linkctl.
+ * Reproducible benchmark harness for variant.
  *
  * Measures five things against deterministic generated fixture projects:
- *   1. CLI startup — `linkctl --help`
+ *   1. CLI startup — `variant --help`
  *   2. Warm run    — cache hit at 100 / 1,000 / 10,000 files (hashing scale)
  *   3. Cold run    — no cache, 1,000-file project
  *   4. Overhead    — cold run minus a raw baseline of the wrapped command,
- *                    i.e. linkctl's own orchestration cost
- *   5. Semantic    — `linkctl impact` over a git fixture with N changed files;
+ *                    i.e. variant's own orchestration cost
+ *   5. Semantic    — `variant impact` over a git fixture with N changed files;
  *                    this is the differ + git-read path, which scales with the
  *                    size of the diff rather than the size of the project
  *
@@ -106,7 +106,7 @@ function moduleSource(index, randomInts) {
 
 // The executor splits commands on spaces (no shell quoting), so the task
 // command must stay quote-free. `node --version` is cheap and universal,
-// which keeps the cold run dominated by linkctl's own work — exactly what
+// which keeps the cold run dominated by variant's own work — exactly what
 // the overhead measurement needs.
 const fixtureConfig = `export default {
 	strategy: "adaptive",
@@ -121,12 +121,12 @@ const fixtureConfig = `export default {
 `;
 
 function generateFixture(fileCount) {
-	const dir = mkdtempSync(join(tmpdir(), `linkctl-bench-${fileCount}-`));
+	const dir = mkdtempSync(join(tmpdir(), `variant-bench-${fileCount}-`));
 	writeFileSync(
 		join(dir, "package.json"),
 		`${JSON.stringify(
 			{
-				name: `linkctl-bench-fixture-${fileCount}`,
+				name: `variant-bench-fixture-${fileCount}`,
 				private: true,
 				version: "0.0.0",
 			},
@@ -134,7 +134,7 @@ function generateFixture(fileCount) {
 			2,
 		)}\n`,
 	);
-	writeFileSync(join(dir, "linkctl.config.ts"), fixtureConfig);
+	writeFileSync(join(dir, "variant.config.ts"), fixtureConfig);
 	const sourceDir = join(dir, "src");
 	mkdirSync(sourceDir);
 	const randomInts = seededInts(fileCount);
@@ -148,7 +148,7 @@ function generateFixture(fileCount) {
 }
 
 // ---------------------------------------------------------------------------
-// Semantic fixture — a real git repo, because `linkctl impact` reads both sides
+// Semantic fixture — a real git repo, because `variant impact` reads both sides
 // of every changed file out of git and classifies them with the AST differ.
 // The cost scales with the diff, so the fixture commits everything and then
 // dirties a fixed slice of the working tree.
@@ -199,12 +199,12 @@ function semanticTestSource(index) {
  */
 function generateSemanticFixture(moduleCount, changedCount) {
 	const dir = mkdtempSync(
-		join(tmpdir(), `linkctl-bench-semantic-${moduleCount}-`),
+		join(tmpdir(), `variant-bench-semantic-${moduleCount}-`),
 	);
 	writeFileSync(
 		join(dir, "package.json"),
 		`${JSON.stringify(
-			{ name: "linkctl-bench-semantic", private: true, version: "0.0.0" },
+			{ name: "variant-bench-semantic", private: true, version: "0.0.0" },
 			null,
 			2,
 		)}\n`,
@@ -412,7 +412,7 @@ function collectEnvironment(timingTool) {
 		readFileSync(join(repoRoot, "package.json"), "utf8"),
 	);
 	return {
-		linkctlVersion: packageJson.version,
+		variantVersion: packageJson.version,
 		commit,
 		node: process.version,
 		os: `${platform()} ${release()} (${arch()})`,
@@ -426,7 +426,7 @@ function collectEnvironment(timingTool) {
 
 function buildMarkdown(environment, measured, orchestrationOverheadMs) {
 	const lines = [
-		"### linkctl benchmarks",
+		"### variant benchmarks",
 		"",
 		"| Scenario | Median | Mean ± σ | Min | Runs |",
 		"|----------|-------:|---------:|----:|-----:|",
@@ -441,7 +441,7 @@ function buildMarkdown(environment, measured, orchestrationOverheadMs) {
 	);
 	lines.push(
 		"",
-		`Environment: ${environment.cpu} (${environment.cores} cores, ${environment.memoryGb} GB RAM), ${environment.os}, Node ${environment.node}, linkctl ${environment.linkctlVersion} @ ${environment.commit}, measured with ${environment.timingTool} on ${environment.generatedAt}.`,
+		`Environment: ${environment.cpu} (${environment.cores} cores, ${environment.memoryGb} GB RAM), ${environment.os}, Node ${environment.node}, variant ${environment.variantVersion} @ ${environment.commit}, measured with ${environment.timingTool} on ${environment.generatedAt}.`,
 		"",
 		"Reproduce with `pnpm build && pnpm bench` — see `benchmarks/README.md` for methodology.",
 	);
@@ -503,7 +503,7 @@ function main() {
 		const clearCacheArgv = [
 			nodeBin,
 			"-e",
-			"require('node:fs').rmSync('.linkctl',{recursive:true,force:true})",
+			"require('node:fs').rmSync('.variant',{recursive:true,force:true})",
 		];
 
 		// Warm scenarios run before the cold one so a primed cache is never
@@ -512,7 +512,7 @@ function main() {
 		const scenarios = [
 			{
 				name: "startup",
-				label: "CLI startup — `linkctl --help`",
+				label: "CLI startup — `variant --help`",
 				argv: [nodeBin, cliPath, "--help"],
 				cwd: repoRoot,
 				runs: runCounts.startup,
@@ -549,7 +549,7 @@ function main() {
 				: [
 						{
 							name: "impact",
-							label: `Semantic — \`linkctl impact\`, ${semanticChanged} changed files of ${formatCount(semanticModules)}`,
+							label: `Semantic — \`variant impact\`, ${semanticChanged} changed files of ${formatCount(semanticModules)}`,
 							argv: [nodeBin, cliPath, "impact", "--base", "HEAD"],
 							cwd: semanticFixture,
 							runs: runCounts.semantic,

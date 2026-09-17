@@ -1,6 +1,6 @@
 /**
  * @module
- * Blast-radius traversal (roadmap 1.3). Given changed files, walks the chain
+ * Blast-radius traversal. Given changed files, walks the chain
  * `File → Import → Package → Task`: classify each changed file with the
  * signature-level differ, gate propagation semantically, BFS the reverse
  * import graph, then map affected files to workspace packages and tasks.
@@ -102,7 +102,7 @@ export interface TraceBlastRadiusOptions {
 	packageGraph?: PackageGraph;
 	/** Task map (e.g. from the planner); matched by `<package>:` name prefix. */
 	tasks?: Record<string, TaskConfig>;
-	/** Where the persisted symbol graph lives. Default `.linkctl/graph/`. */
+	/** Where the persisted symbol graph lives. Default `.variant/graph/`. */
 	graphDir?: string;
 	/** Reuse a prebuilt import graph (skips the symbol-graph update). */
 	importGraph?: ImportGraph;

@@ -1,6 +1,6 @@
 /**
  * @module
- * `linkctl pr report` — the combined check + replay artifact, in the two
+ * `variant pr report` — the combined check + replay artifact, in the two
  * shapes CI consumes: JSON for machines and markdown for a PR comment.
  */
 
@@ -60,7 +60,7 @@ export function formatPrReportJson(report: PrReportResult): string {
 export function formatPrReportMarkdown(report: PrReportResult): string {
 	const { check, replay } = report;
 	const lines: string[] = [
-		"## Linkctl PR Report",
+		"## Variant PR Report",
 		"",
 		`**Generated:** ${report.generatedAt}  `,
 		`**Base ref:** \`${check.baseRef}\`  `,

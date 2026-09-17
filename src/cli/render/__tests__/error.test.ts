@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	ConfigError,
-	LinkctlError,
 	TaskExecutionError,
+	VariantError,
 } from "../../../core/errors.js";
 import { writeGlobalColorChoice } from "../../visuals/color.js";
 import { renderError, renderUnexpectedError } from "../error.js";
@@ -26,7 +26,7 @@ describe("renderError", () => {
 		const sink = capture();
 
 		renderError(
-			new LinkctlError("MY_CODE", "something went wrong"),
+			new VariantError("MY_CODE", "something went wrong"),
 			sink.write,
 		);
 
@@ -41,13 +41,13 @@ describe("renderError", () => {
 
 		expect(sink.text()).toContain("[CONFIG_ERROR]");
 		expect(sink.text()).toContain("Hint:");
-		expect(sink.text()).toContain("linkctl doctor");
+		expect(sink.text()).toContain("variant doctor");
 	});
 
 	it("omits the hint line when there is no hint", () => {
 		const sink = capture();
 
-		renderError(new LinkctlError("BARE", "no hint here"), sink.write);
+		renderError(new VariantError("BARE", "no hint here"), sink.write);
 
 		expect(sink.text()).not.toContain("Hint:");
 	});

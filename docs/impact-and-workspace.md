@@ -2,22 +2,22 @@
 
 Two commands that reason about your TypeScript source directly — no build step required:
 
-- **`linkctl impact`** predicts which tests a change actually requires, so you can eventually skip the rest with confidence.
-- **`linkctl workspace check`** is a CI gate that catches phantom dependencies and import-boundary violations in a monorepo.
+- **`variant impact`** predicts which tests a change actually requires, so you can eventually skip the rest with confidence.
+- **`variant workspace check`** is a CI gate that catches phantom dependencies and import-boundary violations in a monorepo.
 
-Both are built on the same pipeline: a persisted symbol index (`.linkctl/graph/symbols.json`) → a file-level reverse import graph → semantic diffing of exported surfaces. That shared foundation is why both commands share the same limitations — see [Limitations](#limitations) below before you rely on either in CI.
+Both are built on the same pipeline: a persisted symbol index (`.variant/graph/symbols.json`) → a file-level reverse import graph → semantic diffing of exported surfaces. That shared foundation is why both commands share the same limitations — see [Limitations](#limitations) below before you rely on either in CI.
 
-## `linkctl impact`
+## `variant impact`
 
 Runs the full change-intelligence pipeline — signature differ → blast radius → test impact — and reports which test files you need to run for a given diff.
 
 ```bash
-npx linkctl impact
-npx linkctl impact --base origin/main
-npx linkctl impact --json
+variant impact
+variant impact --base origin/main
+variant impact --json
 ```
 
-**This is report-only.** No test skipping happens today. Every run appends its prediction to `.linkctl/history/impact.jsonl`, building a shadow-mode dataset of predicted-vs-actual outcomes. Test skipping only unlocks once the measured false-skip rate over that history is acceptable — the printed confidence score is a graph-resolution number, not a promise that it's safe to skip.
+**This is report-only.** No test skipping happens today. Every run appends its prediction to `.variant/history/impact.jsonl`, building a shadow-mode dataset of predicted-vs-actual outcomes. Test skipping only unlocks once the measured false-skip rate over that history is acceptable — the printed confidence score is a graph-resolution number, not a promise that it's safe to skip.
 
 ### How it classifies changes
 
@@ -77,13 +77,13 @@ Certain changed paths invalidate the whole test suite regardless of import closu
 - `tsconfig*.json`
 - Test/build runner configs (`vitest.config.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`)
 
-## `linkctl workspace check`
+## `variant workspace check`
 
 A CI gate for monorepos: compares what each package actually imports against what its `package.json` declares, and flags three kinds of drift.
 
 ```bash
-npx linkctl workspace check
-npx linkctl workspace check --json
+variant workspace check
+variant workspace check --json
 ```
 
 Exits with code `1` when any violation is found — wire it into CI the same way you would `pr check`.
@@ -130,7 +130,7 @@ Both commands trace imports statically from source text — there is no module b
 - **Dynamic `import()` calls are unknowable.** Both the differ and blast-radius treat a dynamic import edge as "names unknowable": the change is assumed to propagate (over-including rather than silently missing it) and a note is emitted, but which specific exports are used can't be determined the way a static named import can.
 - **Non-TS changes are `unanalyzed`, not `non-impacting`.** A changed `.json`, `.css`, or other non-TypeScript file always contributes a seed to the blast radius (never silently skipped) because the differ has no surface to compare — this is deliberately conservative and can widen the run set beyond what's strictly needed.
 
-Given these gaps, `linkctl impact` never gates test execution on its own — it logs every prediction to `.linkctl/history/impact.jsonl` for shadow-mode validation, and the printed guidance is explicit that you should still run the full suite. Treat a low `confidence` score, or any note mentioning unresolved imports or dynamic imports, as a signal to widen your own manual test selection rather than trusting the narrow list.
+Given these gaps, `variant impact` never gates test execution on its own — it logs every prediction to `.variant/history/impact.jsonl` for shadow-mode validation, and the printed guidance is explicit that you should still run the full suite. Treat a low `confidence` score, or any note mentioning unresolved imports or dynamic imports, as a signal to widen your own manual test selection rather than trusting the narrow list.
 
 ## See also
 

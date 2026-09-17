@@ -41,7 +41,7 @@ function pipePrinter(): { chunks: string[]; printer: Printer } {
 
 beforeEach(() => {
 	writeGlobalColorChoice("never");
-	vi.stubEnv("LINKCTL_TEST_NO_CLI_PROGRESS", "");
+	vi.stubEnv("VARIANT_TEST_NO_CLI_PROGRESS", "");
 });
 
 afterEach(() => {
@@ -169,8 +169,8 @@ describe("ProgressReporter (hidden, piped output)", () => {
 		expect(output).not.toContain(ESC);
 	});
 
-	it("stays fully silent when LINKCTL_TEST_NO_CLI_PROGRESS is set", () => {
-		vi.stubEnv("LINKCTL_TEST_NO_CLI_PROGRESS", "1");
+	it("stays fully silent when VARIANT_TEST_NO_CLI_PROGRESS is set", () => {
+		vi.stubEnv("VARIANT_TEST_NO_CLI_PROGRESS", "1");
 		const { chunks, printer } = pipePrinter();
 		const reporter = ProgressReporter.spinner(printer, "Working...", {
 			singleMode: false,

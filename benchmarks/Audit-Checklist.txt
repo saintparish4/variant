@@ -5,7 +5,7 @@ PATH TRAVERSAL AUDIT
   Fixed: hashing.ts assertSafePattern() — previous check (`startsWith("..")`)
   did not catch `./../../etc/passwd`-style patterns. Now normalises separators
   and rejects any ".." segment in the split path. All other path.join() calls
-  operate on config-controlled input (developer-authored linkctl.config.ts),
+  operate on config-controlled input (developer-authored variant.config.ts),
   which is in the trust boundary.
 
 COMMAND INJECTION AUDIT
@@ -14,7 +14,7 @@ COMMAND INJECTION AUDIT
   git-diff.ts: execa("git", ["diff","--name-only", baseRef]) — array args, safe.
 
 INPUT VALIDATION COMPLETENESS
-  All config keys flow through linkctlConfigSchema (Zod). Types, defaults,
+  All config keys flow through variantConfigSchema (Zod). Types, defaults,
   and cross-field invariants (dependsOn references) are enforced. No raw
   config values reach the filesystem or shell without schema processing.
 
@@ -39,7 +39,7 @@ TotalMilliseconds : 706.2186
 Milliseconds      : 172
 TotalMilliseconds : 172.962
 
-# After rename to `linkctl` (fresh build, identical architecture):
+# After rename to `variant` (fresh build, identical architecture):
 TotalMilliseconds : 193.938
 
 Baseline for 0.1.0 release: ~170-195ms (cold-cache jitter of ~20ms is normal).

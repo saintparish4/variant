@@ -1,7 +1,7 @@
 {
-  "name": "linkctl",
-  "version": "2.0.0",
-  "description": "Adaptive dev orchestration CLI — task DAG, content caching, runtime detection",
+  "name": "vrnt",
+  "version": "0.1.0",
+  "description": "Change intelligence for TypeScript monorepos — AST-level blast radius, test impact, and a cached task DAG",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
     }
   },
   "bin": {
-    "linkctl": "dist/cli.js"
+    "variant": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -45,6 +45,10 @@
   },
   "keywords": [
     "cli",
+    "monorepo",
+    "test-impact",
+    "change-detection",
+    "typescript",
     "build",
     "orchestration",
     "task-runner",
@@ -55,11 +59,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/saintparish4/linkctl.git"
+    "url": "git+https://github.com/saintparish4/variant.git"
   },
-  "homepage": "https://github.com/saintparish4/linkctl#readme",
+  "homepage": "https://github.com/saintparish4/variant#readme",
   "bugs": {
-    "url": "https://github.com/saintparish4/linkctl/issues"
+    "url": "https://github.com/saintparish4/variant/issues"
   },
   "dependencies": {
     "commander": "^14.0.3",

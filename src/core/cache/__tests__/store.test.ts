@@ -15,7 +15,7 @@ import { readCache, writeCache, writeCacheSync } from "../store.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-store-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-store-"));
 	tmpDirs.push(dir);
 	return dir;
 }

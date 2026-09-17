@@ -1,6 +1,6 @@
 /**
  * @module
- * File-level reverse import graph (roadmap 1.2). Same shape as
+ * File-level reverse import graph. Same shape as
  * `package-graph.ts`, one level finer: for every workspace file, which files
  * it imports and — the inversion — which files depend on it. This is the data
  * structure blast-radius traversal (1.3) hangs on.
@@ -184,7 +184,7 @@ export function getDependents(
  * BFS over the reverse import graph: every file that is directly changed OR
  * transitively imports a changed file. The file-level analogue of
  * `computeAffectedPackages` in package-graph.ts — and the blast-radius
- * primitive for `linkctl impact`.
+ * primitive for `variant impact`.
  */
 export function computeAffectedFiles(
 	changed: ReadonlySet<string>,

@@ -164,7 +164,7 @@ export function tasksFromPackageGraph(
 	}
 
 	// Wire each top-level script meta-task to depend on all its workspace tasks
-	// so `linkctl build` runs all `*:build` tasks in dependency order.
+	// so `variant build` runs all `*:build` tasks in dependency order.
 	for (const script of scripts) {
 		const workspaceTasks = Object.keys(out).filter(
 			(name) => name.endsWith(`:${script}`) && !existing[name],

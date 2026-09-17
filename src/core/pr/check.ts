@@ -1,6 +1,6 @@
 /**
  * @module
- * `linkctl pr check` — classify every TypeScript file a branch changes
+ * `variant pr check` — classify every TypeScript file a branch changes
  * relative to its base and reduce them to one build verdict.
  */
 

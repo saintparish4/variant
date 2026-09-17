@@ -1,18 +1,62 @@
 # Changelog
 
-All notable changes to linkctl are documented in this file.
+All notable changes to variant are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-17
+
+Renamed to **variant** and republished under a new npm name, so the version
+resets to `0.1.0`. `0.x` is honest about where the project is: breaking changes
+ship in minor releases and are recorded here.
+
+### Changed
+
+- **Renamed the project to `variant`.** The npm package is `vrnt` (`variant`
+  and `variant-ts` are taken by unrelated packages); everything a user reads or
+  types is `variant`: the `bin`, the config file (`variant.config.ts`), the
+  state directory (`.variant/`), the `VARIANT_*` environment variables, the
+  exported types (`VariantConfig`, `VariantContext`, `VariantError`), the
+  tracer plugins (`variantVitePlugin`, `variantNextPlugin`) and the default S3
+  key prefix (`variant/`).
+
+  `npx vrnt <command>` addresses the package; `variant <command>` is the
+  installed binary. npm runs a package's sole binary even when its name differs
+  from the package, so both work.
+
+  There is no compatibility shim. `linkctl.config.*` is no longer read, and a
+  local checkout must move `linkctl.config.ts` to `variant.config.ts` and
+  `.linkctl/` to `.variant/`. The old `.linkctl/` cache is orphaned, not
+  migrated; delete it.
+
+- **Dropped the semver stability promise** from `src/index.ts`, `src/tracer/`
+  and the README. It predated the decision that breaking changes are acceptable
+  while the package has no users, and contradicted it.
+
+### Fixed
+
+- The 2.0.0 entry below claimed nothing had been published under the old name.
+  True of `link`; the versions below 2.0.0 shipped as `antiscaler`.
+- `docs/pr-commands.md` described a `.github/workflows/pr-report.yml` that was
+  never committed. It now shows the step to copy into your own workflow.
+- `benchmarks/README.md` said the benchmark job runs on pushes to `alpha`; it
+  runs on `master`.
+
+### Removed
+
+- The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
+  config. Quoted-argv parsing is covered by the executor's unit tests.
+
 ## [2.0.0] - 2026-08-30
 
-The rename is breaking on every public surface, hence the major bump. Nothing
-was ever published under the old name, so there is no upgrade path to
-provide — but a local checkout using `link.config.ts` and `.link/` must move
-to `linkctl.config.ts` and `.linkctl/`.
+The rename is breaking on every public surface, hence the major bump. `link`
+itself was never published — the versions below 2.0.0 shipped as `antiscaler`,
+through 1.1.1 — so there is no `link` upgrade path to provide, but a local
+checkout using `link.config.ts` and `.link/` must move to `linkctl.config.ts`
+and `.linkctl/`.
 
 ### Changed
 
@@ -409,22 +453,23 @@ semver stability guarantee: no breaking changes in minor or patch releases.
   Bun / Deno), and framework (Next.js / Vite / generic).
 - Lazy command registration so `link --help` stays under 100 ms.
 
-[Unreleased]: https://github.com/saintparish4/linkctl/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/saintparish4/linkctl/compare/v1.1.1...v2.0.0
-[1.1.1]: https://github.com/saintparish4/linkctl/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/saintparish4/linkctl/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/saintparish4/linkctl/compare/v0.9.3...v1.0.0
-[0.9.3]: https://github.com/saintparish4/linkctl/compare/v0.9.2...v0.9.3
-[0.9.2]: https://github.com/saintparish4/linkctl/compare/v0.9.1...v0.9.2
-[0.9.1]: https://github.com/saintparish4/linkctl/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/saintparish4/linkctl/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/saintparish4/linkctl/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/saintparish4/linkctl/compare/v0.5.1...v0.7.0
-[0.5.1]: https://github.com/saintparish4/linkctl/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/saintparish4/linkctl/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/saintparish4/linkctl/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/saintparish4/linkctl/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/saintparish4/linkctl/compare/v0.1.2...v0.2.0
-[0.1.2]: https://github.com/saintparish4/linkctl/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/saintparish4/linkctl/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/saintparish4/linkctl/releases/tag/v0.1.0
+[Unreleased]: https://github.com/saintparish4/variant/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/saintparish4/variant/releases/tag/v0.1.0
+[2.0.0]: https://github.com/saintparish4/variant/compare/v1.1.1...v2.0.0
+[1.1.1]: https://github.com/saintparish4/variant/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/saintparish4/variant/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/saintparish4/variant/compare/v0.9.3...v1.0.0
+[0.9.3]: https://github.com/saintparish4/variant/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/saintparish4/variant/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/saintparish4/variant/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/saintparish4/variant/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/saintparish4/variant/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/saintparish4/variant/compare/v0.5.1...v0.7.0
+[0.5.1]: https://github.com/saintparish4/variant/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/saintparish4/variant/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/saintparish4/variant/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/saintparish4/variant/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/saintparish4/variant/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/saintparish4/variant/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/saintparish4/variant/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/saintparish4/variant/releases/tag/v0.1.0

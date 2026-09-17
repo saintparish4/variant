@@ -37,8 +37,8 @@ function trace(overrides: Partial<TraceFile> = {}): TraceFile {
 function workspaceWithSession(session: TraceFile): string {
 	const dir = createTempWorkspace("trace");
 	writeFiles(dir, {
-		"linkctl.config.json": JSON.stringify({ tasks: { dev: {} } }),
-		[`.linkctl/traces/${session.sessionId}.json`]: JSON.stringify(session),
+		"variant.config.json": JSON.stringify({ tasks: { dev: {} } }),
+		[`.variant/traces/${session.sessionId}.json`]: JSON.stringify(session),
 	});
 	return dir;
 }
@@ -96,11 +96,11 @@ describe("trace analyze command", () => {
 		const dir = createTempWorkspace("trace");
 		const moduleFile = path.join(dir, "packages", "mylib", "index.ts");
 		writeFiles(dir, {
-			"linkctl.config.json": JSON.stringify({ tasks: { dev: {} } }),
+			"variant.config.json": JSON.stringify({ tasks: { dev: {} } }),
 			"pnpm-workspace.yaml": "packages:\n  - 'packages/*'\n",
 			"packages/mylib/package.json": JSON.stringify({ name: "mylib" }),
 			"packages/mylib/index.ts": "export const value = 1;\n",
-			".linkctl/traces/with-pkg.json": JSON.stringify(
+			".variant/traces/with-pkg.json": JSON.stringify(
 				trace({ sessionId: "with-pkg", modules: [{ file: moduleFile }] }),
 			),
 		});
@@ -117,26 +117,26 @@ describe("trace command", () => {
 	it("runs the dev task with tracing enabled", async () => {
 		const dir = createTempWorkspace("trace");
 		writeFiles(dir, {
-			"linkctl.config.json": JSON.stringify({
+			"variant.config.json": JSON.stringify({
 				tasks: { dev: { command: "echo dev-trace-ok" } },
-				cache: { directory: path.join(dir, ".linkctl/cache") },
+				cache: { directory: path.join(dir, ".variant/cache") },
 			}),
 		});
-		const previous = process.env["LINKCTL_TRACE"];
+		const previous = process.env["VARIANT_TRACE"];
 		captureGlobalOutput();
 
 		try {
 			await expect(
 				withCwd(dir, () => registerTraceAction()),
 			).resolves.toBeUndefined();
-			expect(process.env["LINKCTL_TRACE"]).toBe("1");
+			expect(process.env["VARIANT_TRACE"]).toBe("1");
 		} finally {
 			// Assigning `undefined` would leak the string "undefined" into later
 			// tests, and `delete` is banned by the linter.
 			if (previous === undefined) {
-				Reflect.deleteProperty(process.env, "LINKCTL_TRACE");
+				Reflect.deleteProperty(process.env, "VARIANT_TRACE");
 			} else {
-				process.env["LINKCTL_TRACE"] = previous;
+				process.env["VARIANT_TRACE"] = previous;
 			}
 		}
 	});

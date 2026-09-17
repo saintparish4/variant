@@ -76,7 +76,7 @@ describe("progressEnabled", () => {
 	});
 
 	it("is true only in default mode on a TTY", () => {
-		vi.stubEnv("LINKCTL_TEST_NO_CLI_PROGRESS", "");
+		vi.stubEnv("VARIANT_TEST_NO_CLI_PROGRESS", "");
 		const tty = fakeStream(true).stream;
 		expect(new Printer("default", { stderr: tty }).progressEnabled).toBe(true);
 		expect(new Printer("verbose", { stderr: tty }).progressEnabled).toBe(false);
@@ -90,8 +90,8 @@ describe("progressEnabled", () => {
 		);
 	});
 
-	it("is suppressed by LINKCTL_TEST_NO_CLI_PROGRESS", () => {
-		vi.stubEnv("LINKCTL_TEST_NO_CLI_PROGRESS", "1");
+	it("is suppressed by VARIANT_TEST_NO_CLI_PROGRESS", () => {
+		vi.stubEnv("VARIANT_TEST_NO_CLI_PROGRESS", "1");
 		const tty = fakeStream(true).stream;
 		expect(new Printer("default", { stderr: tty }).progressEnabled).toBe(false);
 	});

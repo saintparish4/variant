@@ -8,7 +8,7 @@ import { loadTrace, tracedPackages } from "../trace-loader.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-trace-loader-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-trace-loader-"));
 	tmpDirs.push(dir);
 	return dir;
 }
@@ -31,7 +31,7 @@ function makeTraceFile(overrides: Partial<TraceFile> = {}): TraceFile {
 }
 
 function writeTrace(dir: string, sessionId: string, data: TraceFile): void {
-	const tracesDir = path.join(dir, ".linkctl", "traces");
+	const tracesDir = path.join(dir, ".variant", "traces");
 	mkdirSync(tracesDir, { recursive: true });
 	writeFileSync(
 		path.join(tracesDir, `${sessionId}.json`),
@@ -69,7 +69,7 @@ describe("loadTrace", () => {
 
 	it("throws when 'last' is requested but no trace files exist", async () => {
 		const dir = makeTmpDir();
-		mkdirSync(path.join(dir, ".linkctl", "traces"), { recursive: true });
+		mkdirSync(path.join(dir, ".variant", "traces"), { recursive: true });
 		// Directory exists but is empty
 		await expect(loadTrace(dir, "last")).rejects.toThrow(
 			"No trace files found",
@@ -77,9 +77,9 @@ describe("loadTrace", () => {
 	});
 
 	it("throws when traces directory does not exist (exposes BUG 3 — raw ENOENT)", async () => {
-		// .linkctl/traces/ was never created — readdir throws ENOENT.
+		// .variant/traces/ was never created — readdir throws ENOENT.
 		// Currently the error is a raw NodeJS.ErrnoException, not an
-		// LinkctlError. The test documents the current behavior.
+		// VariantError. The test documents the current behavior.
 		// Ideal fix: wrap in a ConfigError with a useful message.
 		const dir = makeTmpDir();
 		await expect(loadTrace(dir, "last")).rejects.toThrow();
@@ -87,13 +87,13 @@ describe("loadTrace", () => {
 
 	it("throws when explicit sessionId does not exist", async () => {
 		const dir = makeTmpDir();
-		mkdirSync(path.join(dir, ".linkctl", "traces"), { recursive: true });
+		mkdirSync(path.join(dir, ".variant", "traces"), { recursive: true });
 		await expect(loadTrace(dir, "nonexistent-session")).rejects.toThrow();
 	});
 
 	it("throws on malformed JSON in trace file", async () => {
 		const dir = makeTmpDir();
-		const tracesDir = path.join(dir, ".linkctl", "traces");
+		const tracesDir = path.join(dir, ".variant", "traces");
 		mkdirSync(tracesDir, { recursive: true });
 		writeFileSync(path.join(tracesDir, "bad.json"), "{ NOT VALID JSON }}}");
 		await expect(loadTrace(dir, "bad")).rejects.toThrow();
@@ -101,7 +101,7 @@ describe("loadTrace", () => {
 
 	it("ignores non-.json files when resolving 'last'", async () => {
 		const dir = makeTmpDir();
-		const tracesDir = path.join(dir, ".linkctl", "traces");
+		const tracesDir = path.join(dir, ".variant", "traces");
 		mkdirSync(tracesDir, { recursive: true });
 		// Write a .tmp file that should be ignored
 		writeFileSync(path.join(tracesDir, "session-z.tmp"), "{}");

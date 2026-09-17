@@ -6,7 +6,7 @@ import { detectPackageManager } from "../packageManager.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-pm-det-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-pm-det-"));
 	tmpDirs.push(dir);
 	return dir;
 }

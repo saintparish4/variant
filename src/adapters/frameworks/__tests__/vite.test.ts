@@ -6,7 +6,7 @@ import { viteAdapter } from "../vite.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(join(tmpdir(), "linkctl-vite-test-"));
+	const dir = mkdtempSync(join(tmpdir(), "variant-vite-test-"));
 	tmpDirs.push(dir);
 	return dir;
 }

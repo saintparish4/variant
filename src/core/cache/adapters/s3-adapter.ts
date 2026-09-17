@@ -4,7 +4,7 @@ import type { RemoteCacheAdapter } from "../remote-adapter.js";
 export interface S3CacheAdapterOptions {
 	/** S3 bucket name. */
 	bucket: string;
-	/** Key prefix for all cache objects. Default: `"linkctl/"`. */
+	/** Key prefix for all cache objects. Default: `"variant/"`. */
 	prefix?: string;
 	/** AWS region (e.g. `"us-east-1"`). */
 	region?: string;
@@ -59,7 +59,7 @@ export function createS3CacheAdapter(
 ): RemoteCacheAdapter {
 	const {
 		bucket,
-		prefix = "linkctl/",
+		prefix = "variant/",
 		region,
 		endpoint,
 		credentials,

@@ -22,8 +22,8 @@ import {
 function workspace(config: Record<string, unknown>): string {
 	const dir = createTempWorkspace("seam");
 	writeFiles(dir, {
-		"linkctl.config.json": JSON.stringify({
-			cache: { directory: ".linkctl/cache" },
+		"variant.config.json": JSON.stringify({
+			cache: { directory: ".variant/cache" },
 			...config,
 		}),
 	});
@@ -126,10 +126,10 @@ describe("context → runner", () => {
 				scripts: { build: "echo web" },
 				dependencies: { utils: "workspace:*" },
 			}),
-			"linkctl.config.json": JSON.stringify({
+			"variant.config.json": JSON.stringify({
 				workspace: { enabled: true },
 				tasks: { build: { command: "echo root" } },
-				cache: { directory: path.join(dir, ".linkctl/cache") },
+				cache: { directory: path.join(dir, ".variant/cache") },
 			}),
 		});
 

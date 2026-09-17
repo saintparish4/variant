@@ -8,7 +8,7 @@ import { hashTaskInputs } from "../hashing.js";
 const tmpDirs: string[] = [];
 
 function makeTmpDir(): string {
-	const dir = mkdtempSync(join(tmpdir(), "linkctl-hash-"));
+	const dir = mkdtempSync(join(tmpdir(), "variant-hash-"));
 	tmpDirs.push(dir);
 	return dir;
 }

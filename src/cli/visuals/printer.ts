@@ -75,12 +75,12 @@ export class Printer {
 	/**
 	 * Whether animated progress may draw: only in default mode on a TTY.
 	 * Verbose hides bars so they don't interleave with debug logs, and
-	 * `LINKCTL_TEST_NO_CLI_PROGRESS` suppresses them because concurrent bar
+	 * `VARIANT_TEST_NO_CLI_PROGRESS` suppresses them because concurrent bar
 	 * output is non-deterministic and breaks snapshot tests.
 	 */
 	get progressEnabled(): boolean {
 		if (this.mode !== "default" || this.err.isTTY !== true) return false;
-		const testFlag = process.env["LINKCTL_TEST_NO_CLI_PROGRESS"];
+		const testFlag = process.env["VARIANT_TEST_NO_CLI_PROGRESS"];
 		return testFlag === undefined || testFlag === "";
 	}
 

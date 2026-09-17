@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { ResolvedLinkctlConfig } from "../../../types/index.js";
+import type { ResolvedVariantConfig } from "../../../types/index.js";
 import { CycleError } from "../../errors.js";
 import { buildGraph } from "../planner.js";
 
 function makeConfig(
-	tasks: ResolvedLinkctlConfig["tasks"],
-): ResolvedLinkctlConfig {
+	tasks: ResolvedVariantConfig["tasks"],
+): ResolvedVariantConfig {
 	return {
 		strategy: "adaptive",
-		cache: { mode: "content", directory: ".linkctl/cache" },
+		cache: { mode: "content", directory: ".variant/cache" },
 		tasks,
 	};
 }

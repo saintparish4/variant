@@ -24,7 +24,7 @@ import {
 
 function writeConfig(dir: string, config: Record<string, unknown>): void {
 	writeFiles(dir, {
-		"linkctl.config.json": JSON.stringify(config),
+		"variant.config.json": JSON.stringify(config),
 	});
 }
 
@@ -84,7 +84,7 @@ describe("doctor command", () => {
 
 		await withCwd(dir, () => registerDoctorAction());
 
-		expect(output.stdout()).toMatch(/No linkctl\.config/i);
+		expect(output.stdout()).toMatch(/No variant\.config/i);
 		expect(process.exitCode).toBe(1);
 	});
 
@@ -129,7 +129,7 @@ describe("insight command", () => {
 		const dir = createTempWorkspace("insight");
 		writeConfig(dir, {
 			tasks: {},
-			cache: { directory: path.join(dir, ".linkctl/cache") },
+			cache: { directory: path.join(dir, ".variant/cache") },
 		});
 		const output = captureGlobalOutput();
 
@@ -140,10 +140,10 @@ describe("insight command", () => {
 
 	it("shows cached task history once the cache has entries", async () => {
 		const dir = createTempWorkspace("insight");
-		const cacheDir = path.join(dir, ".linkctl/cache");
+		const cacheDir = path.join(dir, ".variant/cache");
 		writeConfig(dir, { tasks: {}, cache: { directory: cacheDir } });
 		writeFiles(dir, {
-			".linkctl/cache/cache.json": JSON.stringify({
+			".variant/cache/cache.json": JSON.stringify({
 				tasks: {
 					build: { lastRun: Date.now() - 60_000, lastDurationMs: 1234 },
 				},
@@ -165,13 +165,13 @@ describe("init command", () => {
 
 		await withCwd(dir, () => registerInitAction());
 
-		expect(existsSync(path.join(dir, "linkctl.config.ts"))).toBe(true);
+		expect(existsSync(path.join(dir, "variant.config.ts"))).toBe(true);
 		expect(output.stdout()).toMatch(/Created/);
 	});
 
 	it("refuses to overwrite an existing TypeScript config", async () => {
 		const dir = createTempWorkspace("init");
-		writeFiles(dir, { "linkctl.config.ts": "// existing" });
+		writeFiles(dir, { "variant.config.ts": "// existing" });
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerInitAction());
@@ -181,12 +181,12 @@ describe("init command", () => {
 
 	it("refuses to overwrite an existing JSON config", async () => {
 		const dir = createTempWorkspace("init");
-		writeFiles(dir, { "linkctl.config.json": "{}" });
+		writeFiles(dir, { "variant.config.json": "{}" });
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerInitAction());
 
-		expect(output.stdout()).toMatch(/linkctl\.config\.json.*already exists/);
-		expect(existsSync(path.join(dir, "linkctl.config.ts"))).toBe(false);
+		expect(output.stdout()).toMatch(/variant\.config\.json.*already exists/);
+		expect(existsSync(path.join(dir, "variant.config.ts"))).toBe(false);
 	});
 });

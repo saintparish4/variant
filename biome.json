@@ -7,7 +7,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/coverage", "!**/.linkctl/cache"]
+    "includes": ["**", "!**/dist", "!**/coverage", "!**/.variant/cache"]
   },
   "formatter": {
     "enabled": true,

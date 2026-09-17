@@ -29,7 +29,7 @@ function writeTrace(
 	routes: Array<{ path: string; modules: string[] }> = [],
 ): void {
 	writeFiles(dir, {
-		[`.linkctl/traces/${sessionId}.json`]: JSON.stringify({
+		[`.variant/traces/${sessionId}.json`]: JSON.stringify({
 			schemaVersion: 1,
 			sessionId,
 			startedAt: Date.now(),
@@ -225,7 +225,7 @@ describe("pr report command", () => {
 			registerPrReportAction({ base: "main", markdown: true }),
 		);
 
-		expect(output.stdout()).toContain("## Linkctl PR Report");
+		expect(output.stdout()).toContain("## Variant PR Report");
 		expect(output.stdout()).toContain("### Semantic Diff");
 		expect(output.stdout()).toContain("Safe to skip build");
 	});
@@ -257,7 +257,7 @@ describe("pr report command", () => {
 		);
 
 		expect(await readFile(path.join(dir, "report.md"), "utf8")).toContain(
-			"## Linkctl PR Report",
+			"## Variant PR Report",
 		);
 	});
 });

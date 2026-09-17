@@ -90,7 +90,7 @@ export function renderImpact(
 		lines(
 			printer,
 			"",
-			"(warning: could not write .linkctl/history/impact.jsonl — shadow-mode logging skipped)",
+			"(warning: could not write .variant/history/impact.jsonl — shadow-mode logging skipped)",
 		);
 	}
 }

@@ -2,8 +2,8 @@
  * @module
  * Vite plugin for module-level tracing.
  *
- *   import { linkctlVitePlugin } from "link/tracer";
- *   export default { plugins: [linkctlVitePlugin()] };
+ *   import { variantVitePlugin } from "link/tracer";
+ *   export default { plugins: [variantVitePlugin()] };
  */
 
 import type { TraceFile, TracerOptions } from "./types.js";
@@ -37,7 +37,7 @@ function fileToRoute(filePath: string, root: string): string | null {
 	return path;
 }
 
-export function linkctlVitePlugin(options: TracerOptions = {}): VitePlugin {
+export function variantVitePlugin(options: TracerOptions = {}): VitePlugin {
 	const sessionId = options.sessionId ?? newSessionId();
 	const startedAt = Date.now();
 	const seen = new Set<string>();
@@ -45,7 +45,7 @@ export function linkctlVitePlugin(options: TracerOptions = {}): VitePlugin {
 	let root = process.cwd();
 
 	return {
-		name: "linkctl-tracer",
+		name: "variant-tracer",
 		configResolved(cfg) {
 			root = cfg.root;
 		},

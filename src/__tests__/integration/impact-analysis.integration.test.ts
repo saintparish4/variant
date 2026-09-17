@@ -1,5 +1,5 @@
 /**
- * Boundary: the full Pillar 1 pipeline (symbol graph → blast radius → test
+ * Boundary: the full change-intelligence pipeline (symbol graph → blast radius → test
  * impact → shadow log) over a real source tree, and the command that renders
  * it. The symbol graph is built from files on disk, so this cannot be a unit
  * test.

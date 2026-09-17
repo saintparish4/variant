@@ -1,8 +1,8 @@
 blank_issues_enabled: false 
 contact_links:
   - name: Ask a question or discuss a topic 
-    url: https://github.com/saintparish4/linkctl/discussions 
-    about: Ask questions or discuss with other linkctl users in discussions.
+    url: https://github.com/saintparish4/variant/discussions 
+    about: Ask questions or discuss with other variant users in discussions.
   - name: Feature or documentation request 
-    url: https://github.com/saintparish4/linkctl/discussions/new?category=ideas 
+    url: https://github.com/saintparish4/variant/discussions/new?category=ideas 
     about: Open a feature or documentation request in discussions.

@@ -7,7 +7,7 @@ import { nextAdapter, nextPlugin } from "../next.js";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(join(tmpdir(), "linkctl-next-test-"));
+	const dir = mkdtempSync(join(tmpdir(), "variant-next-test-"));
 	tmpDirs.push(dir);
 	return dir;
 }

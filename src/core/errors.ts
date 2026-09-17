@@ -2,7 +2,7 @@
 // back into core and would make this a cycle.
 import type { TaskProvenance } from "../types/provenance.js";
 
-export class LinkctlError extends Error {
+export class VariantError extends Error {
 	hint?: string;
 	/**
 	 * Why the task that produced this failure was running. Attached by the
@@ -18,25 +18,25 @@ export class LinkctlError extends Error {
 		options?: ErrorOptions,
 	) {
 		super(message, options);
-		this.name = "LinkctlError";
+		this.name = "VariantError";
 	}
 }
 
-export class ConfigError extends LinkctlError {
+export class ConfigError extends VariantError {
 	constructor(message: string, options?: ErrorOptions) {
 		super("CONFIG_ERROR", message, options);
-		this.hint = "Run `linkctl doctor` to diagnose configuration issues.";
+		this.hint = "Run `variant doctor` to diagnose configuration issues.";
 	}
 }
 
-export class CycleError extends LinkctlError {
+export class CycleError extends VariantError {
 	constructor(public cycle: string[]) {
 		super("CYCLE_ERROR", `Circular dependency detected: ${cycle.join(" -> ")}`);
 		this.hint = "Remove or reorder `dependsOn` entries to break the cycle.";
 	}
 }
 
-export class TaskExecutionError extends LinkctlError {
+export class TaskExecutionError extends VariantError {
 	constructor(
 		public task: string,
 		public exitCode: number,
@@ -52,23 +52,23 @@ export class TaskExecutionError extends LinkctlError {
 	}
 }
 
-export class CacheError extends LinkctlError {
+export class CacheError extends VariantError {
 	constructor(message: string, options?: ErrorOptions) {
 		super("CACHE_ERROR", message, options);
-		this.hint = "Delete `.linkctl/cache/` and retry.";
+		this.hint = "Delete `.variant/cache/` and retry.";
 	}
 }
 
-export class GraphError extends LinkctlError {
+export class GraphError extends VariantError {
 	constructor(message: string, options?: ErrorOptions) {
 		super("GRAPH_ERROR", message, options);
-		this.hint = "Delete `.linkctl/graph/` and retry.";
+		this.hint = "Delete `.variant/graph/` and retry.";
 	}
 }
 
-export class CliUsageError extends LinkctlError {
+export class CliUsageError extends VariantError {
 	constructor(message: string) {
 		super("CLI_USAGE", message);
-		this.hint = "Run `linkctl --help` for usage information.";
+		this.hint = "Run `variant --help` for usage information.";
 	}
 }

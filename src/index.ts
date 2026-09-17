@@ -1,11 +1,10 @@
 /**
- * The supported public API surface of linkctl.
+ * The supported public API surface of variant.
  *
- * Everything re-exported from this module is covered by the project's semver
- * stability guarantee as of v1.0.0: no breaking changes in a minor or patch
- * release. Symbols reachable through deep import paths (`linkctl/dist/...`)
- * are `@internal` and may change at any time — depend only on what is exported
- * here and from `linkctl/tracer`.
+ * Depend only on what is exported here and from `vrnt/tracer`. Symbols
+ * reachable through deep import paths (`vrnt/dist/...`) are `@internal` and
+ * may change at any time. While the package is `0.x`, even this surface can
+ * break in a minor release; every break is recorded in the CHANGELOG.
  *
  * @packageDocumentation
  */
@@ -16,7 +15,7 @@
  *
  * @example
  * ```typescript
- * import { defineConfig } from "linkctl";
+ * import { defineConfig } from "vrnt";
  *
  * export default defineConfig({
  *   tasks: {
@@ -30,19 +29,19 @@
 export { defineConfig } from "./core/config/loader.js";
 /**
  * The raw config shape accepted by `defineConfig`. All fields are optional;
- * Linkctl applies defaults for anything not specified.
+ * Variant applies defaults for anything not specified.
  *
  * @public
  */
 /**
- * The `cache` sub-object of `ResolvedLinkctlConfig`, with all defaults
+ * The `cache` sub-object of `ResolvedVariantConfig`, with all defaults
  * applied.
  *
  * @public
  */
 /**
  * The fully-validated config with every default filled in. This is the type
- * of the config object that Linkctl uses internally after loading.
+ * of the config object that Variant uses internally after loading.
  *
  * @public
  */
@@ -52,7 +51,7 @@ export { defineConfig } from "./core/config/loader.js";
  * @public
  */
 /**
- * A single task entry inside `LinkctlConfig["tasks"]`.
+ * A single task entry inside `VariantConfig["tasks"]`.
  *
  * @example
  * ```typescript
@@ -67,8 +66,8 @@ export { defineConfig } from "./core/config/loader.js";
  */
 export type {
 	CacheConfig,
-	LinkctlConfig,
-	ResolvedLinkctlConfig,
+	ResolvedVariantConfig,
 	Strategy,
 	TaskConfig,
+	VariantConfig,
 } from "./types/index.js";

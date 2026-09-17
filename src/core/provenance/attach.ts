@@ -5,13 +5,13 @@
  */
 
 import type { TaskProvenance } from "../../types/index.js";
-import { LinkctlError, TaskExecutionError } from "../errors.js";
+import { TaskExecutionError, VariantError } from "../errors.js";
 
 /**
  * Returns the error to throw for a failed task, carrying that task's
  * provenance when the run has any.
  *
- * A throwable that is not already a `LinkctlError` gets wrapped: a task's command
+ * A throwable that is not already a `VariantError` gets wrapped: a task's command
  * failing is a task failure, not an internal bug, and the CLI top level maps
  * those to different exit codes. `executeTask` always throws
  * `TaskExecutionError`, so in practice only an injected executor takes this
@@ -21,9 +21,9 @@ export function attachProvenance(
 	err: unknown,
 	taskId: string,
 	provenance: Map<string, TaskProvenance> | undefined,
-): LinkctlError {
+): VariantError {
 	const failure =
-		err instanceof LinkctlError
+		err instanceof VariantError
 			? err
 			: new TaskExecutionError(
 					taskId,

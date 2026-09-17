@@ -20,7 +20,7 @@ function makeTrace(
 describe("isCriticalChange", () => {
 	// ── Core invariant: no critical paths configured ─────────────────────────
 	it("returns true when criticalPaths is empty (everything is critical)", () => {
-		// If no critical paths are declared, linkctl cannot know what is safe
+		// If no critical paths are declared, variant cannot know what is safe
 		// to skip — the only correct answer is to treat all changes as critical.
 		const trace = makeTrace([{ path: "/checkout", modules: ["src/pay.ts"] }]);
 		expect(isCriticalChange(["src/util.ts"], trace, [])).toBe(true);

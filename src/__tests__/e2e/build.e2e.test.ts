@@ -13,7 +13,7 @@ const cli = path.resolve(here, "../../../dist/cli.js");
 describe("E2E: basic-monorepo", () => {
 	let cwd: string;
 	beforeAll(() => {
-		cwd = mkdtempSync(path.join(tmpdir(), "linkctl-e2e-"));
+		cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-"));
 		cpSync(fixture, cwd, { recursive: true });
 	});
 	afterAll(() => rmSync(cwd, { recursive: true, force: true }));
@@ -80,7 +80,7 @@ describe("E2E: --affected cascade (git-enabled)", () => {
 	const GIT = ["-c", "user.email=t@t.com", "-c", "user.name=T"];
 
 	beforeAll(async () => {
-		cwdAff = mkdtempSync(path.join(tmpdir(), "linkctl-aff-"));
+		cwdAff = mkdtempSync(path.join(tmpdir(), "variant-aff-"));
 		cpSync(fixture, cwdAff, { recursive: true });
 		// Two commits so HEAD~1 resolves: empty base then add all files
 		await execa("git", ["init"], { cwd: cwdAff });

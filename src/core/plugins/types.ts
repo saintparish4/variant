@@ -1,6 +1,6 @@
 /**
  * @module
- * Public types for the linkctl plugin system. Plugins observe and
+ * Public types for the variant plugin system. Plugins observe and
  * optionally override caching / execution decisions; they never throw out
  * of the runner (errors are routed to onPluginError).
  */

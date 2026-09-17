@@ -1,9 +1,9 @@
 /**
  * @module
- * Persisted symbol index (roadmap 1.1 — `SymbolGraph`). For every TypeScript
+ * Persisted symbol index. For every TypeScript
  * file in the workspace it records the imports (module edges), the exported
  * symbols (with signature/body hashes from `surface.ts`), and extraction
- * notes. The index lives at `.linkctl/graph/symbols.json` and is updated
+ * notes. The index lives at `.variant/graph/symbols.json` and is updated
  * incrementally: a file is only re-parsed when its content hash changed since
  * the previous build, keeping repeat runs cheap on large repos.
  *
@@ -77,7 +77,7 @@ export interface BuildSymbolGraphStats {
 export interface BuildSymbolGraphOptions {
 	/** File globs to index. Default: TS/TSX sources, excluding `.d.ts`. */
 	include?: string[];
-	/** Extra ignore globs on top of node_modules/.git/.linkctl/dist. */
+	/** Extra ignore globs on top of node_modules/.git/.variant/dist. */
 	ignore?: string[];
 	/** Previous graph to update incrementally. */
 	previous?: SymbolGraph | null;
@@ -89,13 +89,13 @@ const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
 const DEFAULT_IGNORE = [
 	"node_modules/**",
 	".git/**",
-	".linkctl/**",
+	".variant/**",
 	"dist/**",
 	"**/*.d.ts",
 ];
 
 export function defaultGraphDir(cwd: string): string {
-	return path.join(cwd, ".linkctl", "graph");
+	return path.join(cwd, ".variant", "graph");
 }
 
 /**
@@ -196,7 +196,7 @@ export async function buildSymbolGraph(
 
 /**
  * Convenience wrapper: load the persisted graph, update it incrementally,
- * and save the result back to `graphDir` (default `.linkctl/graph/`).
+ * and save the result back to `graphDir` (default `.variant/graph/`).
  */
 export async function updateSymbolGraph(
 	cwd: string,

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-	const dir = mkdtempSync(path.join(tmpdir(), "linkctl-ctx-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-ctx-"));
 	tmpDirs.push(dir);
 	return dir;
 }
@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 function writeMinimalConfig(dir: string, config: object = {}): void {
-	writeFileSync(path.join(dir, "linkctl.config.json"), JSON.stringify(config));
+	writeFileSync(path.join(dir, "variant.config.json"), JSON.stringify(config));
 }
 
 describe("createContext", () => {
@@ -228,7 +228,7 @@ describe("createContext (lintOnly / performance config)", () => {
 	it("enters lintOnly code path when lintOnlyForNonCritical is configured", async () => {
 		const dir = makeTmpDir();
 		// Write a trace session so loadTrace does not throw
-		const tracesDir = path.join(dir, ".linkctl", "traces");
+		const tracesDir = path.join(dir, ".variant", "traces");
 		mkdirSync(tracesDir, { recursive: true });
 		writeFileSync(
 			path.join(tracesDir, "last.json"),

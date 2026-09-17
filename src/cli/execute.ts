@@ -9,13 +9,13 @@ import { readCache } from "../core/cache/store.js";
 import type { RunOptions, TaskRunResult } from "../core/execution/runner.js";
 import { runTasksWithDeps } from "../core/execution/runner.js";
 import { computeInsights } from "../core/insight/analyzer.js";
-import type { LinkctlContext } from "../types/index.js";
+import type { VariantContext } from "../types/index.js";
 import { renderInsights } from "./render/insight.js";
 import { createTaskEventProgress } from "./visuals/task-events.js";
 
 export async function executeTarget(
 	target: string,
-	ctx: LinkctlContext,
+	ctx: VariantContext,
 	runOptions: RunOptions,
 	message: string,
 ): Promise<TaskRunResult[]> {
@@ -34,7 +34,7 @@ export async function executeTarget(
 
 /** The post-run summary table: timings, cache hit rate, remote savings. */
 export async function reportRunInsights(
-	ctx: LinkctlContext,
+	ctx: VariantContext,
 	results: TaskRunResult[],
 ): Promise<void> {
 	const cache = await readCache(ctx.cacheDir);

@@ -1,6 +1,6 @@
 /**
  * @module
- * `linkctl doctor` — the environment diagnosis behind the command. Each
+ * `variant doctor` — the environment diagnosis behind the command. Each
  * check answers one question and returns a {@link Diagnostic}; the command
  * renders them and maps `error` onto a non-zero exit code.
  *
@@ -10,8 +10,8 @@
 
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import type { ResolvedLinkctlConfig } from "../../types/index.js";
-import { findLinkctlConfigPath, loadConfig } from "../config/loader.js";
+import type { ResolvedVariantConfig } from "../../types/index.js";
+import { findVariantConfigPath, loadConfig } from "../config/loader.js";
 
 export type DiagnosticLevel = "ok" | "warn" | "error";
 
@@ -87,7 +87,7 @@ export async function checkCacheSize(
 }
 
 export async function checkTraces(cwd: string): Promise<Diagnostic> {
-	const traceDir = path.resolve(cwd, ".linkctl/traces");
+	const traceDir = path.resolve(cwd, ".variant/traces");
 	let sessions: string[];
 	try {
 		sessions = (await readdir(traceDir)).filter((f) => f.endsWith(".json"));
@@ -96,14 +96,14 @@ export async function checkTraces(cwd: string): Promise<Diagnostic> {
 			level: "warn",
 			label: "No trace sessions found",
 			detail:
-				"Run `linkctl trace` to record a session (needed for scope/criticalPaths features).",
+				"Run `variant trace` to record a session (needed for scope/criticalPaths features).",
 		};
 	}
 	if (sessions.length === 0) {
 		return {
 			level: "warn",
 			label: "Trace directory exists but contains no sessions",
-			detail: "Run `linkctl trace` to record a session.",
+			detail: "Run `variant trace` to record a session.",
 		};
 	}
 	return { level: "ok", label: `${sessions.length} trace session(s) found` };
@@ -114,7 +114,7 @@ export async function checkTraces(cwd: string): Promise<Diagnostic> {
  * which needs critical paths too — this mirrors the condition in
  * `cli/context.ts`, so the two must change together.
  */
-function requiresTrace(config: ResolvedLinkctlConfig): boolean {
+function requiresTrace(config: ResolvedVariantConfig): boolean {
 	const performance = config.performance;
 	return (
 		(performance?.lintOnlyForNonCritical ?? false) &&
@@ -123,13 +123,13 @@ function requiresTrace(config: ResolvedLinkctlConfig): boolean {
 }
 
 async function checkConfig(cwd: string): Promise<Diagnostic[]> {
-	const configPath = findLinkctlConfigPath(cwd);
+	const configPath = findVariantConfigPath(cwd);
 	if (!configPath) {
 		return [
 			{
 				level: "error",
-				label: "No linkctl.config.ts found",
-				detail: "Run `linkctl init` to create one.",
+				label: "No variant.config.ts found",
+				detail: "Run `variant init` to create one.",
 			},
 		];
 	}
@@ -138,7 +138,7 @@ async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 		{ level: "ok", label: `Config found: ${path.basename(configPath)}` },
 	];
 
-	let config: ResolvedLinkctlConfig;
+	let config: ResolvedVariantConfig;
 	try {
 		config = await loadConfig(cwd);
 	} catch (err) {

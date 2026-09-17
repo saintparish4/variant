@@ -1,10 +1,10 @@
 /**
  * @module
- * Shadow-mode prediction log (seed of roadmap 2.2 build history). Every
- * `linkctl impact` run appends its prediction to
- * `.linkctl/history/impact.jsonl` so prediction-vs-reality can be measured
+ * Shadow-mode prediction log (the seed of a shared build history). Every
+ * `variant impact` run appends its prediction to
+ * `.variant/history/impact.jsonl` so prediction-vs-reality can be measured
  * before test skipping is ever enabled — the measured false-skip rate, not an
- * asserted number, is what earns the right to skip (roadmap 1.5 hard gate).
+ * asserted number, is what earns the right to skip.
  *
  * Logging is best-effort by design: a history write failure must never fail
  * the command, so these functions return booleans / empty lists instead of
@@ -35,7 +35,7 @@ export const MAX_IMPACT_RECORDS = 1000;
 const LOG_FILENAME = "impact.jsonl";
 
 export function defaultHistoryDir(cwd: string): string {
-	return path.join(cwd, ".linkctl", "history");
+	return path.join(cwd, ".variant", "history");
 }
 
 /**

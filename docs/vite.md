@@ -1,11 +1,11 @@
 # Vite setup
 
-linkctl provides a Vite plugin that records which modules and routes are loaded during builds and dev runs — the same trace data used by `linkctl trace analyze` and the lint-only fast path.
+variant provides a Vite plugin that records which modules and routes are loaded during builds and dev runs — the same trace data used by `variant trace analyze` and the lint-only fast path.
 
 ## 1. Install
 
 ```bash
-npm install -D linkctl
+npm install -D vrnt
 ```
 
 ## 2. Add the Vite plugin
@@ -13,35 +13,35 @@ npm install -D linkctl
 ```javascript
 // vite.config.js (or vite.config.ts)
 import { defineConfig } from "vite";
-import { linkctlVitePlugin } from "linkctl/tracer";
+import { variantVitePlugin } from "vrnt/tracer";
 
 export default defineConfig({
   plugins: [
-    linkctlVitePlugin(),
+    variantVitePlugin(),
   ],
 });
 ```
 
-The plugin hooks into `generateBundle` to record entry chunks and their associated routes, writing sessions to `.linkctl/traces/<sessionId>.json`.
+The plugin hooks into `generateBundle` to record entry chunks and their associated routes, writing sessions to `.variant/traces/<sessionId>.json`.
 
 ## 3. Record a trace session
 
 ```bash
-npx linkctl trace
+variant trace
 ```
 
 Starts your Vite dev server with tracing active. Navigate through the routes you want to mark as critical, then stop the server.
 
 ```bash
 # Inspect the most recent session
-npx linkctl trace analyze
+variant trace analyze
 ```
 
 ## 4. Minimal config
 
 ```typescript
-// linkctl.config.ts
-import { defineConfig } from "linkctl";
+// variant.config.ts
+import { defineConfig } from "vrnt";
 
 export default defineConfig({
   tasks: {
@@ -77,4 +77,4 @@ See [nextjs.md](./nextjs.md) for a detailed walkthrough of this feature; the beh
 ## Notes
 
 - Vite route detection maps entry file paths to URLs using a `pages/`, `routes/`, or `views/` directory convention (with an optional `src/` prefix). Entry files outside these directories are recorded in the module list but are not assigned a route.
-- Add `.linkctl/` to `.gitignore` to avoid committing trace sessions.
+- Add `.variant/` to `.gitignore` to avoid committing trace sessions.

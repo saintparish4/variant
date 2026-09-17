@@ -1,10 +1,10 @@
-# Contributing to linkctl
+# Contributing to variant
 
 ## Dev Setup
 
 ```bash
 git clone <repo-url>
-cd linkctl
+cd variant
 pnpm install
 
 # Formatting → Linting → Typechecking (read-only gate, same order as CI / pre-commit)
@@ -50,13 +50,13 @@ src/
 ├── core/
 │   ├── config/
 │   │   ├── schema.ts     # Zod schema with defaults
-│   │   └── loader.ts     # Finds and loads linkctl.config.ts via jiti
+│   │   └── loader.ts     # Finds and loads variant.config.ts via jiti
 │   │
 │   ├── graph/
 │   │   ├── dag.ts        # TaskGraph class — addTask, addDependency, toLevels
 │   │   ├── package-graph.ts  # Workspace discovery and cross-package task generation
 │   │   ├── planner.ts    # buildGraph() — config -> TaskGraph
-│   │   ├── validation.ts # validateTaskGraph() — backs `linkctl check`
+│   │   ├── validation.ts # validateTaskGraph() — backs `variant check`
 │   │   ├── workspace-check.ts  # Pure declared-vs-imported dependency audit
 │   │   └── workspace-audit.ts  # Gathers manifests + symbol graph, runs the audit
 │   │
@@ -83,7 +83,7 @@ src/
 │   │   └── analyzer.ts   # computeInsights() — stats from results + cache
 │   │
 │   ├── doctor/
-│   │   └── diagnostics.ts    # Environment checks behind `linkctl doctor`
+│   │   └── diagnostics.ts    # Environment checks behind `variant doctor`
 │   │
 │   ├── pr/
 │   │   ├── check.ts      # Classify a PR's TypeScript changes into a verdict
@@ -94,7 +94,7 @@ src/
 │   │   └── predict.ts    # Test-impact prediction plus shadow-mode logging
 │   │
 │   ├── scaffold/
-│   │   └── config-template.ts  # Defaults and template behind `linkctl init`
+│   │   └── config-template.ts  # Defaults and template behind `variant init`
 │   │
 │   ├── plugins/
 │   │   ├── types.ts      # BuildPlugin interface and hook signatures
@@ -117,7 +117,7 @@ src/
 │   │   ├── blast-radius.ts   # Reverse-graph traversal from changed files
 │   │   └── test-impact.ts    # Which tests a change requires
 │   │
-│   └── errors.ts         # LinkctlError hierarchy (Config, Cycle, Task, Cache)
+│   └── errors.ts         # VariantError hierarchy (Config, Cycle, Task, Cache)
 │
 ├── adapters/             # Concrete adapter implementations
 │   ├── types.ts          # Adapter interfaces
@@ -128,21 +128,21 @@ src/
 ├── tracer/               # Module tracing plugins
 │   ├── next-plugin.ts    # Webpack plugin for Next.js
 │   ├── vite-plugin.ts    # Vite plugin
-│   └── writer.ts         # Writes trace sessions to .linkctl/traces/
+│   └── writer.ts         # Writes trace sessions to .variant/traces/
 │
 └── types/
-    └── index.ts          # Shared type definitions (LinkctlContext, TaskGraph, etc.)
+    └── index.ts          # Shared type definitions (VariantContext, TaskGraph, etc.)
 ```
 
 ### Key Design Decisions
 
 - **Lazy imports**: The CLI entry (`index.ts`) defines commands with inline
   `action()` callbacks that use dynamic `import()`. This keeps
-  `linkctl --help` fast (< 100ms) by avoiding loading heavy deps (execa,
+  `variant --help` fast (< 100ms) by avoiding loading heavy deps (execa,
   jiti, fast-glob) until a command actually runs.
 - **DI in the runner**: `runTasksWithDeps` accepts a `TaskExecutor` parameter
   (defaults to the real `executeTask`). Tests inject a mock executor.
-- **Typed errors**: Every failure path throws an `LinkctlError` subclass
+- **Typed errors**: Every failure path throws an `VariantError` subclass
   with a machine-readable `.code` string. The CLI error boundary formats
   these for the user.
 - **`core` never prints**: `core` reports through the progress port and throws
@@ -242,7 +242,7 @@ All commits must follow the conventional commit format:
 | `test` | Test additions/changes | `test: add integration tests for pnpm workspace detection` |
 | `docs` | Documentation | `docs: document scheduler policy options in README` |
 | `chore` | Build/tooling changes | `chore: update biome to 2.x` |
-| `types` | Type definition updates | `types: tighten LinkctlContext packageScopes inference` |
+| `types` | Type definition updates | `types: tighten VariantContext packageScopes inference` |
 | `ci` | CI/CD changes | `ci: add coverage threshold enforcement to CI workflow` |
 
 **Subject line rules:** imperative mood, no trailing period, max 72 characters, capitalize first letter.

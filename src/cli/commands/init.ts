@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { findLinkctlConfigPath } from "../../core/config/loader.js";
+import { findVariantConfigPath } from "../../core/config/loader.js";
 import { detectProject } from "../../core/detection/project.js";
 import type { TaskScaffold } from "../../core/scaffold/config-template.js";
 import {
@@ -13,7 +13,7 @@ import {
 import { lines } from "../render/writer.js";
 import { getPrinter } from "../visuals/printer.js";
 
-const CONFIG_FILENAME = "linkctl.config.ts";
+const CONFIG_FILENAME = "variant.config.ts";
 
 function splitList(answer: string): string[] {
 	return answer
@@ -26,7 +26,7 @@ export async function registerInitAction(): Promise<void> {
 	const cwd = process.cwd();
 	const printer = getPrinter();
 
-	const existing = findLinkctlConfigPath(cwd);
+	const existing = findVariantConfigPath(cwd);
 	if (existing) {
 		lines(
 			printer,
@@ -96,7 +96,7 @@ export async function registerInitAction(): Promise<void> {
 		lines(
 			printer,
 			"",
-			`Created ${CONFIG_FILENAME} — run \`linkctl doctor\` to verify.`,
+			`Created ${CONFIG_FILENAME} — run \`variant doctor\` to verify.`,
 		);
 	} finally {
 		rl.close();
