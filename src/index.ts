@@ -2,7 +2,7 @@
  * The supported public API surface of variant.
  *
  * Depend only on what is exported here. Symbols reachable through deep import
- * paths (`vrnt/dist/...`) are `@internal` and may change at any time. While the
+ * paths (`variantjs/dist/...`) are `@internal` and may change at any time. While the
  * package is `0.x`, even this surface can break in a minor release; every break
  * is recorded in the CHANGELOG.
  *
@@ -15,7 +15,7 @@
  *
  * @example
  * ```typescript
- * import { defineConfig } from "vrnt";
+ * import { defineConfig } from "variantjs";
  *
  * export default defineConfig({
  *   tasks: {

@@ -14,7 +14,7 @@ Enable workspace mode in your config:
 
 ```typescript
 // variant.config.ts
-import { defineConfig } from "vrnt";
+import { defineConfig } from "variantjs";
 
 export default defineConfig({
   strategy: "adaptive",
@@ -116,7 +116,7 @@ packages:
 `variant.config.ts` at the workspace root:
 
 ```typescript
-import { defineConfig } from "vrnt";
+import { defineConfig } from "variantjs";
 
 export default defineConfig({
   strategy: "adaptive",

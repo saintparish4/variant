@@ -15,15 +15,15 @@ config file, no setup — and then covers the task runner underneath it.
 `impact` needs no config file. Point it at a commit range:
 
 ```bash
-npx vrnt impact --base HEAD~1
+npx variantjs impact --base HEAD~1
 ```
 
-The package is `vrnt`; the command it installs is `variant`. `npx vrnt` runs it
+The package is `variantjs`; the command it installs is `variant`. `npx variantjs` runs it
 without installing. (`npx variant` would fetch an unrelated package of that
 name, so never write that.) To install it:
 
 ```bash
-npm install -D vrnt
+npm install -D variantjs
 ```
 
 After which the command is `variant`:
@@ -108,7 +108,7 @@ scripts, then writes `variant.config.ts`:
 
 ```typescript
 // variant.config.ts
-import { defineConfig } from "vrnt";
+import { defineConfig } from "variantjs";
 
 export default defineConfig({
   strategy: "adaptive",

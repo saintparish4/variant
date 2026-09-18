@@ -5,12 +5,12 @@ All notable changes to variant are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Versions here are the `vrnt` package, which started at 0.1.0 when the project
+Versions here are the `variantjs` package, which started at 0.1.0 when the project
 was renamed to variant. Everything published before that — `antiscaler` 0.1.0
 through 1.1.1, then `linkctl` 2.0.0 — is in
 [CHANGELOG-archive.md](./CHANGELOG-archive.md). The two series reuse the same
 numbers, so they are kept apart rather than interleaved: git tags for this
-series are `vrnt@x.y.z`, and the archived series keeps its bare `vx.y.z` tags.
+series are `variantjs@x.y.z`, and the archived series keeps its bare `vx.y.z` tags.
 
 ## [Unreleased]
 
@@ -68,7 +68,7 @@ corresponding config keys.
 
 ### Removed
 
-- **The tracer.** `src/tracer/`, the `vrnt/tracer` export and its `tsup` entry
+- **The tracer.** `src/tracer/`, the `variantjs/tracer` export and its `tsup` entry
   point, the `trace` and `trace analyze` commands, and `.variant/traces/`. It
   needed a plugin inside the user's dev server, only covered Next and Vite, and
   fed nothing into the impact pipeline.
@@ -106,15 +106,16 @@ ship in minor releases and are recorded here.
 
 ### Changed
 
-- **Renamed the project to `variant`.** The npm package is `vrnt` (`variant`
-  and `variant-ts` are taken by unrelated packages); everything a user reads or
-  types is `variant`: the `bin`, the config file (`variant.config.ts`), the
+- **Renamed the project to `variant`.** The npm package is `variantjs`: `variant`
+  and `variant-ts` belong to unrelated packages, and npm's typosquat filter
+  rejects short alternatives as too similar to existing names. Everything a user
+  reads or types is `variant`: the `bin`, the config file (`variant.config.ts`), the
   state directory (`.variant/`), the `VARIANT_*` environment variables, the
   exported types (`VariantConfig`, `VariantContext`, `VariantError`), the
   tracer plugins (`variantVitePlugin`, `variantNextPlugin`) and the default S3
   key prefix (`variant/`).
 
-  `npx vrnt <command>` addresses the package; `variant <command>` is the
+  `npx variantjs <command>` addresses the package; `variant <command>` is the
   installed binary. npm runs a package's sole binary even when its name differs
   from the package, so both work.
 
@@ -142,6 +143,6 @@ ship in minor releases and are recorded here.
 - The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
   config. Quoted-argv parsing is covered by the executor's unit tests.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/vrnt@0.2.0...HEAD
-[0.2.0]: https://github.com/saintparish4/variant/compare/vrnt@0.1.0...vrnt@0.2.0
-[0.1.0]: https://github.com/saintparish4/variant/releases/tag/vrnt@0.1.0
+[Unreleased]: https://github.com/saintparish4/variant/compare/variantjs@0.2.0...HEAD
+[0.2.0]: https://github.com/saintparish4/variant/compare/variantjs@0.1.0...variantjs@0.2.0
+[0.1.0]: https://github.com/saintparish4/variant/releases/tag/variantjs@0.1.0

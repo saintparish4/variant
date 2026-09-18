@@ -1,12 +1,12 @@
 # variant
 
-[![npm version](https://img.shields.io/npm/v/vrnt.svg)](https://www.npmjs.com/package/vrnt)
+[![npm version](https://img.shields.io/npm/v/variantjs.svg)](https://www.npmjs.com/package/variantjs)
 [![CI](https://github.com/saintparish4/variant/actions/workflows/ci.yml/badge.svg)](https://github.com/saintparish4/variant/actions/workflows/ci.yml)
 
 Change intelligence for TypeScript monorepos. variant reads a diff at the AST level and answers one question: **which tests does this change actually need, and how sure are we?**
 
 ```console
-$ npx vrnt impact --base HEAD~1
+$ npx variantjs impact --base HEAD~1
 
 Base ref: HEAD~1
 
@@ -24,7 +24,7 @@ Confidence: 100%  (report-only — run the full suite; skipping unlocks after sh
 
 `internal` means the exported signature did not change — only the body — so a dependent that never imports the changed names is not selected. That distinction is the point: test runners and build orchestrators decide "affected" from the file or package graph; variant decides it from the exported surface.
 
-No config file is required. Published to npm as **`vrnt`**; the command it installs is **`variant`**.
+No config file is required. Published to npm as **`variantjs`**; the command it installs is **`variant`**.
 
 **`impact` is report-only and stays that way until it is measured.** Every prediction is appended to `.variant/history/impact.jsonl` so a false-skip rate can be reconciled against real test results. The printed confidence is a graph-resolution score, not a safety number. Until that rate is published, run the full suite.
 
@@ -156,7 +156,7 @@ Only `dist/` is published (`files: ["dist"]`). The package exposes `.` through t
 
 Releases are **manual**; the only workflows in the repository are `ci.yml` and `benchmark.yml`. Before publishing: bump the version, update [CHANGELOG.md](./CHANGELOG.md), and confirm CI is green on `master`.
 
-The package is `0.x` and makes no semver stability promise yet. Breaking changes to the `vrnt` public API can ship in any minor release; each one is recorded in [CHANGELOG.md](./CHANGELOG.md).
+The package is `0.x` and makes no semver stability promise yet. Breaking changes to the `variantjs` public API can ship in any minor release; each one is recorded in [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 

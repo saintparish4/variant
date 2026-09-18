@@ -3,7 +3,7 @@
 All configuration lives in `variant.config.ts` (or `.js` / `.mjs` / `.json`) at your project root. The config is loaded via [jiti](https://github.com/unjs/jiti), so TypeScript is supported without a build step. The JSON format (`variant.config.json`) is also accepted for environments where TypeScript is unavailable.
 
 ```typescript
-import { defineConfig } from "vrnt";
+import { defineConfig } from "variantjs";
 
 export default defineConfig({ ... });
 ```
@@ -206,7 +206,7 @@ Controls how the event-driven scheduler orders task execution within a DAG level
 ## Full example
 
 ```typescript
-import { defineConfig } from "vrnt";
+import { defineConfig } from "variantjs";
 
 export default defineConfig({
   strategy: "adaptive",

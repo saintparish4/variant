@@ -81,7 +81,7 @@ export function renderConfigTemplate(tasks: readonly TaskScaffold[]): string {
 		)
 		.join(",\n");
 
-	return `import { defineConfig } from "vrnt";
+	return `import { defineConfig } from "variantjs";
 
 export default defineConfig({
   strategy: "adaptive",
