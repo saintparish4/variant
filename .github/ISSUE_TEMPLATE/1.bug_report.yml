@@ -113,7 +113,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Narrowing down the regression:** If this worked in an earlier release, it helps us enormously if you can identify which version introduced the bug. Check the [releases page](https://github.com/saintparish4/variant/releases) and install an older version with `pnpm add -D variantjs@<version>` to bisect. Include your findings in "Additional context" below.
+        **Narrowing down the regression:** If this worked in an earlier release, it helps us enormously if you can identify which version introduced the bug. Check the [releases page](https://github.com/saintparish4/variant/releases) and install an older version with `pnpm add -D @blzsky/variant@<version>` to bisect. Include your findings in "Additional context" below.
 
   - type: textarea
     id: logs

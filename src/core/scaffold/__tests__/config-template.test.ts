@@ -47,7 +47,9 @@ describe("renderConfigTemplate", () => {
 			{ name: "build", command: "pnpm build", inputs: ["src/**/*"] },
 		]);
 
-		expect(template).toContain('import { defineConfig } from "variantjs";');
+		expect(template).toContain(
+			'import { defineConfig } from "@blzsky/variant";',
+		);
 		expect(template).toContain("export default defineConfig({");
 		expect(template).toContain('strategy: "adaptive"');
 	});

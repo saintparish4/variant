@@ -77,7 +77,7 @@ JSON output shape:
 There is no ready-made workflow to install yet. `pr report --markdown` writes a file that any commenting action can post, so the integration is a few lines in your own workflow:
 
 ```yaml
-- run: npx variantjs pr report --base ${{ github.base_ref }} --markdown --output pr-report.md
+- run: npx @blzsky/variant pr report --base ${{ github.base_ref }} --markdown --output pr-report.md
 ```
 
 Feed `pr-report.md` to `actions/github-script` (or `peter-evans/create-or-update-comment`) with a fixed marker line such as `## Variant PR Report` so each run updates the same sticky comment instead of adding a new one. The default `GITHUB_TOKEN` is enough — no extra secrets.

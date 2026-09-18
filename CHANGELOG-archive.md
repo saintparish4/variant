@@ -5,7 +5,7 @@ two npm packages — `antiscaler` (0.1.0 through 1.1.1) and then `linkctl`
 (2.0.0) — and their git tags are the bare `vx.y.z` form.
 
 Kept verbatim. The current series starts over at 0.1.0 under the package name
-`variantjs` and lives in [CHANGELOG.md](./CHANGELOG.md); because the two series reuse
+`@blzsky/variant` and lives in [CHANGELOG.md](./CHANGELOG.md); because the two series reuse
 the same version numbers, they are not merged.
 
 ## [2.0.0] - 2026-08-30

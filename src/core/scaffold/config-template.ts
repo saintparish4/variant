@@ -81,7 +81,7 @@ export function renderConfigTemplate(tasks: readonly TaskScaffold[]): string {
 		)
 		.join(",\n");
 
-	return `import { defineConfig } from "variantjs";
+	return `import { defineConfig } from "@blzsky/variant";
 
 export default defineConfig({
   strategy: "adaptive",
