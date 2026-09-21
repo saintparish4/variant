@@ -24,17 +24,95 @@ Confidence: 100%  (report-only — run the full suite; skipping unlocks after sh
 
 `internal` means the exported signature did not change — only the body — so a dependent that never imports the changed names is not selected. That distinction is the point: test runners and build orchestrators decide "affected" from the file or package graph; variant decides it from the exported surface.
 
-No config file is required. Published to npm as **`@blzsky/variant`**; the command it installs is **`variant`**.
+No config file is required.
 
 **`impact` is report-only and stays that way until it is measured.** Every prediction is appended to `.variant/history/impact.jsonl` so a false-skip rate can be reconciled against real test results. The printed confidence is a graph-resolution score, not a safety number. Until that rate is published, run the full suite.
 
 A cached task DAG (`build`, `run`, `insight`) sits underneath, and dogfoods the repo.
 
-The rest of this README is for working **on** variant. Using it in your own project is documented in [docs/](./docs/getting-started.md).
+---
+
+## Quick start
+
+Node ≥ 20 and a git repository with at least one prior commit. Nothing to configure:
+
+```bash
+npx @blzsky/variant impact --base origin/main
+```
+
+To keep it in a project:
+
+```bash
+npm install -D @blzsky/variant    # or pnpm add -D / yarn add -D
+```
+
+The package is `@blzsky/variant`; the binary it installs is `variant`. (`npx variant` fetches an unrelated package of that name — always scope it.)
+
+```bash
+variant impact --base origin/main     # which tests does this branch need?
+variant diff src/api/checkout.ts      # classify one file's change
+variant pr check --base main          # one build verdict for the whole PR
+```
+
+In CI, `pr report` renders the verdict as a comment-ready artifact and `workspace check` exits 1 on an undeclared dependency:
+
+```yaml
+- run: npx @blzsky/variant pr report --base ${{ github.base_ref }} --markdown --output report.md
+- run: npx @blzsky/variant workspace check
+```
+
+To check a prediction against what actually happened, keep the test runner's JSON report and reconcile it:
+
+```bash
+npx vitest run --reporter=json --outputFile=report.json
+variant impact verify report.json     # reports false skips
+```
+
+Walkthrough: [docs/getting-started.md](./docs/getting-started.md). Then [impact & workspace](./docs/impact-and-workspace.md), [PR commands](./docs/pr-commands.md), [monorepos](./docs/monorepo.md), [config reference](./docs/config-reference.md), [troubleshooting](./docs/troubleshooting.md).
+
+---
+
+## Commands
+
+Change intelligence — what variant is for:
+
+| Command | What it does |
+|---|---|
+| `impact` | Predict which tests a change requires, and how much of the import graph resolved. Report-only. `--base <ref>` (default `HEAD~1`), `--json` |
+| `impact verify <report>` | Reconcile a logged prediction against a Vitest (`--reporter=json`) or Jest (`--json`) report, and report false skips. `--head-sha <sha>`, `--json` |
+| `diff <file>` | Classify one TypeScript file's change as non-impacting / internal / breaking. `--base <ref>` |
+| `pr check` | Classify every TypeScript change in the PR and roll them up to a build verdict. `--base <ref>` (default `main`) |
+| `pr report` | The `pr check` verdict as a structured artifact. `--markdown`, `--output <file>`, `--base <ref>` |
+| `workspace check` | CI gate: packages importing dependencies they do not declare. Exits 1 on violations. `--json` |
+
+Task orchestration — the cached DAG underneath, frozen at feature parity because it carries the cache-key invariants and dogfoods this repo:
+
+| Command | What it does |
+|---|---|
+| `build` | Run the `build` task across the workspace. `--affected`, `-c, --concurrency <n>`, `--dry-run` |
+| `run <task>` | Run a named task with its dependencies |
+| `insight` | Task timing and cache-hit stats |
+
+Setup and diagnostics:
+
+| Command | What it does |
+|---|---|
+| `init` | Scaffold `variant.config.ts` in the current directory |
+| `doctor` | Validate config and diagnose common issues |
+| `check` | Validate config and task graph without executing anything |
+| `env` | Show the detected runtime, package manager and framework |
+
+Global flags, accepted by every command: `-q`/`-qq` (quieter, silent), `-v` (verbose), `--color <auto\|always\|never>`, `--no-color`, `--no-progress`, `-V`, `-h`. Run `variant help <command>` for the full option list.
+
+---
+
+Everything below is for working **on** variant itself. Using it in your own project is [docs/](./docs/getting-started.md).
 
 ---
 
 ## Requirements
+
+For developing variant. Using it needs only Node ≥ 20 and git.
 
 | | Version | Notes |
 |---|---|---|
@@ -46,7 +124,7 @@ Optional: **[hyperfine](https://github.com/sharkdp/hyperfine)**, required by `pn
 
 ---
 
-## Installation
+## Local setup
 
 ```bash
 git clone https://github.com/saintparish4/variant.git
