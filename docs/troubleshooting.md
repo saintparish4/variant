@@ -32,13 +32,13 @@ An empty `inputs: []` means the task never hashes — it will always be a cache 
 
 **Cause:** The binary isn't on PATH. variant is installed as a local dev dependency.
 
-**Fix:** Use `npx` or add a script to `package.json`:
+**Fix:** Run it through `npx` with the package name (never `npx variant`, which fetches an unrelated package):
 
 ```bash
-variant build
+npx @blzsky/variant build
 ```
 
-Or add to `package.json`:
+Or add a script to `package.json`, where the local `variant` binary is on PATH:
 
 ```json
 {
@@ -52,11 +52,9 @@ Or add to `package.json`:
 
 ## 3. Config file not found
 
-**Cause:** variant looks for `variant.config.ts`, `variant.config.js`, or `variant.config.mjs` in the current working directory.
+**Cause:** variant looks for `variant.config.ts`, `variant.config.mjs`, `variant.config.js`, or `variant.config.json`, in that order, in the current working directory.
 
-**Fix:** Create the config with `variant init`, or check you're running from the project root.
-
-Note: the config filename is `variant.config.ts` (no `r` at the end), while the package name and CLI are `variant`.
+**Fix:** Create the config with `variant init`, or check you're running from the project root. Only the task runner (`build`, `run`, `insight`) needs a config; `impact`, `pr` and `workspace check` work without one.
 
 ---
 
@@ -72,12 +70,12 @@ workspace: {
 }
 ```
 
-variant looks for:
+variant looks for, in order:
 - `pnpm-workspace.yaml` (pnpm)
 - `package.json` `workspaces` field (npm / Yarn)
-- `tsconfig.json` project references
+- the directories `packages/*`, `apps/*` and `services/*`
 
-Run `variant env` to see what was detected.
+A package directory also needs a `package.json` with a `name`. Run `variant env` to see what was detected.
 
 ---
 
@@ -146,6 +144,26 @@ When a task fails, variant adds a short block explaining why that task was selec
 **This does not explain why the task failed.** It answers "why did this run at all", which is a different question. A task can be selected because `db.ts` changed and then fail for a reason with nothing to do with `db.ts` — treat the file list as a place to start looking, not a cause. The failing command's own output, above the block, is the actual evidence.
 
 The block appears on stderr, only on failure, and only for errors belonging to a task — config and usage errors have no task to explain. Colors follow the same rules as the rest of the CLI (`NO_COLOR`, `--no-color`, `FORCE_COLOR`); when styling is off the same text still prints.
+
+---
+
+## 9. `impact` finds no changes, or `pr check` says "safe to skip build" with 0 files
+
+**Cause:** The `--base` ref does not resolve. variant does not treat that as an error: `impact` prints `could not determine changed files` and `pr check` reports zero changed files and a `safe to skip build` verdict, both exiting 0. In CI this is the usual case, for two reasons:
+
+- `actions/checkout` fetches a single commit by default, so the base commit is not there to compare against.
+- It creates no local branch for the target, so `--base main` names nothing.
+
+**Fix:** Check out with `fetch-depth: 0` and pass the remote-tracking ref:
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0
+- run: npx --yes @blzsky/variant pr check --base origin/main
+```
+
+Locally, `git rev-parse --verify <ref>` confirms a ref exists. The [example workflows](../examples/github-actions) are set up correctly. See [Refs and diffs](./cli-reference.md#refs-and-diffs) for how each command compares.
 
 ---
 

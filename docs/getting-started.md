@@ -4,6 +4,10 @@ variant reads a TypeScript diff at the AST level and tells you which tests that
 change actually needs. This guide runs it against your own repository — no
 config file, no setup — and then covers the task runner underneath it.
 
+Prefer a guided run on a sample project first? The
+[tutorial](./tutorial.md) walks through every command on a three-package
+monorepo.
+
 ## Prerequisites
 
 - Node.js ≥ 20
@@ -53,12 +57,14 @@ Confidence: 100%  (report-only — run the full suite; skipping unlocks after sh
 
 Reading it:
 
-- **`internal`** — the exported signature did not change, only the body. A
-  dependent that calls `add` still compiles; one that only imports `mul` is
-  untouched. The three classifications are `non-impacting`, `internal` and
+- **`internal`** — the exported signature did not change, only the body.
+  Dependents still compile, so the change does not spread through the blast
+  radius (`Impact`). Every test that imports `math.ts`, directly or through
+  other files, is still selected: a new implementation can change what a test
+  observes. The three classifications are `non-impacting`, `internal` and
   `breaking`; anything that is not TypeScript is `unanalyzed`.
-- **Run / Skip** — the tests whose static import closure reaches a changed
-  file, and the rest.
+- **Run / Skip** — the tests whose static import closure reaches an affected
+  file, and the rest. Here the skipped test never imports `math.ts`.
 - **Confidence** — how much of the import graph resolved, *not* a safety
   number. Unresolved specifiers and dynamic `import()` lower it and add a note.
 - **Report-only.** variant never skips anything for you. Every prediction is
@@ -66,7 +72,12 @@ Reading it:
   measured before skipping is ever offered.
 
 Add `--json` for the machine-readable form, which includes the full blast
-radius and every note.
+radius and every note; its shape is in the [API reference](./api.md#impact---json).
+
+`--base` compares the ref's commit with your working tree, so on a branch that
+has fallen behind `main`, `--base main` also reports what landed on `main`
+since. Pass `--base "$(git merge-base main HEAD)"` to see only your branch; the
+[CLI reference](./cli-reference.md#refs-and-diffs) has the details.
 
 To check a prediction against reality, keep the test runner's JSON report and
 reconcile it:
@@ -88,7 +99,8 @@ variant pr report --base origin/main --markdown --output pr-report.md
 
 `pr check` classifies every changed TypeScript file and rolls the result into
 one verdict. `pr report` renders the same thing as JSON or as markdown suitable
-for a sticky PR comment — see [pr-commands.md](./pr-commands.md).
+for a sticky PR comment — see [pr-commands.md](./pr-commands.md), and
+[`examples/github-actions`](../examples/github-actions) for workflows to copy.
 
 In a monorepo, `variant workspace check` is a CI gate for undeclared
 dependencies and cross-package relative imports. Both commands are covered in
@@ -167,8 +179,12 @@ local cache history.
 
 ## Next steps
 
+- **[tutorial.md](./tutorial.md)** — every change-intelligence command on a
+  sample monorepo, including reconciling a prediction with a real test run.
 - **[impact-and-workspace.md](./impact-and-workspace.md)** — what `impact` can
   and cannot see, and how `workspace check` is configured.
+- **[cli-reference.md](./cli-reference.md)** and **[api.md](./api.md)** —
+  every command, flag and JSON output.
 - **[pr-commands.md](./pr-commands.md)** — `pr check` and `pr report` in CI.
 - **[monorepo.md](./monorepo.md)** — workspace task generation and `--affected`.
 - **[config-reference.md](./config-reference.md)** — every config key.

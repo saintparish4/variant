@@ -2,6 +2,8 @@
 
 variant's `pr` subcommands classify what a pull request actually changes at the TypeScript AST level, and render the result for a human or for CI.
 
+![Running `variant pr check --base main`: price.ts is breaking, slug.ts is non-impacting, verdict build required](./assets/pr-check.gif)
+
 ## Commands
 
 ### `pr check`
@@ -31,9 +33,11 @@ Verdict: build required
 
 | Label | Meaning |
 |-------|---------|
-| `non-impacting` | No exported symbols changed (comments, whitespace, private code) |
-| `internal` | Exported symbols changed in a backwards-compatible way |
-| `breaking` | Exported symbols removed or their signatures changed |
+| `non-impacting` | Nothing but comments or whitespace changed |
+| `internal` | Code changed, but no exported signature did: implementation only |
+| `breaking` | An exported signature changed, or an export was added or removed |
+
+The parenthesis counts exported symbols added (`+`), removed (`-`) and changed (`~`).
 
 **Verdicts:**
 
@@ -72,15 +76,23 @@ JSON output shape:
 }
 ```
 
+Every field, and the exact markdown layout, is in the [API reference](./api.md#pr-report).
+
 ## GitHub Actions integration
 
-There is no ready-made workflow to install yet. `pr report --markdown` writes a file that any commenting action can post, so the integration is a few lines in your own workflow:
+[`examples/github-actions/pr-report.yml`](../examples/github-actions/pr-report.yml) is a complete workflow: it runs `pr report --markdown` on every pull request and keeps one sticky comment up to date, using the default `GITHUB_TOKEN`. The step that matters:
 
 ```yaml
-- run: npx @blzsky/variant pr report --base ${{ github.base_ref }} --markdown --output pr-report.md
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0
+
+- env:
+    BASE_REF: origin/${{ github.base_ref }}
+  run: npx --yes @blzsky/variant pr report --base "$BASE_REF" --markdown --output pr-report.md
 ```
 
-Feed `pr-report.md` to `actions/github-script` (or `peter-evans/create-or-update-comment`) with a fixed marker line such as `## Variant PR Report` so each run updates the same sticky comment instead of adding a new one. The default `GITHUB_TOKEN` is enough — no extra secrets.
+Both details are load-bearing. `pr check` and `pr report` diff from the merge base with `--base`, so they need history: a shallow clone has none. And `actions/checkout` creates no local branch for the target, so `--base main` names nothing, while `--base origin/main` resolves.
 
 ## Options
 
@@ -89,6 +101,10 @@ Both `pr` commands accept:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--base <ref>` | `main` | Git ref to diff against |
+
+Both diff `<ref>...HEAD`: the committed changes since the branch left `<ref>`. Uncommitted changes are not included.
+
+> **A ref that does not resolve is not an error.** `pr check` then reports zero changed files and `safe to skip build`. Check the ref with `git rev-parse --verify <ref>` before trusting a verdict in a new setup.
 
 `pr report` also accepts:
 
