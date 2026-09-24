@@ -39,6 +39,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **A `--base` ref that names no commit is now an error** (`GIT_REF_ERROR`,
+  exit 1) in `impact`, `diff`, `pr check` and `pr report`. `pr check` and
+  `pr report` used to report zero changed files and `safe to skip build`, and
+  `impact` printed "could not determine changed files" and exited 0, so a
+  mistyped ref, or a CI checkout with no local `main`, passed as a clean
+  result. `pr check` and `pr report` also fail when the ref shares no merge
+  base with `HEAD`, as in a shallow clone. This changes an exit code: the
+  default `impact --base HEAD~1` in a repository with a single commit now
+  fails instead of printing a message.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and

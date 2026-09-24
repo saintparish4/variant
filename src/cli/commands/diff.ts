@@ -3,6 +3,7 @@ import {
 	DEFAULT_DIFF_BASE_REF,
 	toWorkspaceRelative,
 } from "../../core/semantic/file-change.js";
+import { assertBaseRef } from "../../core/vcs/base-ref.js";
 import { renderClassification } from "../render/diff.js";
 
 export interface DiffActionOptions {
@@ -17,6 +18,7 @@ export async function registerDiffAction(
 	const cwd = process.cwd();
 	const baseRef = opts.base ?? DEFAULT_DIFF_BASE_REF;
 	const relPath = toWorkspaceRelative(cwd, filePath);
+	await assertBaseRef(cwd, baseRef);
 	renderClassification(
 		await classifyFileAgainstRef(cwd, relPath, baseRef),
 		baseRef,

@@ -2,7 +2,6 @@ import type { ImpactOptions } from "../../core/impact/predict.js";
 import { predictImpact } from "../../core/impact/predict.js";
 import { verifyImpact } from "../../core/impact/verify.js";
 import {
-	NO_CHANGED_FILES_MESSAGE,
 	NO_PREDICTION_MESSAGE,
 	renderImpact,
 	renderImpactJson,
@@ -21,11 +20,6 @@ export async function registerImpactAction(
 	opts: ImpactActionOptions = {},
 ): Promise<void> {
 	const report = await predictImpact(process.cwd(), opts);
-
-	if (report === null) {
-		lines(getPrinter(), NO_CHANGED_FILES_MESSAGE);
-		return;
-	}
 
 	if (opts.json === true) {
 		renderImpactJson(report);

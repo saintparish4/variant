@@ -99,7 +99,7 @@ Ready-to-copy GitHub Actions workflows are in
 
 Check out with `fetch-depth: 0` and pass `--base origin/<branch>`. With a
 shallow clone, or a bare `main` that CI never created, there is no base to
-diff against, and the result is empty rather than an error.
+diff against, and variant stops with `GIT_REF_ERROR` rather than guess.
 
 ## Documentation
 

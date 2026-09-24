@@ -147,12 +147,14 @@ The block appears on stderr, only on failure, and only for errors belonging to a
 
 ---
 
-## 9. `impact` finds no changes, or `pr check` says "safe to skip build" with 0 files
+## 9. `[GIT_REF_ERROR] "main" does not name a commit in this repository`
 
-**Cause:** The `--base` ref does not resolve. variant does not treat that as an error: `impact` prints `could not determine changed files` and `pr check` reports zero changed files and a `safe to skip build` verdict, both exiting 0. In CI this is the usual case, for two reasons:
+**Cause:** The `--base` ref does not resolve, or, for `pr check` and `pr report`, it shares no merge base with `HEAD`. In CI this is the usual case, for two reasons:
 
 - `actions/checkout` fetches a single commit by default, so the base commit is not there to compare against.
 - It creates no local branch for the target, so `--base main` names nothing.
+
+Locally, the default `--base HEAD~1` fails the same way in a repository with a single commit.
 
 **Fix:** Check out with `fetch-depth: 0` and pass the remote-tracking ref:
 

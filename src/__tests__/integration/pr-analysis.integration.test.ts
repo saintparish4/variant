@@ -14,6 +14,7 @@ import { runPrCheck } from "../../core/pr/check.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
+	createGitWorkspace,
 	createTempWorkspace,
 	restoreGlobalPrinter,
 	withCwd,
@@ -26,26 +27,45 @@ afterEach(() => {
 });
 
 describe("runPrCheck", () => {
-	it("reports safe-to-skip with no changed files when git is unavailable", async () => {
+	// Reporting "no changes" here once produced "safe to skip build" for a
+	// mistyped or unfetched ref: a narrow verdict from a wrong input.
+	it("rejects a base ref outside a git repository", async () => {
 		const dir = createTempWorkspace("pr");
+
+		await expect(runPrCheck(dir, { base: "main" })).rejects.toMatchObject({
+			code: "GIT_REF_ERROR",
+		});
+	});
+
+	it("rejects a base ref that names no commit", async () => {
+		const dir = createGitWorkspace("pr", {});
+
+		await expect(
+			runPrCheck(dir, { base: "does-not-exist" }),
+		).rejects.toMatchObject({ code: "GIT_REF_ERROR" });
+	});
+
+	it("reports no changes on a branch that has not diverged from its base", async () => {
+		const dir = createGitWorkspace("pr", {});
 		const result = await runPrCheck(dir, { base: "main" });
 
 		expect(result.verdict).toBe("safe-to-skip");
 		expect(result.tsFilesChanged).toBe(0);
-		expect(result.files).toHaveLength(0);
 		expect(result.baseRef).toBe("main");
 	});
 
 	it("defaults the base ref to main", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		expect((await runPrCheck(dir, {})).baseRef).toBe("main");
 	});
 
 	it("honors a custom base ref", async () => {
 		const dir = createTempWorkspace("pr");
-		expect((await runPrCheck(dir, { base: "origin/main" })).baseRef).toBe(
-			"origin/main",
-		);
+		const result = await runPrCheck(dir, {
+			base: "origin/main",
+			changedFiles: [],
+		});
+		expect(result.baseRef).toBe("origin/main");
 	});
 
 	it("classifies a new exported symbol as breaking and requires a build", async () => {
@@ -80,7 +100,7 @@ describe("runPrCheck", () => {
 
 describe("pr check command", () => {
 	it("prints the base ref, file count, and verdict", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerPrCheckAction({ base: "main" }));
@@ -93,7 +113,7 @@ describe("pr check command", () => {
 
 describe("pr report command", () => {
 	it("emits parseable JSON by default", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerPrReportAction({ base: "main" }));
@@ -107,7 +127,7 @@ describe("pr report command", () => {
 	});
 
 	it("emits a markdown summary with --markdown", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () =>
@@ -120,7 +140,7 @@ describe("pr report command", () => {
 	});
 
 	it("writes JSON to the path given by --output", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		captureGlobalOutput();
 
 		await withCwd(dir, () =>
@@ -134,7 +154,7 @@ describe("pr report command", () => {
 	});
 
 	it("writes markdown to the path given by --output", async () => {
-		const dir = createTempWorkspace("pr");
+		const dir = createGitWorkspace("pr", {});
 		captureGlobalOutput();
 
 		await withCwd(dir, () =>

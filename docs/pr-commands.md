@@ -104,7 +104,7 @@ Both `pr` commands accept:
 
 Both diff `<ref>...HEAD`: the committed changes since the branch left `<ref>`. Uncommitted changes are not included.
 
-> **A ref that does not resolve is not an error.** `pr check` then reports zero changed files and `safe to skip build`. Check the ref with `git rev-parse --verify <ref>` before trusting a verdict in a new setup.
+A ref that names no commit, or that shares no merge base with `HEAD` (a shallow clone), stops the command with `GIT_REF_ERROR` and exit code 1. An analysis that cannot see the base has no verdict to give.
 
 `pr report` also accepts:
 

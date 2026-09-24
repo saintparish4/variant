@@ -169,6 +169,24 @@ export async function readHeadSha(cwd: string): Promise<string | null> {
 }
 
 /**
+ * The commit `ref` names, or null when it names none: a typo, a branch that
+ * was never fetched, `HEAD~1` in a one-commit repository, or no repository.
+ */
+export async function resolveCommit(
+	cwd: string,
+	ref: string,
+): Promise<string | null> {
+	const stdout = await git(cwd, [
+		"rev-parse",
+		"--verify",
+		"--quiet",
+		`${ref}^{commit}`,
+	]);
+	const sha = stdout?.trim();
+	return sha === undefined || sha === "" ? null : sha;
+}
+
+/**
  * Files differing between `ref` and the working tree.
  *
  * The trailing `--` terminates option parsing so a crafted ref (one starting

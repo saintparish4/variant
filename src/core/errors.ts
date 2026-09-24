@@ -66,6 +66,14 @@ export class GraphError extends VariantError {
 	}
 }
 
+export class GitRefError extends VariantError {
+	constructor(message: string) {
+		super("GIT_REF_ERROR", message);
+		this.hint =
+			"Check the ref with `git rev-parse --verify <ref>`. In CI, check out with `fetch-depth: 0` and pass a remote-tracking ref such as `origin/main`.";
+	}
+}
+
 export class ImpactReportError extends VariantError {
 	constructor(message: string) {
 		super("IMPACT_REPORT_ERROR", `Could not read the test report: ${message}`);

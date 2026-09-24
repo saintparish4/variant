@@ -114,11 +114,11 @@ and names are sorted. `-q` suppresses JSON along with all other output.
 
 When there is nothing to analyze, the commands print a plain-text line instead
 of JSON and exit 0. Check the exit code, and that stdout starts with `{`,
-before parsing.
+before parsing. A `--base` ref that cannot be resolved is not in this table: it
+is an error (`GIT_REF_ERROR`, exit 1).
 
 | Command | Plain-text line printed instead of JSON |
 |---|---|
-| `impact --json` | `impact: could not determine changed files …` (bad ref, or no prior commit) |
 | `impact verify --json` | `impact verify: no logged prediction to reconcile against. …` |
 | `workspace check --json` | `workspace check: no workspace packages found …` |
 
