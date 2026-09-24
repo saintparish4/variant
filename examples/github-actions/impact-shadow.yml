@@ -1,0 +1,66 @@
+# Shadow mode: log what variant would have skipped, run the full suite anyway,
+# and reconcile the two. The accumulated false-skip rate is the measurement
+# that has to be acceptable before test skipping is ever worth enabling.
+#
+# Copy to .github/workflows/impact-shadow.yml, or fold the steps into the job
+# that already runs your tests. Assumes npm and Vitest; for Jest, replace the
+# test step with `npx jest --json --outputFile=report.json`.
+
+name: impact shadow mode
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `impact` reads the base commit's copy of each changed file.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # History saved from `main` is readable by every branch; history saved
+      # from a pull request stays with that pull request (GitHub cache scoping).
+      # So the shared record grows from pushes to main.
+      - name: Restore prediction history
+        uses: actions/cache/restore@v6
+        with:
+          path: .variant/history
+          key: variant-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: variant-history-
+
+      - name: Predict (report-only; nothing is skipped)
+        env:
+          # A pull request is diffed against its target branch, a push against
+          # the commit it replaced.
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: npx --yes @blzsky/variant impact --base "$BASE_REF"
+
+      - name: Run the full suite
+        run: npx vitest run --reporter=default --reporter=json --outputFile.json=report.json
+
+      # Failing tests are exactly what reconciliation needs, so this runs even
+      # when the suite fails, as long as it produced a report.
+      - name: Reconcile the prediction with the run
+        if: ${{ !cancelled() && hashFiles('report.json') != '' }}
+        run: npx --yes @blzsky/variant impact verify report.json --head-sha "$(git rev-parse HEAD)"
+
+      - name: Save prediction history
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v6
+        with:
+          path: .variant/history
+          key: variant-history-${{ github.run_id }}-${{ github.run_attempt }}

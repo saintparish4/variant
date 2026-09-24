@@ -16,6 +16,56 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **`docs/tutorial.md`**, a fifteen-minute walkthrough of every
+  change-intelligence command on a sample monorepo, with output captured from
+  real runs.
+- **`docs/cli-reference.md`**: every command and flag, exit and error codes,
+  how each command compares `--base`, what is analyzed, and what is written
+  under `.variant/`.
+- **`docs/api.md`**: `defineConfig` and the config types, the shape of every
+  `--json` output and of the `pr report` markdown, and the history-file
+  records.
+- **`examples/`**: the sample monorepo the tutorial uses, and GitHub Actions
+  workflows for a sticky `pr report` comment, a `workspace check` gate, and
+  shadow-mode reconciliation with `impact verify`.
+- Terminal demos in `docs/assets/`, recorded from the real CLI by
+  `scripts/record-demos.mjs`.
+
+### Changed
+
+- The README is now for users: logo, badges, a recorded demo, a quick start and
+  a documentation index. Setup, architecture, testing and release notes moved
+  to `CONTRIBUTORS.md`.
+
+### Fixed
+
+- The README said a dependent that never imports the changed names is not
+  selected. That holds for the blast radius, not for test selection: every
+  test that imports a changed file runs. The README and
+  `docs/getting-started.md` now say so.
+- The README's CI step passed `--base ${{ github.base_ref }}`, which names no
+  ref in a default `actions/checkout` clone, so the report came out empty. The
+  docs and examples now check out with `fetch-depth: 0` and pass
+  `origin/<branch>`.
+- `docs/monorepo.md` and `docs/troubleshooting.md` said workspace packages are
+  discovered from tsconfig project references, which are not read. They now
+  list the actual fallback: `packages/*`, `apps/*` and `services/*`.
+- `docs/troubleshooting.md` fixed `variant: command not found` by running
+  `variant build`, the command that was not found. It now uses
+  `npx @blzsky/variant`.
+
+## [0.2.0] - 2026-09-17
+
+Cut to the part nobody else does. variant is a change-intelligence tool for
+TypeScript monorepos: what a change affects, and which tests it needs. The task
+runner stays, frozen, because it carries the cache-key invariants and dogfoods
+the repo — but it is no longer what the project is about.
+
+Every removal below is breaking. There is no shim; delete the corresponding
+config keys.
+
+### Added
+
 - **`variant impact verify <report>`** — reconciles a logged prediction against
   a Vitest (`--reporter=json`) or Jest (`--json`) report and reports **false
   skips**: tests that failed and that the prediction did not select. This closes
@@ -28,43 +78,6 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   `impact verify --head-sha <sha>` selects a specific run.
 - `ImpactReportError` (`IMPACT_REPORT_ERROR`), for a test report that cannot be
   read as one.
-
-### Fixed
-
-- **tsconfig `paths` aliases now resolve**, closing one of the two known
-  under-selection gaps. An import reaching its target only through an alias
-  (`@/lib/date`) previously landed in `unresolved`: the change did not
-  propagate to the file's real importers and `impact` under-selected the tests
-  — a false skip, reported at full confidence. `compilerOptions.paths` is read
-  through the TypeScript compiler's own config parser, so JSONC, `extends`
-  chains and `baseUrl` behave as `tsc` does rather than as a reimplementation
-  of it. A workspace package still wins over an alias sharing its prefix, and
-  an alias that matches a pattern but names no indexed file is now reported as
-  `unresolved` instead of being counted as an external package.
-- **Package `exports` maps are now read**, closing the second under-selection
-  gap. A bare import of a sibling workspace package consults that package's
-  `exports` — conditional exports, fallback arrays and `*` subpath patterns
-  included — before falling back to the conventional `src/index.*` guesses.
-
-  Because `exports` names published entry points that usually do not exist in a
-  source checkout, a target of `./dist/entry.js` is also probed as `src/entry`,
-  `lib/entry`, `source/entry` and `entry`. Reproduced before fixing: a workspace
-  package exporting `.` as `./dist/entry.js` with its source at `lib/entry.ts`
-  selected 0 of 2 test files.
-
-  The layer is strictly additive — a package with no `exports`, or whose targets
-  name no indexed file, resolves exactly as it did before.
-
-
-## [0.2.0] - 2026-09-17
-
-Cut to the part nobody else does. variant is a change-intelligence tool for
-TypeScript monorepos: what a change affects, and which tests it needs. The task
-runner stays, frozen, because it carries the cache-key invariants and dogfoods
-the repo — but it is no longer what the project is about.
-
-Everything below is a breaking removal. There is no shim; delete the
-corresponding config keys.
 
 ### Removed
 
@@ -96,6 +109,29 @@ corresponding config keys.
 
 ### Fixed
 
+- **tsconfig `paths` aliases now resolve**, closing one of the two known
+  under-selection gaps. An import reaching its target only through an alias
+  (`@/lib/date`) previously landed in `unresolved`: the change did not
+  propagate to the file's real importers and `impact` under-selected the tests
+  — a false skip, reported at full confidence. `compilerOptions.paths` is read
+  through the TypeScript compiler's own config parser, so JSONC, `extends`
+  chains and `baseUrl` behave as `tsc` does rather than as a reimplementation
+  of it. A workspace package still wins over an alias sharing its prefix, and
+  an alias that matches a pattern but names no indexed file is now reported as
+  `unresolved` instead of being counted as an external package.
+- **Package `exports` maps are now read**, closing the second under-selection
+  gap. A bare import of a sibling workspace package consults that package's
+  `exports` — conditional exports, fallback arrays and `*` subpath patterns
+  included — before falling back to the conventional `src/index.*` guesses.
+
+  Because `exports` names published entry points that usually do not exist in a
+  source checkout, a target of `./dist/entry.js` is also probed as `src/entry`,
+  `lib/entry`, `source/entry` and `entry`. Reproduced before fixing: a workspace
+  package exporting `.` as `./dist/entry.js` with its source at `lib/entry.ts`
+  selected 0 of 2 test files.
+
+  The layer is strictly additive — a package with no `exports`, or whose targets
+  name no indexed file, resolves exactly as it did before.
 - `impact` said "1 test files"; test-file counts are pluralized.
 
 ## [0.1.0] - 2026-09-17

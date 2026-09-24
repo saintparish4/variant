@@ -1,0 +1,4 @@
+node_modules/
+.variant/
+report.json
+pr-report.md

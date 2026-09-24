@@ -1,0 +1,11 @@
+{
+  "name": "@acme/blog",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/post.ts"
+  },
+  "dependencies": {
+    "@acme/utils": "*"
+  }
+}

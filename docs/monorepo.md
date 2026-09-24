@@ -4,13 +4,13 @@ variant has first-class support for pnpm workspaces, npm workspaces, and Yarn wo
 
 ## Workspace discovery
 
-variant discovers packages from:
+variant discovers packages from the first of these it finds:
 
-- `pnpm-workspace.yaml`
-- `package.json` `workspaces` field (npm / Yarn)
-- TypeScript project references in `tsconfig.json`
+1. `pnpm-workspace.yaml` (its `packages:` list)
+2. the `package.json` `workspaces` field (npm / Yarn)
+3. the directories `packages/*`, `apps/*` and `services/*`
 
-Enable workspace mode in your config:
+A directory counts as a package only if its `package.json` has a `name`. The change-intelligence commands (`impact`, `workspace check`) use this discovery with no config at all. The task runner needs workspace mode enabled in your config:
 
 ```typescript
 // variant.config.ts

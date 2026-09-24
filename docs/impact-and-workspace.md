@@ -26,8 +26,8 @@ Each changed `.ts`/`.tsx` file is classified by comparing its exported surface b
 | Classification | Meaning |
 |---|---|
 | `non-impacting` | No exported symbols changed (comments, whitespace, private code) — not even a seed for propagation |
-| `internal` | Body-only change to an exported symbol — affects the file itself but does not propagate to importers |
-| `breaking` | An exported symbol's signature changed or was removed — propagates to dependents |
+| `internal` | Body-only change to an exported symbol — does not propagate to importers in the blast radius, but every test that imports the file (directly or transitively) is still selected |
+| `breaking` | An exported symbol's signature changed, or an export was added or removed — propagates to dependents |
 | `unanalyzed` | Not a TypeScript source (e.g. `.json`, `.d.ts`) — the differ has nothing to compare |
 
 Propagation past the first hop is structural (any dependent of a dependent is included), because a dependent's own inferred surface may change in ways single-file analysis can't see. The first hop is gated per symbol: a dependent that only imports names your change didn't touch is skipped.
@@ -67,7 +67,7 @@ Verdicts reuse the same vocabulary as `pr check`:
 | Flag | Default | Description |
 |---|---|---|
 | `--base <ref>` | `HEAD~1` | Git ref to diff against |
-| `--json` | off | Print the full report (`radius` + `tests`) as JSON instead of the human summary |
+| `--json` | off | Print the full report (`radius` + `tests`) as JSON instead of the human summary. [Shape](./api.md#impact---json) |
 
 ### Select-all triggers
 
@@ -133,12 +133,18 @@ Two things this deliberately does not do:
 
 | Flag | Default | Description |
 |---|---|---|
-| `--head-sha <sha>` | most recent prediction | Reconcile the prediction made at this commit |
-| `--json` | off | Print the reconciliation as JSON |
+| `--head-sha <sha>` | most recent prediction | Reconcile the prediction made at this commit. Pass the full SHA: `"$(git rev-parse HEAD)"` |
+| `--json` | off | Print the reconciliation as JSON. [Shape](./api.md#impact-verify---json) |
+
+> **Known issue in 0.2.0:** `--json` is taken by the parent `impact` command, so `impact verify` prints the human report whichever position the flag is given in.
+
+[`examples/github-actions/impact-shadow.yml`](../examples/github-actions/impact-shadow.yml) runs predict → full suite → reconcile in CI and keeps the history across runs.
 
 ## `variant workspace check`
 
 A CI gate for monorepos: compares what each package actually imports against what its `package.json` declares, and flags three kinds of drift.
+
+![Running `variant workspace check`: @acme/shop imports @acme/blog but does not declare it, 1 violation found](./assets/workspace-check.gif)
 
 ```bash
 variant workspace check
@@ -175,9 +181,9 @@ Checked 4 packages.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--json` | off | Print `{ packagesChecked, violations }` as JSON, still exiting 1 on violations |
+| `--json` | off | Print `{ packagesChecked, violations }` as JSON, still exiting 1 on violations. [Shape](./api.md#workspace-check---json) |
 
-Requires workspace mode: a `pnpm-workspace.yaml` or `package.json` `workspaces` field must be discoverable. See [monorepo.md](./monorepo.md) for setup. With no workspace packages found, the command prints a message and exits 0 without checking anything.
+Packages are discovered from `pnpm-workspace.yaml`, else the `package.json` `workspaces` field, else the directories `packages/*`, `apps/*` and `services/*`; no `variant.config.ts` is needed. Only directories whose `package.json` has a `name` count. With no workspace packages found, the command prints a message and exits 0 without checking anything.
 
 ## Limitations
 

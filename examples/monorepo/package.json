@@ -1,0 +1,15 @@
+{
+  "name": "acme",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@blzsky/variant": "^0.2.0",
+    "vitest": "^4.1.5"
+  }
+}

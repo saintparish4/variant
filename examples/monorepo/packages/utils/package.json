@@ -1,0 +1,9 @@
+{
+  "name": "@acme/utils",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./price": "./src/price.ts",
+    "./slug": "./src/slug.ts"
+  }
+}

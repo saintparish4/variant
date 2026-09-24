@@ -1,177 +1,134 @@
-# variant
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./public/dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="./public/light-mode.png">
+    <img alt="variant: toolchain of change" src="./public/light-mode.png" width="560">
+  </picture>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/@blzsky/variant.svg)](https://www.npmjs.com/package/@blzsky/variant)
-[![CI](https://github.com/saintparish4/variant/actions/workflows/ci.yml/badge.svg)](https://github.com/saintparish4/variant/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@blzsky/variant"><img alt="npm version" src="https://img.shields.io/npm/v/@blzsky/variant"></a>
+  <a href="https://github.com/saintparish4/variant/actions/workflows/ci.yml?query=branch%3Amaster"><img alt="CI" src="https://github.com/saintparish4/variant/actions/workflows/ci.yml/badge.svg?branch=master"></a>
+  <a href="https://github.com/saintparish4/variant/actions/workflows/benchmark.yml?query=branch%3Amaster"><img alt="Benchmark" src="https://github.com/saintparish4/variant/actions/workflows/benchmark.yml/badge.svg?branch=master"></a>
+  <a href="./package.json"><img alt="node" src="https://img.shields.io/node/v/@blzsky/variant"></a>
+  <a href="https://www.npmjs.com/package/@blzsky/variant"><img alt="types" src="https://img.shields.io/npm/types/@blzsky/variant"></a>
+  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/npm/l/@blzsky/variant"></a>
+</p>
 
-Change intelligence for TypeScript monorepos. variant reads a diff at the AST level and answers one question: **which tests does this change actually need, and how sure are we?**
+**Change intelligence for TypeScript monorepos.** variant reads a diff at the
+AST level and answers one question: *which tests does this change actually
+need, and how sure are we?*
 
-```console
-$ npx @blzsky/variant impact --base HEAD~1
+<p align="center">
+  <img alt="Running `variant impact --base main` after changing formatPrice's signature and documenting slugify: price.ts is breaking, slug.ts is non-impacting, 2 of 4 test files run" src="./docs/assets/impact.gif" width="840">
+</p>
 
-Base ref: HEAD~1
+Both `shop` and `blog` depend on `utils`, so a tool that works from the package
+graph would run all four test files. variant follows the imports: only `shop`
+reaches the changed `price.ts`, and a doc comment on `slug.ts` selects nothing.
 
-You changed 1 file.
-  internal       src/math.ts
+- **File-level, across packages.** Each test's import chain is followed through
+  workspace packages, `exports` maps and tsconfig `paths`, not just the package
+  graph.
+- **Classified by exported surface.** Every changed file is `non-impacting`,
+  `internal` or `breaking`. Comment-only edits select no tests; breaking changes
+  follow the importers of the changed names.
+- **One verdict per pull request,** ready to post as a comment.
+- **A dependency gate:** `workspace check` fails CI when a package imports
+  something it never declared.
+- **Measured before trusted.** `impact` is report-only. Every prediction is
+  logged, and `impact verify` checks it against your real test results. Test
+  skipping stays off until the measured false-skip rate earns it, and the
+  printed confidence is a graph-resolution score, not a safety number.
 
-Impact: 1 file
+## Quick start
 
-Run:   1 test file
-Skip:  1 test file (of 2 total)
-
-Verdict:    build recommended
-Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
-```
-
-`internal` means the exported signature did not change — only the body — so a dependent that never imports the changed names is not selected. That distinction is the point: test runners and build orchestrators decide "affected" from the file or package graph; variant decides it from the exported surface.
-
-No config file is required. Published to npm as **`@blzsky/variant`**; the command it installs is **`variant`**.
-
-**`impact` is report-only and stays that way until it is measured.** Every prediction is appended to `.variant/history/impact.jsonl` so a false-skip rate can be reconciled against real test results. The printed confidence is a graph-resolution score, not a safety number. Until that rate is published, run the full suite.
-
-A cached task DAG (`build`, `run`, `insight`) sits underneath, and dogfoods the repo.
-
-The rest of this README is for working **on** variant. Using it in your own project is documented in [docs/](./docs/getting-started.md).
-
----
-
-## Requirements
-
-| | Version | Notes |
-|---|---|---|
-| Node | ≥ 20 | Enforced via `engines`; CI tests 20, 22, and 24 |
-| pnpm | ≥ 10 | Pinned by `packageManager` |
-| git | any recent | Needed to exercise `--affected`, `diff`, `impact`, and `pr *` — they no-op without a repo |
-
-Optional: **[hyperfine](https://github.com/sharkdp/hyperfine)**, required by `pnpm bench`.
-
----
-
-## Installation
+You need Node ≥ 20 and a git repository with at least one prior commit. There is
+nothing to configure:
 
 ```bash
-git clone https://github.com/saintparish4/variant.git
-cd variant
-pnpm install
-pnpm build               # required before the CLI or E2E tests can run
-node dist/cli.js --help  # smoke test
+npx @blzsky/variant impact --base origin/main
 ```
 
----
-
-## Development
+To keep it in a project:
 
 ```bash
-pnpm build             # compile all three entry points to dist/ via tsup
-pnpm clean             # delete dist/
-pnpm format            # biome format --write .
-pnpm format:check      # biome format (read-only)
-pnpm lint              # biome check . (static analysis, read-only)
-pnpm typecheck         # tsc --noEmit
-pnpm check             # biome check --write — local autofix (format + lint + organize imports)
-pnpm bench             # benchmark harness (pnpm bench:quick for a fast pass)
+npm install -D @blzsky/variant    # or pnpm add -D / yarn add -D
 ```
 
-The default branch is `master`, and it is expected to be lint-clean — if `pnpm format:check`, `pnpm lint`, or `pnpm typecheck` is red, your change caused it.
-
-There is no watch build. The loop is `pnpm build && node dist/cli.js <command>`, run against a scratch project or one of the fixture workspaces in `src/__tests__/fixtures/`.
-
-`src/cli/index.ts` registers every command with a dynamic `import()` inside its `action()` callback, deferring execa, jiti, and fast-glob until a command actually runs. That is what keeps `variant --help` fast, and it is the one sanctioned exception to the project's prefer-top-level-imports rule — the benchmark job fails if startup regresses past 200 ms.
-
-Benchmark methodology and how to reproduce the published numbers: [benchmarks/README.md](./benchmarks/README.md).
-
----
-
-## Testing
-
-Three tiers, each answering a different question. Write a test at the cheapest tier that can answer yours.
-
-| Tier | Tests | Lives in | Runs against |
-|------|-------|----------|--------------|
-| Unit | Isolated behavior — one module, collaborators substituted | `src/**/__tests__/*.test.ts` | Source |
-| Integration | Boundaries — real modules meeting, or a real edge (filesystem, git, config) | `src/__tests__/integration/` | Source |
-| E2E | User workflows through the shipped binary | `src/__tests__/e2e/` | Built `dist/` |
+The package is `@blzsky/variant`; the binary it installs is `variant`.
+`npx variant` fetches an unrelated package, so always use the scope with `npx`.
 
 ```bash
-pnpm test              # watch mode
-pnpm test:run          # every tier, once
-pnpm test:integration  # boundaries only
-pnpm test:e2e          # workflows only — run pnpm build first
-pnpm test:all          # everything + coverage
-pnpm vitest run src/core/graph/__tests__/dag.test.ts   # a single file
+variant impact --base origin/main          # which tests does this branch need?
+npx vitest run --reporter=json --outputFile=report.json
+variant impact verify report.json          # did the prediction miss a failure?
+variant pr check --base origin/main        # one build verdict for the branch
+variant workspace check                    # undeclared dependencies (exits 1)
 ```
 
-Unit tests never shell out — `runTasksWithDeps` takes a `TaskExecutor`, so tests inject a mock. Fixture workspaces are shared across tiers at `src/__tests__/fixtures/`. Coverage gates in CI: 70% lines/statements/functions, 60% branches.
+The [tutorial](./docs/tutorial.md) walks through all of these on a sample
+monorepo in about fifteen minutes.
 
----
+## Commands
 
-## Environment Variables
-
-variant takes no configuration from the environment — that lives in `variant.config.ts`. What it reads are standard terminal and CI signals:
-
-| Variable | Read by | Effect |
-|---|---|---|
-| `NO_COLOR` | `visuals/color.ts` | Disables color everywhere. Highest-priority env signal. |
-| `FORCE_COLOR` | `visuals/color.ts` | Forces color on when output is not a TTY. |
-| `CLICOLOR_FORCE` | `visuals/color.ts` | Same as `FORCE_COLOR`. |
-| `CI` | picocolors, indirectly | Nothing in `src/` reads `CI`. picocolors counts it as color *support*, so CI logs keep color unless `NO_COLOR` is set. Animated progress stops in CI because stderr is not a TTY (`printer.ts:82`), not because of this variable. |
-| `JPY_SESSION_NAME` | `visuals/progress.ts` | Detects a Jupyter session and falls back to line-based output. |
-| `VARIANT_TEST_NO_CLI_PROGRESS` | `visuals/printer.ts`, `visuals/progress.ts` | Test-only. Suppresses progress bars so concurrent output stays assertable. |
-
-Color precedence: `--color <when>` → `--no-color` → `NO_COLOR` → `FORCE_COLOR`/`CLICOLOR_FORCE` → TTY detection. All of it resolves once in `visuals/color.ts:resolveColorChoice()`, applied process-wide by `writeGlobalColorChoice()`; renderers call `getColors()` and never consult the environment themselves. Adding a second color path is the mistake this design exists to prevent.
-
----
-
-## Architecture
-
-Layered, dependencies pointing one way: `cli → core → adapters`. Ports are owned by `core`; adapters implement them and import nothing from `core` except types.
-
-| Directory | Role |
+| Command | What it does |
 |---|---|
-| `src/cli/` | Commander wiring, option parsing, terminal rendering |
-| `src/core/` | Orchestration logic, grouped by capability — `semantic`, `impact`, `pr`, `cache`, `graph`, `execution`, `detection`, `plugins` |
-| `src/adapters/` | The outside world — package managers, runtimes, frameworks |
-| `src/types/` | Contracts shared across layers |
+| `impact` | Predict which test files a change requires, and how much of the import graph resolved. Report-only. |
+| `impact verify <report>` | Reconcile the last prediction against a Vitest or Jest JSON report and report false skips |
+| `diff <file>` | Classify one file's change and list the exported symbols that changed |
+| `pr check` | Classify every TypeScript change on the branch and roll them into one build verdict |
+| `pr report` | The `pr check` verdict as JSON, or as markdown for a PR comment |
+| `workspace check` | Fail when a package imports a dependency it does not declare |
 
-`tsup` builds two entry points: `dist/index.js` (library API) and `dist/cli.js` (the `variant` binary).
+`build`, `run` and `insight` run a cached task graph from `variant.config.ts`.
+`init`, `doctor`, `check` and `env` set it up and diagnose it. Every command and
+flag is in the [CLI reference](./docs/cli-reference.md).
 
-The request path for most commands: `cli/context.ts:createContext()` loads config, detects PM/runtime/framework, builds the task DAG, and computes git-diff scoping — then `core/execution:runTasksWithDeps()` walks DAG levels while `core/cache` hashes inputs against `.variant/cache/cache.json`.
+## In CI
 
-Along the way `core/provenance` records why each task was selected to run — cache miss, affected by the diff, or never cached. The runner attaches that record to the `VariantError` a failing task throws, and `cli/render/error.ts` prints it under the failure. It explains *selection*, never *cause*; see [docs/troubleshooting.md](./docs/troubleshooting.md) for the output and that distinction.
+Ready-to-copy GitHub Actions workflows are in
+[`examples/github-actions`](./examples/github-actions):
 
-Two rules to know before your first PR: business logic does not live in command handlers, and `core` never prints or exits — it throws `VariantError` subclasses and lets the CLI top level map them to exit codes (`VariantError` → 1, unexpected → 2). Full detail in [CLAUDE.md](./CLAUDE.md).
+- [`pr-report.yml`](./examples/github-actions/pr-report.yml) keeps one sticky
+  comment with the verdict on every pull request.
+- [`workspace-check.yml`](./examples/github-actions/workspace-check.yml) fails
+  the build on an undeclared dependency.
+- [`impact-shadow.yml`](./examples/github-actions/impact-shadow.yml) logs a
+  prediction, runs the full suite, and reconciles the two.
 
-Note the naming: `core/progress/reporter.ts` is a *port* — a bare `TaskEvent` interface with no output code. Everything that actually draws lives in `cli/visuals/` (progress, spinners, task events) and `cli/render/` (command output, errors). A file under `core/` never prints, whatever its name suggests.
+Check out with `fetch-depth: 0` and pass `--base origin/<branch>`. With a
+shallow clone, or a bare `main` that CI never created, there is no base to
+diff against, and the result is empty rather than an error.
 
----
+## Documentation
 
-## Deployment
+| | |
+|---|---|
+| [Tutorial](./docs/tutorial.md) | Every command, step by step, on a sample monorepo |
+| [Getting started](./docs/getting-started.md) | Run it on your own repository, then set up the task runner |
+| [Impact & workspace](./docs/impact-and-workspace.md) | How `impact` and `workspace check` work, and what static analysis cannot see |
+| [PR commands](./docs/pr-commands.md) | `pr check` and `pr report` |
+| [CLI reference](./docs/cli-reference.md) | Every command, flag, exit code and file |
+| [API reference](./docs/api.md) | `defineConfig`, the config types, and every JSON output |
+| [Monorepo setup](./docs/monorepo.md) | Workspace tasks and `--affected` |
+| [Config reference](./docs/config-reference.md) | Every `variant.config.ts` key |
+| [Troubleshooting](./docs/troubleshooting.md) | Common problems and what they mean |
 
-variant ships as an npm package; there is no server to deploy.
+## Status
 
-```bash
-pnpm publish            # prepublishOnly runs `pnpm test:all && pnpm build`
-```
-
-Only `dist/` is published (`files: ["dist"]`). The package exposes `.` through the `exports` map, ESM-only (`"type": "module"`).
-
-Releases are **manual**; the only workflows in the repository are `ci.yml` and `benchmark.yml`. Before publishing: bump the version, update [CHANGELOG.md](./CHANGELOG.md), and confirm CI is green on `master`.
-
-The package is `0.x` and makes no semver stability promise yet. Breaking changes to the `@blzsky/variant` public API can ship in any minor release; each one is recorded in [CHANGELOG.md](./CHANGELOG.md).
-
----
+variant is `0.x`: any minor release can break, and every break is recorded in
+the [CHANGELOG](./CHANGELOG.md). The change-intelligence commands are where
+development happens. The task runner underneath (`build`, `run`, `insight`) is
+feature-frozen.
 
 ## Contributing
 
-Read [CONTRIBUTORS.md](./CONTRIBUTORS.md) for the full workflow and [CLAUDE.md](./CLAUDE.md) for architecture and code-style rules. The short version:
-
-- All PRs must pass `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
-- Changed behavior needs a test; a bug fix needs a test that fails before it.
-- Behavior changes that users can observe need a `docs/` update in the same PR.
-- Conventional commits: `<type>: <subject>`, imperative mood, ≤ 72 chars, no trailing period.
-- Bump one dependency at a time — never a blanket `pnpm update` — so lockfile diffs stay reviewable.
-
----
+Setup, architecture, testing and release notes are in
+[CONTRIBUTORS.md](./CONTRIBUTORS.md). In short: every PR passes
+`pnpm format:check`, `pnpm lint`, `pnpm typecheck` and `pnpm build`, and
+changed behavior comes with a test.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).
