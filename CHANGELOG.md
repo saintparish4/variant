@@ -48,6 +48,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   base with `HEAD`, as in a shallow clone. This changes an exit code: the
   default `impact --base HEAD~1` in a repository with a single commit now
   fails instead of printing a message.
+- **Comments and whitespace in a file with a template substitution or a regex
+  are non-impacting again.** The differ's tokenizer could not find the end of
+  a `${…}` substitution or tell a regex from a division, so the rest of the
+  file scanned as one token that kept its whitespace. The base version comes
+  from git without its final newline, so any edit to such a file, a comment
+  included, classified as `internal` and selected every test that imported
+  it. The tokenizer now rescans both the way the TypeScript parser does. JSX
+  text is still scanned as code, so the same can happen in a `.tsx` file whose
+  JSX contains an apostrophe; it only ever widens the result.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and

@@ -456,9 +456,17 @@ function inferTypeText(get: () => string): string {
  * Token stream of the source with comments and whitespace dropped, using the
  * real TypeScript scanner — unlike regex stripping, this never corrupts string
  * literals that happen to contain `//` or `/*`.
+ *
+ * A bare scanner cannot tell where a `${…}` substitution ends or whether `/`
+ * starts a regex; the parser answers both by asking the scanner to rescan.
+ * Without that, everything after either construct scans as one token that
+ * keeps its whitespace, so a comment added below one read as a code change.
+ * Both rescans here only ever split or merge tokens, never drop text, so a
+ * wrong guess can make a change look bigger but never hide one.
  */
 export function significantText(src: string, tsm: TsMorph): string {
 	if (src.trim() === "") return "";
+	const { SyntaxKind } = tsm.ts;
 	const scanner = tsm.ts.createScanner(
 		tsm.ts.ScriptTarget.Latest,
 		/* skipTrivia */ true,
@@ -466,12 +474,76 @@ export function significantText(src: string, tsm: TsMorph): string {
 		src,
 	);
 	const parts: string[] = [];
+	// Open `{` count inside each substitution being scanned, innermost last.
+	const substitutionBraces: number[] = [];
+	let previous = SyntaxKind.Unknown;
 	let kind = scanner.scan();
-	while (kind !== tsm.ts.SyntaxKind.EndOfFileToken) {
+	while (kind !== SyntaxKind.EndOfFileToken) {
+		if (
+			kind === SyntaxKind.CloseBraceToken &&
+			substitutionBraces.at(-1) === 0
+		) {
+			substitutionBraces.pop();
+			kind = scanner.reScanTemplateToken(/* isTaggedTemplate */ false);
+		} else if (
+			kind === SyntaxKind.OpenBraceToken ||
+			kind === SyntaxKind.CloseBraceToken
+		) {
+			const depth = substitutionBraces.pop();
+			if (depth !== undefined) {
+				substitutionBraces.push(
+					kind === SyntaxKind.OpenBraceToken ? depth + 1 : depth - 1,
+				);
+			}
+		} else if (
+			(kind === SyntaxKind.SlashToken ||
+				kind === SyntaxKind.SlashEqualsToken) &&
+			!endsOperand(previous, tsm)
+		) {
+			kind = scanner.reScanSlashToken();
+		}
+		if (
+			kind === SyntaxKind.TemplateHead ||
+			kind === SyntaxKind.TemplateMiddle
+		) {
+			substitutionBraces.push(0);
+		}
 		parts.push(scanner.getTokenText());
+		previous = kind;
 		kind = scanner.scan();
 	}
 	return parts.join(" ");
+}
+
+/**
+ * Whether a token can end an operand, making a following `/` a division. The
+ * same rule JavaScript tokenizers use when no parser is available.
+ */
+function endsOperand(kind: number, tsm: TsMorph): boolean {
+	const { SyntaxKind } = tsm.ts;
+	switch (kind) {
+		case SyntaxKind.Identifier:
+		case SyntaxKind.PrivateIdentifier:
+		case SyntaxKind.NumericLiteral:
+		case SyntaxKind.BigIntLiteral:
+		case SyntaxKind.StringLiteral:
+		case SyntaxKind.NoSubstitutionTemplateLiteral:
+		case SyntaxKind.TemplateTail:
+		case SyntaxKind.RegularExpressionLiteral:
+		case SyntaxKind.CloseParenToken:
+		case SyntaxKind.CloseBracketToken:
+		case SyntaxKind.CloseBraceToken:
+		case SyntaxKind.PlusPlusToken:
+		case SyntaxKind.MinusMinusToken:
+		case SyntaxKind.ThisKeyword:
+		case SyntaxKind.SuperKeyword:
+		case SyntaxKind.TrueKeyword:
+		case SyntaxKind.FalseKeyword:
+		case SyntaxKind.NullKeyword:
+			return true;
+		default:
+			return false;
+	}
 }
 
 function normalize(text: string): string {

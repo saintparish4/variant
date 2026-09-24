@@ -390,6 +390,73 @@ describe("classifyChange", () => {
 	});
 });
 
+// A bare scanner cannot find the end of `${…}` or tell a regex from a
+// division, so everything after either once scanned as one token that kept its
+// whitespace. Git hands the base version over without its final newline, so
+// any edit to such a file, comments included, classified as internal.
+describe("classifyChange: comments and whitespace around scanner-ambiguous syntax", () => {
+	const TEMPLATE =
+		"export function formatPrice(cents: number): string {\n" +
+		"\treturn `$${(cents / 100).toFixed(2)}`;\n" +
+		"}";
+
+	it("flags a comment added to a file with a template substitution as non-impacting", async () => {
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: TEMPLATE,
+			after: `// Prices are integer cents.\n${TEMPLATE}\n`,
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+
+	it("flags reformatting after a template substitution as non-impacting", async () => {
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: `${TEMPLATE}\nexport const rate   =   2;`,
+			after: `${TEMPLATE}\nexport const rate = 2;\n`,
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+
+	it("flags a comment after a nested template as non-impacting", async () => {
+		const nested = `export const label = (a: string, b: string) => \`x\${\`y\${a}\`}z\${b}\`;`;
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: nested,
+			after: `${nested}\n// trailing note\n`,
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+
+	it("flags a comment after a regex containing a backtick as non-impacting", async () => {
+		const regex = 'export const unquote = (s: string) => s.replace(/`/g, "");';
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: regex,
+			after: `${regex}\n// strips code quotes\n`,
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+
+	it("still sees an edit inside a template substitution", async () => {
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: `export const greet = (n: string) => \`hi \${n}\`;`,
+			after: `export const greet = (n: string) => \`hi \${n.trim()}\`;`,
+		});
+		expect(r.classification).toBe("internal");
+	});
+
+	it("does not read a division as a regex", async () => {
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: "export const half = (a: number, b: number) => a / b / 2;",
+			after: "export const half = (a: number, b: number) => a/b/2;",
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+});
+
 describe("createClassifier", () => {
 	it("classifies many files through one reused project", async () => {
 		const classify = createClassifier();
