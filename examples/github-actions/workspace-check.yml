@@ -1,0 +1,27 @@
+# Fail CI when a workspace package imports something it does not declare.
+#
+# Copy to .github/workflows/workspace-check.yml. The check reads source files
+# and manifests only, so it needs no git history and no `npm install`.
+
+name: workspace check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Exits 1 on any violation, which fails the job.
+      - run: npx --yes @blzsky/variant workspace check

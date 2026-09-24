@@ -1,0 +1,63 @@
+# Classify every pull request and keep one sticky comment up to date.
+#
+# Copy to .github/workflows/pr-report.yml. No secrets needed: the default
+# GITHUB_TOKEN can comment once the job asks for `pull-requests: write`.
+
+name: variant PR report
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `pr report` diffs from the merge base with the target branch, so it
+          # needs history. A shallow clone has no `origin/<base>` to diff
+          # against, and the report comes out empty.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Classify the pull request
+        env:
+          # A remote-tracking ref: actions/checkout does not create a local
+          # branch for the target, so a bare `main` would not resolve.
+          BASE_REF: origin/${{ github.base_ref }}
+        run: npx --yes @blzsky/variant pr report --base "$BASE_REF" --markdown --output pr-report.md
+
+      - name: Post or update the comment
+        # Pull requests from forks get a read-only token and cannot comment.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require("node:fs");
+            const body = fs.readFileSync("pr-report.md", "utf8");
+            // The first line of every report; it marks the comment to update.
+            const marker = "## Variant PR Report";
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.startsWith(marker),
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
