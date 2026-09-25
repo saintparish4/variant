@@ -5,6 +5,8 @@
  */
 
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getChangedPackages } from "../../core/cache/git-diff.js";
 import { loadPackageGraph } from "../../core/graph/package-graph.js";
@@ -13,6 +15,7 @@ import {
 	listChangedFilesSinceMergeBase,
 	readFileAtRef,
 	readFilesAtRef,
+	resolveCommit,
 } from "../../core/vcs/git.js";
 import {
 	cleanupTempWorkspaces,
@@ -201,6 +204,22 @@ describe("listChangedFilesSinceMergeBase", () => {
 		expect(await listChangedFilesSinceMergeBase(dir, "base-branch")).toEqual([
 			"packages/utils/src/feature.ts",
 		]);
+	});
+});
+
+// A trailing `--` only protects the paths after it: git still parses a ref
+// that starts with `-` as an option, and `--output=<file>` makes it write one.
+describe("refs that look like options", () => {
+	it("never reach git as an option", async () => {
+		const dir = repoWithBaseline();
+		const planted = path.join(dir, "planted.txt");
+		const ref = `--output=${planted}`;
+
+		expect(await listChangedFiles(dir, ref)).toBeNull();
+		expect(await listChangedFilesSinceMergeBase(dir, ref)).toBeNull();
+		expect(await readFileAtRef(dir, ref, "package.json")).toBeNull();
+		expect(await resolveCommit(dir, ref)).toBeNull();
+		expect(existsSync(planted)).toBe(false);
 	});
 });
 

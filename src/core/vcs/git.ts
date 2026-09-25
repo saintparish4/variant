@@ -33,6 +33,16 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
 	}
 }
 
+/**
+ * git parses any argument starting with `-` as an option, and a trailing `--`
+ * protects only the paths after it, so a ref like `--output=<file>` would make
+ * `git diff` write a file. Git refuses to create a ref whose name starts with
+ * `-`, so such a value names nothing and is answered here without running git.
+ */
+function isOptionLike(ref: string): boolean {
+	return ref.startsWith("-");
+}
+
 function toFileList(stdout: string | null): string[] | null {
 	if (stdout === null) return null;
 	return stdout
@@ -47,6 +57,7 @@ export async function readFileAtRef(
 	ref: string,
 	relPath: string,
 ): Promise<string | null> {
+	if (isOptionLike(ref)) return null;
 	return git(cwd, ["show", `${ref}:${toPosix(relPath)}`]);
 }
 
@@ -176,6 +187,7 @@ export async function resolveCommit(
 	cwd: string,
 	ref: string,
 ): Promise<string | null> {
+	if (isOptionLike(ref)) return null;
 	const stdout = await git(cwd, [
 		"rev-parse",
 		"--verify",
@@ -186,16 +198,12 @@ export async function resolveCommit(
 	return sha === undefined || sha === "" ? null : sha;
 }
 
-/**
- * Files differing between `ref` and the working tree.
- *
- * The trailing `--` terminates option parsing so a crafted ref (one starting
- * with `-`) is always treated as a revision, never as a git flag.
- */
+/** Files differing between `ref` and the working tree. */
 export async function listChangedFiles(
 	cwd: string,
 	ref: string,
 ): Promise<string[] | null> {
+	if (isOptionLike(ref)) return null;
 	return toFileList(await git(cwd, ["diff", "--name-only", ref, "--"]));
 }
 
@@ -208,6 +216,7 @@ export async function listChangedFilesSinceMergeBase(
 	cwd: string,
 	ref: string,
 ): Promise<string[] | null> {
+	if (isOptionLike(ref)) return null;
 	return toFileList(
 		await git(cwd, ["diff", "--name-only", `${ref}...HEAD`, "--"]),
 	);

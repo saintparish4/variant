@@ -72,6 +72,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   `variant build`, the command that was not found. It now uses
   `npx @blzsky/variant`.
 
+### Security
+
+- **A `--base` value starting with `-` no longer reaches git as an option.**
+  The `--` that git commands put before paths protects only the paths, so
+  `--base=--output=<file>` made `git diff` write that file. Git never creates a
+  ref whose name starts with `-`, so such a value is now answered as a ref that
+  names nothing, and fails with `GIT_REF_ERROR`.
+
 ## [0.2.0] - 2026-09-17
 
 Cut to the part nobody else does. variant is a change-intelligence tool for
