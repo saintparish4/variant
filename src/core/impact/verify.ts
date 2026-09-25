@@ -144,6 +144,24 @@ function selectPrediction(
 }
 
 /**
+ * A report that cannot be read is the same mistake as one that cannot be
+ * parsed: a path from the user, not a fault in variant.
+ */
+async function readReport(cwd: string, reportPath: string): Promise<string> {
+	try {
+		return await readFile(path.resolve(cwd, reportPath), "utf8");
+	} catch (error) {
+		const code =
+			error instanceof Error && "code" in error ? String(error.code) : "";
+		throw new ImpactReportError(
+			code === "ENOENT"
+				? `no file at ${reportPath}`
+				: `${reportPath} could not be read${code === "" ? "" : ` (${code})`}`,
+		);
+	}
+}
+
+/**
  * Returns null when no prediction can be matched — there is nothing to
  * reconcile against, which is a different answer from "no false skips".
  */
@@ -159,7 +177,7 @@ export async function verifyImpact(
 	const match = selectPrediction(predictions, options.headSha);
 	if (match === null) return null;
 
-	const raw = await readFile(path.resolve(cwd, reportPath), "utf8");
+	const raw = await readReport(cwd, reportPath);
 	const failedTests = parseFailedTests(cwd, raw);
 
 	const { caught, falseSkips, falseSkipRate } = reconcile(

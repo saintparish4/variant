@@ -60,6 +60,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`impact verify --json` prints JSON.** `impact` defines `--json` as well,
   and Commander gave a flag both commands share to the parent, so the
   reconciliation always printed as text wherever the flag was placed.
+- `impact verify` with a report path that does not exist exits 1 with
+  `IMPACT_REPORT_ERROR` and "no file at <path>", instead of exit 2 and a
+  request to file a bug.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and

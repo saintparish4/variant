@@ -73,7 +73,7 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `TASK_EXECUTION_ERROR` | A task's command exited non-zero. See [troubleshooting](./troubleshooting.md#8-a-failure-prints-ran-because--what-is-it-telling-me) for the `ran because:` block it carries. |
 | `CACHE_ERROR` | The task cache cannot be read or written. Deleting `.variant/cache/` fixes it. |
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
-| `IMPACT_REPORT_ERROR` | `impact verify` was given a file that is not a Vitest or Jest JSON report |
+| `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
@@ -182,8 +182,8 @@ appends the counts to `.variant/history/reconciliation.jsonl`.
 | `--json` | off | Print the reconciliation as JSON, [shape here](./api.md#impact-verify---json). |
 
 Exits 0 whatever the reconciliation finds: the test run decides whether the
-build fails. A file that is not a test report exits 1 with
-`IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
+build fails. A report path that does not exist, or a file that is not a test
+report, exits 1 with `IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
 `--head-sha`, it says so and exits 0.
 
 ### `diff`
