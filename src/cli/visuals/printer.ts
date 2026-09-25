@@ -16,9 +16,9 @@ export interface OutputStream {
 }
 
 export type PrinterMode =
-	/** Suppresses all output. */
+	/** Suppresses all output; errors still reach stderr through the CLI top level. */
 	| "silent"
-	/** Suppresses most output. */
+	/** Keeps results on stdout; suppresses diagnostics and progress on stderr. */
 	| "quiet"
 	/** Prints to standard streams. */
 	| "default"
@@ -64,8 +64,12 @@ export class Printer {
 		return new Printer("default", streams);
 	}
 
+	/**
+	 * As in uv, `-q` quiets the commentary, not the answer: a script that asks
+	 * for `--json` with `-q` still gets its JSON. Only `-qq` silences stdout.
+	 */
 	get stdoutEnabled(): boolean {
-		return this.mode !== "silent" && this.mode !== "quiet";
+		return this.mode !== "silent";
 	}
 
 	get stderrEnabled(): boolean {

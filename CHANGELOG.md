@@ -63,6 +63,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - `impact verify` with a report path that does not exist exits 1 with
   `IMPACT_REPORT_ERROR` and "no file at <path>", instead of exit 2 and a
   request to file a bug.
+- **`-q` keeps results.** It silenced stdout as well as progress and
+  diagnostics, so it behaved exactly like `-qq` and `variant -q impact --json`
+  printed nothing. As in uv, whose printer variant's is modeled on, `-q` now
+  hides only the commentary; `-qq` still hides everything but errors.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and

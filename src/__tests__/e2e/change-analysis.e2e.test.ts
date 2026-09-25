@@ -104,4 +104,36 @@ describe("E2E: reconciling a prediction for CI", () => {
 		expect(parsed.caught).toEqual(["src/math.test.ts"]);
 		expect(parsed.falseSkips).toEqual([]);
 	});
+
+	it("-q keeps the JSON a script asked for", async () => {
+		const result = await variant(
+			cwd,
+			"-q",
+			"impact",
+			"verify",
+			"report.json",
+			"--json",
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({
+			matchedBy: "most-recent",
+		});
+	});
+
+	it("-qq prints nothing but still reports errors", async () => {
+		const quiet = await variant(cwd, "-qq", "impact", "verify", "report.json");
+		expect(quiet.exitCode).toBe(0);
+		expect(quiet.stdout).toBe("");
+
+		const failed = await variant(
+			cwd,
+			"-qq",
+			"impact",
+			"verify",
+			"missing.json",
+		);
+		expect(failed.exitCode).toBe(1);
+		expect(failed.stderr).toContain("IMPACT_REPORT_ERROR");
+	});
 });

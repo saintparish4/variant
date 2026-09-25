@@ -27,7 +27,7 @@ Accepted before any command.
 
 | Flag | Effect |
 |---|---|
-| `-q`, `--quiet` | Suppress normal output, JSON included. Errors still print to stderr. `-qq` (silent) is accepted and currently behaves the same. |
+| `-q`, `--quiet` | Hide progress and diagnostics; results and JSON still print. `-qq` hides everything except errors. |
 | `-v`, `--verbose` | More output. |
 | `--no-progress` | Hide progress bars and spinners. |
 | `--color <when>` | `auto` (default), `always` or `never`. |

@@ -110,7 +110,8 @@ type TaskConfig = {
 
 All JSON is printed to stdout with two-space indentation. Paths are relative to
 the directory variant ran in and always use `/`, on Windows too. Arrays of paths
-and names are sorted. `-q` suppresses JSON along with all other output.
+and names are sorted. `-q` keeps the JSON and drops everything else; `-qq`
+suppresses the JSON too.
 
 When there is nothing to analyze, the commands print a plain-text line instead
 of JSON and exit 0. Check the exit code, and that stdout starts with `{`,
