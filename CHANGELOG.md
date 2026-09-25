@@ -67,6 +67,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   diagnostics, so it behaved exactly like `-qq` and `variant -q impact --json`
   printed nothing. As in uv, whose printer variant's is modeled on, `-q` now
   hides only the commentary; `-qq` still hides everything but errors.
+- Piping output into a reader that stops early, such as
+  `variant impact --json | head`, no longer crashes with an `EPIPE` stack
+  trace. The command finishes and exits with its own code.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and

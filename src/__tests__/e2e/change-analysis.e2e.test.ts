@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -135,5 +137,26 @@ describe("E2E: reconciling a prediction for CI", () => {
 		);
 		expect(failed.exitCode).toBe(1);
 		expect(failed.stderr).toContain("IMPACT_REPORT_ERROR");
+	});
+
+	// `variant ... | head` closes the pipe while variant is still writing. Node's
+	// default for the failed write is an unhandled 'error' and a stack trace.
+	// Closing the read end before the child's first write makes that
+	// deterministic instead of a race against the pipe buffer.
+	it("stops quietly when the reader goes away", async () => {
+		const child = spawn(
+			process.execPath,
+			[cli, "impact", "verify", "report.json"],
+			{ cwd, env: { ...process.env, NO_COLOR: "1" } },
+		);
+		child.stdout.destroy();
+		let stderr = "";
+		child.stderr.on("data", (chunk: Uint8Array) => {
+			stderr += new TextDecoder().decode(chunk);
+		});
+		const [exitCode] = await once(child, "close");
+
+		expect(stderr).toBe("");
+		expect(exitCode).toBe(0);
 	});
 });

@@ -237,6 +237,17 @@ program
 		await registerCheckAction();
 	});
 
+// A reader that stops early (`variant impact --json | head`) closes the pipe
+// while variant is still writing, and the next write fails: EPIPE, or EOF on
+// Windows. That is the reader's choice, not a failure, but Node's default is
+// to crash with a stack trace. Ignore it so the command still finishes with
+// its own exit code; later writes to the closed stream are dropped.
+for (const stream of [process.stdout, process.stderr]) {
+	stream.on("error", (error: NodeJS.ErrnoException) => {
+		if (error.code !== "EPIPE" && error.code !== "EOF") throw error;
+	});
+}
+
 // The only place the process exits on error: typed VariantErrors are the
 // expected failure mode (exit 1); anything else escaped a typed path and is a
 // bug worth a distinct exit code (exit 2).
