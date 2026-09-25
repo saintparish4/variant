@@ -234,10 +234,6 @@ Notes are human-readable strings, sorted. The forms they take:
 
 ### `impact verify --json`
 
-> **Known issue in 0.2.0:** the `--json` flag is taken by the parent `impact`
-> command, so this output is not reachable from the CLI yet. The shape below is
-> what the command is built to print.
-
 ```ts
 type VerifyResult = {
 	/** How the prediction was found: by --head-sha, or the newest logged. */

@@ -83,17 +83,19 @@ impactCmd
 	)
 	.option("--head-sha <sha>", "reconcile the prediction made at this commit")
 	.option("--json", "output the reconciliation as JSON")
-	.action(
-		async (report: string, opts: { headSha?: string; json?: boolean }) => {
-			const { registerImpactVerifyAction } = await import(
-				"./commands/impact.js"
-			);
-			await registerImpactVerifyAction(report, {
-				...(opts.headSha !== undefined && { headSha: opts.headSha }),
-				...(opts.json === true && { json: true }),
-			});
-		},
-	);
+	.action(async (report: string, _opts: unknown, command: Command) => {
+		const { registerImpactVerifyAction } = await import("./commands/impact.js");
+		// `impact` defines --json too, and Commander gives a flag both
+		// commands share to the parent, whichever side of `verify` it is on.
+		const opts = command.optsWithGlobals<{
+			headSha?: string;
+			json?: boolean;
+		}>();
+		await registerImpactVerifyAction(report, {
+			...(opts.headSha !== undefined && { headSha: opts.headSha }),
+			...(opts.json === true && { json: true }),
+		});
+	});
 
 program
 	.command("diff <file>")

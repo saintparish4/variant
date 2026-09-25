@@ -181,9 +181,6 @@ appends the counts to `.variant/history/reconciliation.jsonl`.
 | `--head-sha <sha>` | most recent prediction | Use the prediction made at this commit. Pass the full 40-character SHA: `"$(git rev-parse HEAD)"`. |
 | `--json` | off | Print the reconciliation as JSON, [shape here](./api.md#impact-verify---json). |
 
-> **Known issue in 0.2.0:** `--json` is taken by the parent `impact` command,
-> so `impact verify` prints the human report whichever position it is given in.
-
 Exits 0 whatever the reconciliation finds: the test run decides whether the
 build fails. A file that is not a test report exits 1 with
 `IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches

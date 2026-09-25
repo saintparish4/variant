@@ -57,6 +57,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   it. The tokenizer now rescans both the way the TypeScript parser does. JSX
   text is still scanned as code, so the same can happen in a `.tsx` file whose
   JSX contains an apostrophe; it only ever widens the result.
+- **`impact verify --json` prints JSON.** `impact` defines `--json` as well,
+  and Commander gave a flag both commands share to the parent, so the
+  reconciliation always printed as text wherever the flag was placed.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and
