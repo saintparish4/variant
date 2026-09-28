@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./public/dark-mode.png">
-    <source media="(prefers-color-scheme: light)" srcset="./public/light-mode.png">
-    <img alt="variant: toolchain of change" src="./public/light-mode.png" width="560">
+    <source media="(prefers-color-scheme: dark)" srcset="./public/new-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="./public/new-light-mode.png">
+    <img alt="variant: know what changed. know what matters." src="./public/new-light-mode.png" width="560">
   </picture>
 </p>
 
