@@ -116,6 +116,18 @@ A **false skip** is a test that failed and that the prediction did not select.
 Had skipping been enabled, that failure would have shipped. This is the number
 that gates test skipping; everything else `impact` prints describes a graph.
 
+The **false-skip rate** is false skips divided by failed test files: of the
+failures that happened, how many the prediction would have missed. It is not
+divided by the number of skipped tests. Most skipped tests pass, so that
+denominator makes any selector look nearly perfect. Two consequences are
+deliberate:
+
+- **A flaky failure outside the predicted set counts as a false skip.** variant
+  cannot tell a flake from a real miss, so it counts against the prediction.
+  The rate can only overstate the risk, never hide it.
+- **The unit is a test file,** because that is what `impact` selects and what
+  Jest and Vitest reports name.
+
 Each prediction records the commit it was made against, so `--head-sha <sha>`
 reconciles a specific run rather than the most recent one — which is what CI
 needs when several predictions are in flight. Each reconciliation is appended to
@@ -191,6 +203,11 @@ Both commands trace imports statically from source text — there is no module b
 - **Package `exports` maps are read, but the source they name is inferred.** Resolving a bare import of a sibling workspace package (`import { x } from "@org/utils"`) consults the target's `package.json` `exports`, including conditional exports, fallback arrays and `*` subpath patterns. The catch is that `exports` names *published* entry points, which are usually build output that does not exist in a source checkout: a target of `./dist/entry.js` is therefore also probed as `src/entry`, `lib/entry`, `source/entry` and `entry`. A package whose sources sit somewhere else entirely still falls through to the conventional `src/index.*` guesses, and then to `unresolved`. This layer is additive — it can find edges the guesses miss, never lose ones they find.
 - **Static import closures miss fixtures, snapshots, and non-TS assets.** `impact`'s test selection is built by forward-BFS over each test file's *statically resolvable* TypeScript imports. A test that reaches its dependencies through a fixture directory, a JSON/YAML snapshot, a dynamically-constructed path, or any non-`.ts`/`.tsx` asset has a blind spot in its closure — the command lowers the confidence score and adds a note ("N selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed") rather than silently trusting an incomplete closure, but it cannot recover the missing edges.
 - **Dynamic `import()` calls are unknowable.** Both the differ and blast-radius treat a dynamic import edge as "names unknowable": the change is assumed to propagate (over-including rather than silently missing it) and a note is emitted, but which specific exports are used can't be determined the way a static named import can.
+- **Edges that exist only at runtime are invisible.** A dependency injection container resolving a class by token, a plugin registry keyed by string, `require()` of a computed path, and `eval` never appear as imports. A test that reaches code only through one of these is not selected when that code changes, and nothing in the output says so. This is the largest blind spot and the main reason `impact` is report-only.
+- **Service boundaries end the graph.** An end-to-end test that drives a running server over HTTP, or a test of one service that depends on another service's behavior, imports none of the code it exercises. variant sees the test files and the source separately, never the network call between them.
+- **Global setup files are missed.** Tests never import a `setupFiles` or `globalSetup` module, so a change to one selects no tests, and confidence stays high because every import did resolve. Changing the runner config itself selects everything (see [Select-all triggers](#select-all-triggers)); changing only the setup file it names does not. Run the full suite for such a change.
+- **Shared state is not an import.** Test ordering, and state one test leaves behind for another, are outside the closure.
+- **Type-only changes are not narrowed.** Changing an interface or type alias selects every test that imports the file, the same as a runtime change, even though no runtime behavior changed. This errs wide.
 - **Non-TS changes are `unanalyzed`, not `non-impacting`.** A changed `.json`, `.css`, or other non-TypeScript file always contributes a seed to the blast radius (never silently skipped) because the differ has no surface to compare — this is deliberately conservative and can widen the run set beyond what's strictly needed.
 
 Given these gaps, `variant impact` never gates test execution on its own — it logs every prediction to `.variant/history/impact.jsonl` for shadow-mode validation, and the printed guidance is explicit that you should still run the full suite. Treat a low `confidence` score, or any note mentioning unresolved imports or dynamic imports, as a signal to widen your own manual test selection rather than trusting the narrow list.

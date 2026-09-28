@@ -30,6 +30,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   shadow-mode reconciliation with `impact verify`.
 - Terminal demos in `docs/assets/`, recorded from the real CLI by
   `scripts/record-demos.mjs`.
+- README sections comparing variant with Nx `affected`, Turborepo `--filter`
+  and `vitest related`, and listing what static analysis cannot see.
+- `docs/impact-and-workspace.md` defines the false-skip rate (false skips over
+  failed test files, flakes included) and lists four more blind spots:
+  runtime-only wiring, service boundaries, global setup files, and type-only
+  changes, which are not narrowed.
+- `impact-shadow.yml` uploads `reconciliation.jsonl` as a downloadable
+  artifact, and a "Share shadow-mode results" issue form collects the counts.
 
 ### Changed
 

@@ -101,6 +101,51 @@ Check out with `fetch-depth: 0` and pass `--base origin/<branch>`. With a
 shallow clone, or a bare `main` that CI never created, there is no base to
 diff against, and variant stops with `GIT_REF_ERROR` rather than guess.
 
+### Help measure it
+
+Test skipping stays off until its false-skip rate is measured on real
+repositories, and one repository is not enough. If you run
+`impact-shadow.yml`, it changes nothing about your build and uploads the
+counts as a `variant-reconciliation` artifact: no file paths, no source.
+[Share them in an issue](https://github.com/saintparish4/variant/issues/new?template=3.shadow_results.yml)
+and they go into the measurement that decides whether skipping ever ships.
+
+## How it compares
+
+**Nx `affected`, Turborepo `--filter`.** These work at the level of projects
+and tasks: a change inside `utils` reruns the test target of `utils` and of
+every project that depends on it. In the example above, that is all four test
+files. variant works at the level of test files and follows each one's imports
+across packages, so it runs two. Nx and Turborepo also cache and orchestrate
+tasks; variant's `impact` does neither, and the two can be used together.
+
+**`vitest related`, `jest --findRelatedTests`.** These follow imports at the
+file level too, within one project. variant adds two things: import chains that
+cross workspace packages, and classification, so a change to comments or
+formatting selects no tests at all.
+
+**Not function-level.** Test selection is by file: a test that imports a changed
+file runs, whichever functions it calls. The exported-surface classification
+decides `pr check`'s build verdict and whether a change selects anything, not
+which functions a test touches.
+
+## Limitations
+
+variant reads source statically, so it sees imports and nothing else. It widens
+the selection or lowers its confidence wherever it can tell it is missing
+something, but some edges it cannot see at all:
+
+- Runtime-only wiring: dependency injection by token, string-keyed registries,
+  computed `require()`, `eval`.
+- Service boundaries: an end-to-end test that calls a running server imports
+  none of the code it exercises.
+- Global setup files: a change to a `setupFiles` module selects no tests.
+- Fixtures, snapshots and non-TypeScript assets a test reads at runtime.
+
+That is why `impact` is report-only, and why its confidence score describes how
+much of the import graph resolved, not how safe a skip would be. The full list
+is in [Impact & workspace](./docs/impact-and-workspace.md#limitations).
+
 ## Documentation
 
 | | |
