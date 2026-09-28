@@ -76,6 +76,9 @@ Certain changed paths invalidate the whole test suite regardless of import closu
 - `package.json`, lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`)
 - `tsconfig*.json`
 - Test/build runner configs (`vitest.config.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`)
+- Test setup files with a conventional name (`vitest.setup.*`, `jest.setup.*`, `setupTests.*`, `global-setup.*`, `global-teardown.*`, `test/setup.*`). A runner loads them before every test, but no test imports them.
+
+These match by path, whatever the file's classification: a `vitest.config.ts` edit is `breaking` or `internal` code to the differ, and still selects everything.
 
 ## `variant impact verify`
 
@@ -205,7 +208,7 @@ Both commands trace imports statically from source text — there is no module b
 - **Dynamic `import()` calls are unknowable.** Both the differ and blast-radius treat a dynamic import edge as "names unknowable": the change is assumed to propagate (over-including rather than silently missing it) and a note is emitted, but which specific exports are used can't be determined the way a static named import can.
 - **Edges that exist only at runtime are invisible.** A dependency injection container resolving a class by token, a plugin registry keyed by string, `require()` of a computed path, and `eval` never appear as imports. A test that reaches code only through one of these is not selected when that code changes, and nothing in the output says so. This is the largest blind spot and the main reason `impact` is report-only.
 - **Service boundaries end the graph.** An end-to-end test that drives a running server over HTTP, or a test of one service that depends on another service's behavior, imports none of the code it exercises. variant sees the test files and the source separately, never the network call between them.
-- **Global setup files are missed.** Tests never import a `setupFiles` or `globalSetup` module, so a change to one selects no tests, and confidence stays high because every import did resolve. Changing the runner config itself selects everything (see [Select-all triggers](#select-all-triggers)); changing only the setup file it names does not. Run the full suite for such a change.
+- **Setup files with an unconventional name are missed.** Tests never import a `setupFiles` or `globalSetup` module. The conventional names are [select-all triggers](#select-all-triggers), but a setup file named anything else selects no tests when it changes, and confidence stays high because every import did resolve. variant does not read the runner config to learn the names. Run the full suite for such a change.
 - **Shared state is not an import.** Test ordering, and state one test leaves behind for another, are outside the closure.
 - **Type-only changes are not narrowed.** Changing an interface or type alias selects every test that imports the file, the same as a runtime change, even though no runtime behavior changed. This errs wide.
 - **Non-TS changes are `unanalyzed`, not `non-impacting`.** A changed `.json`, `.css`, or other non-TypeScript file always contributes a seed to the blast radius (never silently skipped) because the differ has no surface to compare — this is deliberately conservative and can widen the run set beyond what's strictly needed.

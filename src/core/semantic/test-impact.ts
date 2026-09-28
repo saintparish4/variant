@@ -65,10 +65,22 @@ export function defaultIsTestFile(file: string): boolean {
 
 /**
  * Changed files that invalidate every test regardless of imports: dependency
- * manifests, lockfiles, TS config, and test-runner config.
+ * manifests, lockfiles, TS config, test-runner config, and the setup files a
+ * runner loads before every test. Tests never import a setup file, so its
+ * change would otherwise select nothing. Matched by path alone: a `.ts` config
+ * classifies as ordinary code, and gating on `unanalyzed` once let every
+ * `vitest.config.ts` edit select zero tests. A setup file with an
+ * unconventional name is still missed.
  */
 const TEST_CONFIG_FILE =
 	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite)\.config\.[^/.]+(\.[^/]+)?)$/;
+
+const TEST_SETUP_FILE =
+	/(^|\/)((vitest|jest)\.setup|setup-?tests|global-?(setup|teardown)|tests?\/setup)\.[cm]?[jt]sx?$/i;
+
+function invalidatesAllTests(filePath: string): boolean {
+	return TEST_CONFIG_FILE.test(filePath) || TEST_SETUP_FILE.test(filePath);
+}
 
 /** Forward-BFS each test file's import closure. */
 export function buildTestTrace(
@@ -116,10 +128,7 @@ export function computeTestImpact(
 
 	let selectAll = false;
 	for (const impact of radius.changed) {
-		if (
-			impact.classification === "unanalyzed" &&
-			TEST_CONFIG_FILE.test(impact.filePath)
-		) {
+		if (invalidatesAllTests(impact.filePath)) {
 			selectAll = true;
 			notes.add(
 				`${impact.filePath}: build/test configuration changed — running all tests`,

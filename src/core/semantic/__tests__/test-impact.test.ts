@@ -140,6 +140,41 @@ describe("computeTestImpact", () => {
 		expect(impact.selectAll).toBe(true);
 	});
 
+	it.each([
+		["a TypeScript runner config", "vitest.config.ts", "breaking"],
+		["a Jest config", "packages/web/jest.config.ts", "internal"],
+		["a Vitest setup file", "vitest.setup.ts", "internal"],
+		["a Jest setup file", "jest.setup.js", "internal"],
+		["a setupTests file", "src/setupTests.ts", "internal"],
+		["a test/setup file", "packages/web/test/setup.ts", "internal"],
+		["a global setup file", "e2e/global-setup.ts", "internal"],
+	] as const)("%s selects all even when it classifies as code", (_, filePath, classification) => {
+		const impact = computeTestImpact(
+			{
+				changed: [{ ...unanalyzed(filePath), classification }],
+				affectedFiles: [filePath],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.selectAll).toBe(true);
+		expect(impact.affectedTests).toHaveLength(3);
+	});
+
+	it("a source file named setup does not select-all", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [
+					{ ...unanalyzed("src/setup.ts"), classification: "internal" },
+				],
+				affectedFiles: ["src/setup.ts"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.selectAll).toBe(false);
+	});
+
 	it("non-config unanalyzed changes do not select-all", () => {
 		const impact = computeTestImpact(
 			{

@@ -139,7 +139,8 @@ something, but some edges it cannot see at all:
   computed `require()`, `eval`.
 - Service boundaries: an end-to-end test that calls a running server imports
   none of the code it exercises.
-- Global setup files: a change to a `setupFiles` module selects no tests.
+- Test setup files with an unconventional name. `vitest.setup.ts`,
+  `setupTests.ts` and the like select every test; `bootstrap.ts` selects none.
 - Fixtures, snapshots and non-TypeScript assets a test reads at runtime.
 
 That is why `impact` is report-only, and why its confidence score describes how

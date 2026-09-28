@@ -34,7 +34,8 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   and `vitest related`, and listing what static analysis cannot see.
 - `docs/impact-and-workspace.md` defines the false-skip rate (false skips over
   failed test files, flakes included) and lists four more blind spots:
-  runtime-only wiring, service boundaries, global setup files, and type-only
+  runtime-only wiring, service boundaries, setup files with unconventional
+  names, and type-only
   changes, which are not narrowed.
 - `impact-shadow.yml` uploads `reconciliation.jsonl` as a downloadable
   artifact, and a "Share shadow-mode results" issue form collects the counts.
@@ -47,6 +48,16 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **Editing a TypeScript runner config selects every test.** A change to
+  `vitest.config.ts`, `jest.config.ts`, `vite.config.ts` or
+  `playwright.config.ts` selected no tests at 100% confidence: the select-all
+  rule only fired for files the differ could not analyze, and a `.ts` config
+  analyzes as ordinary code. Only JSON triggers such as `package.json` and
+  `tsconfig.json` worked. The rule now matches by path alone.
+- **Changing a test setup file selects every test.** No test imports
+  `vitest.setup.ts`, `jest.setup.*`, `setupTests.*`, `global-setup.*` or
+  `test/setup.*`, so a change to one selected nothing. They are now select-all
+  triggers. A setup file with another name is still missed; see Limitations.
 - **A `--base` ref that names no commit is now an error** (`GIT_REF_ERROR`,
   exit 1) in `impact`, `diff`, `pr check` and `pr report`. `pr check` and
   `pr report` used to report zero changed files and `safe to skip build`, and
