@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./public/dark-mode.png">
-    <source media="(prefers-color-scheme: light)" srcset="./public/light-mode.png">
-    <img alt="variant: toolchain of change" src="./public/light-mode.png" width="560">
+    <source media="(prefers-color-scheme: dark)" srcset="./public/new-dark-mode.png">
+    <source media="(prefers-color-scheme: light)" srcset="./public/new-light-mode.png">
+    <img alt="variant: know what changed. know what matters." src="./public/new-light-mode.png" width="560">
   </picture>
 </p>
 
@@ -99,7 +99,7 @@ Ready-to-copy GitHub Actions workflows are in
 
 Check out with `fetch-depth: 0` and pass `--base origin/<branch>`. With a
 shallow clone, or a bare `main` that CI never created, there is no base to
-diff against, and the result is empty rather than an error.
+diff against, and variant stops with `GIT_REF_ERROR` rather than guess.
 
 ## Documentation
 

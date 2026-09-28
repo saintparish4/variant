@@ -10,6 +10,7 @@
  * this returns is a graph-resolution score, not a promise.
  */
 
+import { GitRefError } from "../errors.js";
 import { loadPackageGraph } from "../graph/package-graph.js";
 import {
 	appendImpactPrediction,
@@ -20,6 +21,7 @@ import type { TestImpactResult } from "../semantic/test-impact.js";
 import { traceTestImpact } from "../semantic/test-impact.js";
 import type { BuildVerdict } from "../semantic/verdict.js";
 import { deriveVerdict } from "../semantic/verdict.js";
+import { assertBaseRef } from "../vcs/base-ref.js";
 import { readHeadSha } from "../vcs/git.js";
 
 export const DEFAULT_IMPACT_BASE_REF = "HEAD~1";
@@ -43,14 +45,15 @@ export interface ImpactReport {
 }
 
 /**
- * Returns null when the changed set is unavailable (no git, or a ref with no
- * prior commit), mirroring `traceBlastRadius`.
+ * Throws `GitRefError` when the changed set cannot be listed: an empty
+ * prediction there would read as "run nothing".
  */
 export async function predictImpact(
 	cwd: string,
 	options: ImpactOptions = {},
-): Promise<ImpactReport | null> {
+): Promise<ImpactReport> {
 	const baseRef = options.base ?? DEFAULT_IMPACT_BASE_REF;
+	if (options.changedFiles === undefined) await assertBaseRef(cwd, baseRef);
 	const packageGraph = await loadPackageGraph(cwd).catch(() => undefined);
 
 	const result = await traceTestImpact(cwd, {
@@ -61,7 +64,11 @@ export async function predictImpact(
 		}),
 		...(options.readBefore !== undefined && { readBefore: options.readBefore }),
 	});
-	if (result === null) return null;
+	if (result === null) {
+		throw new GitRefError(
+			`Could not list the files changed since "${baseRef}"`,
+		);
+	}
 
 	const verdict = deriveVerdict(
 		result.radius.changed.map((change) => change.classification),

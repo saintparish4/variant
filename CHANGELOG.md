@@ -39,6 +39,37 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **A `--base` ref that names no commit is now an error** (`GIT_REF_ERROR`,
+  exit 1) in `impact`, `diff`, `pr check` and `pr report`. `pr check` and
+  `pr report` used to report zero changed files and `safe to skip build`, and
+  `impact` printed "could not determine changed files" and exited 0, so a
+  mistyped ref, or a CI checkout with no local `main`, passed as a clean
+  result. `pr check` and `pr report` also fail when the ref shares no merge
+  base with `HEAD`, as in a shallow clone. This changes an exit code: the
+  default `impact --base HEAD~1` in a repository with a single commit now
+  fails instead of printing a message.
+- **Comments and whitespace in a file with a template substitution or a regex
+  are non-impacting again.** The differ's tokenizer could not find the end of
+  a `${…}` substitution or tell a regex from a division, so the rest of the
+  file scanned as one token that kept its whitespace. The base version comes
+  from git without its final newline, so any edit to such a file, a comment
+  included, classified as `internal` and selected every test that imported
+  it. The tokenizer now rescans both the way the TypeScript parser does. JSX
+  text is still scanned as code, so the same can happen in a `.tsx` file whose
+  JSX contains an apostrophe; it only ever widens the result.
+- **`impact verify --json` prints JSON.** `impact` defines `--json` as well,
+  and Commander gave a flag both commands share to the parent, so the
+  reconciliation always printed as text wherever the flag was placed.
+- `impact verify` with a report path that does not exist exits 1 with
+  `IMPACT_REPORT_ERROR` and "no file at <path>", instead of exit 2 and a
+  request to file a bug.
+- **`-q` keeps results.** It silenced stdout as well as progress and
+  diagnostics, so it behaved exactly like `-qq` and `variant -q impact --json`
+  printed nothing. As in uv, whose printer variant's is modeled on, `-q` now
+  hides only the commentary; `-qq` still hides everything but errors.
+- Piping output into a reader that stops early, such as
+  `variant impact --json | head`, no longer crashes with an `EPIPE` stack
+  trace. The command finishes and exits with its own code.
 - The README said a dependent that never imports the changed names is not
   selected. That holds for the blast radius, not for test selection: every
   test that imports a changed file runs. The README and
@@ -53,6 +84,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - `docs/troubleshooting.md` fixed `variant: command not found` by running
   `variant build`, the command that was not found. It now uses
   `npx @blzsky/variant`.
+
+### Security
+
+- **A `--base` value starting with `-` no longer reaches git as an option.**
+  The `--` that git commands put before paths protects only the paths, so
+  `--base=--output=<file>` made `git diff` write that file. Git never creates a
+  ref whose name starts with `-`, so such a value is now answered as a ref that
+  names nothing, and fails with `GIT_REF_ERROR`.
 
 ## [0.2.0] - 2026-09-17
 

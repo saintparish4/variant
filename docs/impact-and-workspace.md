@@ -136,8 +136,6 @@ Two things this deliberately does not do:
 | `--head-sha <sha>` | most recent prediction | Reconcile the prediction made at this commit. Pass the full SHA: `"$(git rev-parse HEAD)"` |
 | `--json` | off | Print the reconciliation as JSON. [Shape](./api.md#impact-verify---json) |
 
-> **Known issue in 0.2.0:** `--json` is taken by the parent `impact` command, so `impact verify` prints the human report whichever position the flag is given in.
-
 [`examples/github-actions/impact-shadow.yml`](../examples/github-actions/impact-shadow.yml) runs predict → full suite → reconcile in CI and keeps the history across runs.
 
 ## `variant workspace check`

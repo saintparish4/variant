@@ -4,10 +4,12 @@
  * relative to its base and reduce them to one build verdict.
  */
 
+import { GitRefError } from "../errors.js";
 import type { ClassifyResult } from "../semantic/differ.js";
 import { classifyFileAgainstRef } from "../semantic/file-change.js";
 import type { BuildVerdict } from "../semantic/verdict.js";
 import { deriveVerdict } from "../semantic/verdict.js";
+import { assertBaseRef } from "../vcs/base-ref.js";
 import { listChangedFilesSinceMergeBase } from "../vcs/git.js";
 
 export const DEFAULT_PR_BASE_REF = "main";
@@ -27,15 +29,26 @@ export interface PrCheckResult {
 
 const TS_FILE = /\.tsx?$/;
 
+async function listBranchChanges(
+	cwd: string,
+	baseRef: string,
+): Promise<string[]> {
+	await assertBaseRef(cwd, baseRef);
+	const changed = await listChangedFilesSinceMergeBase(cwd, baseRef);
+	// A shallow clone can hold both tips without the commit they share.
+	if (changed === null) {
+		throw new GitRefError(`"${baseRef}" has no merge base with HEAD`);
+	}
+	return changed;
+}
+
 export async function runPrCheck(
 	cwd: string,
 	options: PrCheckOptions = {},
 ): Promise<PrCheckResult> {
 	const baseRef = options.base ?? DEFAULT_PR_BASE_REF;
 	const changed =
-		options.changedFiles ??
-		(await listChangedFilesSinceMergeBase(cwd, baseRef)) ??
-		[];
+		options.changedFiles ?? (await listBranchChanges(cwd, baseRef));
 	const tsFiles = changed.filter((file) => TS_FILE.test(file));
 
 	const files: ClassifyResult[] = [];

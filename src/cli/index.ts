@@ -83,17 +83,19 @@ impactCmd
 	)
 	.option("--head-sha <sha>", "reconcile the prediction made at this commit")
 	.option("--json", "output the reconciliation as JSON")
-	.action(
-		async (report: string, opts: { headSha?: string; json?: boolean }) => {
-			const { registerImpactVerifyAction } = await import(
-				"./commands/impact.js"
-			);
-			await registerImpactVerifyAction(report, {
-				...(opts.headSha !== undefined && { headSha: opts.headSha }),
-				...(opts.json === true && { json: true }),
-			});
-		},
-	);
+	.action(async (report: string, _opts: unknown, command: Command) => {
+		const { registerImpactVerifyAction } = await import("./commands/impact.js");
+		// `impact` defines --json too, and Commander gives a flag both
+		// commands share to the parent, whichever side of `verify` it is on.
+		const opts = command.optsWithGlobals<{
+			headSha?: string;
+			json?: boolean;
+		}>();
+		await registerImpactVerifyAction(report, {
+			...(opts.headSha !== undefined && { headSha: opts.headSha }),
+			...(opts.json === true && { json: true }),
+		});
+	});
 
 program
 	.command("diff <file>")
@@ -234,6 +236,17 @@ program
 		const { registerCheckAction } = await import("./commands/check.js");
 		await registerCheckAction();
 	});
+
+// A reader that stops early (`variant impact --json | head`) closes the pipe
+// while variant is still writing, and the next write fails: EPIPE, or EOF on
+// Windows. That is the reader's choice, not a failure, but Node's default is
+// to crash with a stack trace. Ignore it so the command still finishes with
+// its own exit code; later writes to the closed stream are dropped.
+for (const stream of [process.stdout, process.stderr]) {
+	stream.on("error", (error: NodeJS.ErrnoException) => {
+		if (error.code !== "EPIPE" && error.code !== "EOF") throw error;
+	});
+}
 
 // The only place the process exits on error: typed VariantErrors are the
 // expected failure mode (exit 1); anything else escaped a typed path and is a

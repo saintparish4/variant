@@ -62,7 +62,7 @@ The request path most commands follow: `createContext()` → `core/graph` builds
 - **Security boundaries:**
   - Task `inputs` reject absolute patterns and any `..` segment (`cache/hashing.ts:assertSafePattern`).
   - Commands run through execa with a string-argv array, never a shell.
-  - Git invocations put `--` before paths so a ref cannot become an option.
+  - Git invocations put `--` before paths, and `vcs/git.ts` answers a ref starting with `-` without running git, so neither a path nor a ref can become an option.
   - The config schema has no credential fields.
 
 ## Code Style

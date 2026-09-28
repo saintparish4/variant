@@ -110,15 +110,16 @@ type TaskConfig = {
 
 All JSON is printed to stdout with two-space indentation. Paths are relative to
 the directory variant ran in and always use `/`, on Windows too. Arrays of paths
-and names are sorted. `-q` suppresses JSON along with all other output.
+and names are sorted. `-q` keeps the JSON and drops everything else; `-qq`
+suppresses the JSON too.
 
 When there is nothing to analyze, the commands print a plain-text line instead
 of JSON and exit 0. Check the exit code, and that stdout starts with `{`,
-before parsing.
+before parsing. A `--base` ref that cannot be resolved is not in this table: it
+is an error (`GIT_REF_ERROR`, exit 1).
 
 | Command | Plain-text line printed instead of JSON |
 |---|---|
-| `impact --json` | `impact: could not determine changed files …` (bad ref, or no prior commit) |
 | `impact verify --json` | `impact verify: no logged prediction to reconcile against. …` |
 | `workspace check --json` | `workspace check: no workspace packages found …` |
 
@@ -233,10 +234,6 @@ Notes are human-readable strings, sorted. The forms they take:
 | `tests.notes` | `<n> selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed` |
 
 ### `impact verify --json`
-
-> **Known issue in 0.2.0:** the `--json` flag is taken by the parent `impact`
-> command, so this output is not reachable from the CLI yet. The shape below is
-> what the command is built to print.
 
 ```ts
 type VerifyResult = {

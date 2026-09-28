@@ -27,7 +27,7 @@ Accepted before any command.
 
 | Flag | Effect |
 |---|---|
-| `-q`, `--quiet` | Suppress normal output, JSON included. Errors still print to stderr. `-qq` (silent) is accepted and currently behaves the same. |
+| `-q`, `--quiet` | Hide progress and diagnostics; results and JSON still print. `-qq` hides everything except errors. |
 | `-v`, `--verbose` | More output. |
 | `--no-progress` | Hide progress bars and spinners. |
 | `--color <when>` | `auto` (default), `always` or `never`. |
@@ -54,7 +54,7 @@ Color precedence, highest first: `--color <when>`, `--no-color`, `NO_COLOR`,
 
 | Code | Meaning |
 |---|---|
-| `0` | Success, including "nothing to analyze" (no changed files, no workspace, no logged prediction). |
+| `0` | Success, including "nothing to analyze" (no workspace packages, no logged prediction). |
 | `1` | A reported failure: a `variant` error (below), a `workspace check` violation, or a failed `doctor` check. |
 | `2` | An unexpected error. The stack trace is printed; please [file a bug](https://github.com/saintparish4/variant/issues). |
 
@@ -69,10 +69,11 @@ Errors go to stderr as a code, a message and, usually, a hint:
 |---|---|
 | `CONFIG_ERROR` | The config is missing, invalid, or names a task that does not exist |
 | `CYCLE_ERROR` | Tasks depend on each other in a cycle |
+| `GIT_REF_ERROR` | A `--base` ref names no commit, shares no merge base with `HEAD`, or there is no repository to read it from |
 | `TASK_EXECUTION_ERROR` | A task's command exited non-zero. See [troubleshooting](./troubleshooting.md#8-a-failure-prints-ran-because--what-is-it-telling-me) for the `ran because:` block it carries. |
 | `CACHE_ERROR` | The task cache cannot be read or written. Deleting `.variant/cache/` fixes it. |
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
-| `IMPACT_REPORT_ERROR` | `impact verify` was given a file that is not a Vitest or Jest JSON report |
+| `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
@@ -95,10 +96,11 @@ Three consequences:
   clones one commit by default and creates no local branch for the target, so
   use `fetch-depth: 0` and `--base origin/main`, not `--base main`. The
   [example workflows](../examples/github-actions) do both.
-- **A ref that does not resolve is not an error.** `impact` prints
-  `could not determine changed files` and exits 0. `pr check` and `pr report`
-  report zero changed files and a `safe to skip build` verdict. Check that the
-  ref exists (`git rev-parse --verify <ref>`) before trusting a verdict.
+- **A ref that does not resolve is an error.** Every command that takes
+  `--base` exits 1 with `GIT_REF_ERROR` when the ref names no commit, and
+  `pr check`/`pr report` do the same when it shares no merge base with `HEAD`.
+  That includes the default `HEAD~1` in a repository with a single commit.
+  An analysis that cannot see its base has nothing true to report.
 
 ## What gets analyzed
 
@@ -179,12 +181,9 @@ appends the counts to `.variant/history/reconciliation.jsonl`.
 | `--head-sha <sha>` | most recent prediction | Use the prediction made at this commit. Pass the full 40-character SHA: `"$(git rev-parse HEAD)"`. |
 | `--json` | off | Print the reconciliation as JSON, [shape here](./api.md#impact-verify---json). |
 
-> **Known issue in 0.2.0:** `--json` is taken by the parent `impact` command,
-> so `impact verify` prints the human report whichever position it is given in.
-
 Exits 0 whatever the reconciliation finds: the test run decides whether the
-build fails. A file that is not a test report exits 1 with
-`IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
+build fails. A report path that does not exist, or a file that is not a test
+report, exits 1 with `IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
 `--head-sha`, it says so and exits 0.
 
 ### `diff`

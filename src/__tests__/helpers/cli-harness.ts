@@ -8,6 +8,7 @@
  * `-q`/`-v`, so these tests exercise the real output path.
  */
 
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -77,6 +78,33 @@ export function writeFiles(dir: string, files: Record<string, string>): void {
 		mkdirSync(path.dirname(absolute), { recursive: true });
 		writeFileSync(absolute, contents);
 	}
+}
+
+const GIT_IDENTITY = ["-c", "user.email=t@t.com", "-c", "user.name=T"];
+
+/** Runs git in `dir` with a fixed identity, so commits work on any machine. */
+export function git(dir: string, ...args: string[]): void {
+	execFileSync("git", [...GIT_IDENTITY, ...args], {
+		cwd: dir,
+		stdio: "ignore",
+	});
+}
+
+/**
+ * A temp workspace committed as the first commit of a new repository on
+ * `main`. Change analysis rejects a base ref that names no commit, so a test
+ * of `pr` or `diff` needs a real history to compare against.
+ */
+export function createGitWorkspace(
+	prefix: string,
+	files: Record<string, string>,
+): string {
+	const dir = createTempWorkspace(prefix);
+	writeFiles(dir, files);
+	git(dir, "init", "-q", "-b", "main");
+	git(dir, "add", "-A");
+	git(dir, "commit", "-q", "--allow-empty", "-m", "initial");
+	return dir;
 }
 
 /** Call from `afterEach`. Windows may still hold handles; the OS cleans up. */

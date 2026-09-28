@@ -44,19 +44,32 @@ describe("output gating", () => {
 		expect(err.chunks).toEqual(["b"]);
 	});
 
-	it("suppresses both streams in quiet and silent modes", () => {
-		for (const mode of ["quiet", "silent"] as const) {
-			const out = fakeStream();
-			const err = fakeStream();
-			const printer = new Printer(mode, {
-				stdout: out.stream,
-				stderr: err.stream,
-			});
-			printer.stdout("a");
-			printer.stderr("b");
-			expect(out.chunks).toEqual([]);
-			expect(err.chunks).toEqual([]);
-		}
+	// -q once dropped stdout too, so `variant -q impact --json` printed nothing:
+	// the same as -qq, and useless in a script.
+	it("keeps results on stdout but drops diagnostics in quiet mode", () => {
+		const out = fakeStream();
+		const err = fakeStream();
+		const printer = new Printer("quiet", {
+			stdout: out.stream,
+			stderr: err.stream,
+		});
+		printer.stdout("a");
+		printer.stderr("b");
+		expect(out.chunks).toEqual(["a"]);
+		expect(err.chunks).toEqual([]);
+	});
+
+	it("suppresses both streams in silent mode", () => {
+		const out = fakeStream();
+		const err = fakeStream();
+		const printer = new Printer("silent", {
+			stdout: out.stream,
+			stderr: err.stream,
+		});
+		printer.stdout("a");
+		printer.stderr("b");
+		expect(out.chunks).toEqual([]);
+		expect(err.chunks).toEqual([]);
 	});
 
 	it("writes debug lines only in verbose mode", () => {

@@ -15,6 +15,7 @@ import { predictImpact } from "../../core/impact/predict.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
+	createGitWorkspace,
 	createTempWorkspace,
 	restoreGlobalPrinter,
 	withCwd,
@@ -112,10 +113,23 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
-	it("returns null when git is unavailable and no changed set is given", async () => {
+	it("rejects a base ref outside a git repository", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, { "src/a.ts": "export const a = 1;" });
-		expect(await predictImpact(dir)).toBeNull();
+
+		await expect(predictImpact(dir)).rejects.toMatchObject({
+			code: "GIT_REF_ERROR",
+		});
+	});
+
+	it("rejects the default HEAD~1 in a repository with one commit", async () => {
+		const dir = createGitWorkspace("impact", {
+			"src/a.ts": "export const a = 1;",
+		});
+
+		await expect(predictImpact(dir)).rejects.toMatchObject({
+			code: "GIT_REF_ERROR",
+		});
 	});
 });
 
@@ -165,13 +179,14 @@ describe("impact command", () => {
 		expect(parsed.tests.affectedTests).toEqual([]);
 	});
 
-	it("degrades gracefully outside a usable git context", async () => {
+	it("fails outside a git repository instead of reporting no changes", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, { "src/a.ts": "export const a = 1;" });
 		const output = captureGlobalOutput();
 
-		await withCwd(dir, () => registerImpactAction());
-
-		expect(output.stdout()).toContain("could not determine changed files");
+		await expect(
+			withCwd(dir, () => registerImpactAction()),
+		).rejects.toMatchObject({ code: "GIT_REF_ERROR" });
+		expect(output.stdout()).toBe("");
 	});
 });

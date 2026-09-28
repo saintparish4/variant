@@ -1,9 +1,9 @@
 /**
  * @module
  * Workspace package discovery + package-level DAG. Reads pnpm-workspace.yaml,
- * package.json `workspaces`, and tsconfig project references; produces a
- * deterministic list of WorkspacePackages and a coarse package-level DAG that
- * drives auto-generated TaskGraph entries.
+ * else package.json `workspaces`, else the `packages/*`, `apps/*` and
+ * `services/*` fallback; produces a deterministic list of WorkspacePackages
+ * and a coarse package-level DAG that drives auto-generated TaskGraph entries.
  */
 
 import { readFile, stat } from "node:fs/promises";

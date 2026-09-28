@@ -9,11 +9,22 @@ import { registerDiffAction } from "../../cli/commands/diff.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
+	createGitWorkspace,
 	createTempWorkspace,
+	git,
 	restoreGlobalPrinter,
 	withCwd,
 	writeFiles,
 } from "../helpers/cli-harness.js";
+
+/** A repository whose second commit adds `files`, so HEAD~1 predates them. */
+function repoAdding(files: Record<string, string>): string {
+	const dir = createGitWorkspace("diff", { "README.md": "# fixture\n" });
+	writeFiles(dir, files);
+	git(dir, "add", "-A");
+	git(dir, "commit", "-q", "-m", "add files");
+	return dir;
+}
 
 afterEach(() => {
 	cleanupTempWorkspaces();
@@ -22,13 +33,12 @@ afterEach(() => {
 
 describe("diff command", () => {
 	it("classifies a new exported function as breaking", async () => {
-		const dir = createTempWorkspace("diff");
-		writeFiles(dir, {
+		const dir = repoAdding({
 			"subject.ts": "export function hello(): string { return 'hi'; }\n",
 		});
 		const output = captureGlobalOutput();
 
-		// Not a git repo, so the baseline resolves to empty: every export is new.
+		// The file did not exist at HEAD~1, so every export is new.
 		await withCwd(dir, () => registerDiffAction("subject.ts"));
 
 		expect(output.stdout()).toContain("subject.ts");
@@ -37,8 +47,7 @@ describe("diff command", () => {
 	});
 
 	it("classifies a file with no exports as non-impacting", async () => {
-		const dir = createTempWorkspace("diff");
-		writeFiles(dir, { "empty.ts": "// just a comment\n" });
+		const dir = repoAdding({ "empty.ts": "// just a comment\n" });
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerDiffAction("empty.ts"));
@@ -47,13 +56,27 @@ describe("diff command", () => {
 	});
 
 	it("reports the base ref given by --base", async () => {
-		const dir = createTempWorkspace("diff");
-		writeFiles(dir, { "thing.ts": "export const x = 1;\n" });
+		const dir = createGitWorkspace("diff", {
+			"thing.ts": "export const x = 1;\n",
+		});
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerDiffAction("thing.ts", { base: "main" }));
 
 		expect(output.stdout()).toContain("main");
+	});
+
+	it("rejects a base ref that names no commit", async () => {
+		const dir = createGitWorkspace("diff", {
+			"thing.ts": "export const x = 1;\n",
+		});
+		captureGlobalOutput();
+
+		await expect(
+			withCwd(dir, () =>
+				registerDiffAction("thing.ts", { base: "does-not-exist" }),
+			),
+		).rejects.toMatchObject({ code: "GIT_REF_ERROR" });
 	});
 
 	/**

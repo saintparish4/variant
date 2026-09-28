@@ -160,4 +160,16 @@ describe("verifyImpact", () => {
 			ImpactReportError,
 		);
 	});
+
+	// A mistyped path is a usage mistake, not a bug in variant: it once
+	// escaped as a raw ENOENT and printed "please file a bug" with exit 2.
+	it("rejects a report path that does not exist", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(defaultHistoryDir(dir), prediction({}));
+
+		await expect(verifyImpact(dir, "missing.json")).rejects.toMatchObject({
+			code: "IMPACT_REPORT_ERROR",
+			message: expect.stringContaining("missing.json"),
+		});
+	});
 });

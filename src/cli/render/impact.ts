@@ -14,9 +14,6 @@ const count = (value: number): string => value.toLocaleString("en-US");
 export const NO_PREDICTION_MESSAGE =
 	"impact verify: no logged prediction to reconcile against. Run `variant impact` before the test run, or pass --head-sha for a specific commit.";
 
-export const NO_CHANGED_FILES_MESSAGE =
-	"impact: could not determine changed files (is this a git repository with at least one prior commit?). Pass --base <ref> against a valid ref.";
-
 export function renderImpactJson(
 	report: ImpactReport,
 	printer: Printer = getPrinter(),
