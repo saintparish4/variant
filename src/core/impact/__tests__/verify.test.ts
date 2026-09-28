@@ -53,6 +53,22 @@ describe("parseFailedTests", () => {
 		).toEqual(["src/x.test.ts"]);
 	});
 
+	it("relativizes a runner path reached through a symlink to the workspace", () => {
+		// macOS: getcwd() answers /private/var/..., os.tmpdir() answers /var/...
+		const realCwd = path.resolve("/private/repo");
+		const realpath = (target: string): string =>
+			target.startsWith(CWD) ? realCwd + target.slice(CWD.length) : target;
+		expect(
+			parseFailedTests(
+				realCwd,
+				report([
+					{ name: path.join(CWD, "src", "x.test.ts"), status: "failed" },
+				]),
+				realpath,
+			),
+		).toEqual(["src/x.test.ts"]);
+	});
+
 	it("accepts a path the runner already reported as relative", () => {
 		expect(
 			parseFailedTests(
