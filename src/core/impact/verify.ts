@@ -9,6 +9,7 @@
  * `impact` prints is a description of a graph.
  */
 
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImpactReportError } from "../errors.js";
@@ -56,11 +57,43 @@ export interface VerifyResult {
 	historyLogged: boolean;
 }
 
-/** Normalizes a runner-reported path to the form predictions are keyed by. */
-function toRelativePosix(cwd: string, testPath: string): string {
-	const relative = path.isAbsolute(testPath)
-		? path.relative(cwd, testPath)
-		: testPath;
+/** Resolves symlinks, or answers the path unchanged when it does not exist. */
+function realpathOrSelf(target: string): string {
+	try {
+		return realpathSync.native(target);
+	} catch {
+		return target;
+	}
+}
+
+function escapes(relative: string): boolean {
+	return (
+		relative === ".." ||
+		relative.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relative)
+	);
+}
+
+/**
+ * Normalizes a runner-reported path to the form predictions are keyed by.
+ *
+ * The runner and variant can name the same workspace by different paths: on
+ * macOS getcwd() answers /private/var/... while os.tmpdir() answers /var/....
+ * A path that seems to leave the workspace is retried with symlinks resolved;
+ * compared lexically, every failure there would be counted as a false skip.
+ */
+function toRelativePosix(
+	cwd: string,
+	testPath: string,
+	realpath: (target: string) => string,
+): string {
+	let relative = testPath;
+	if (path.isAbsolute(testPath)) {
+		relative = path.relative(cwd, testPath);
+		if (escapes(relative)) {
+			relative = path.relative(realpath(cwd), realpath(testPath));
+		}
+	}
 	return relative.replace(/\\/g, "/");
 }
 
@@ -70,7 +103,11 @@ function toRelativePosix(cwd: string, testPath: string): string {
  * must not break reconciliation, and a report with no recognizable failures is
  * a legitimate result (everything passed).
  */
-export function parseFailedTests(cwd: string, raw: string): string[] {
+export function parseFailedTests(
+	cwd: string,
+	raw: string,
+	realpath: (target: string) => string = realpathOrSelf,
+): string[] {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
@@ -90,7 +127,7 @@ export function parseFailedTests(cwd: string, raw: string): string[] {
 		if (typeof entry !== "object" || entry === null) continue;
 		const { name, status } = entry;
 		if (status !== "failed" || typeof name !== "string") continue;
-		failed.push(toRelativePosix(cwd, name));
+		failed.push(toRelativePosix(cwd, name, realpath));
 	}
 	return [...new Set(failed)].sort();
 }
