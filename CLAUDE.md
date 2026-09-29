@@ -48,13 +48,15 @@ The request path most commands follow: `createContext()` → `core/graph` builds
 
 - **Constructing a ts-morph `Project` dominates the semantic path.** Hoist one classifier with `createClassifier()` and reuse it across files; never call `classifyChange` in a loop. `symbol-graph.ts` follows the same one-Project-per-build shape.
 - **Input hashing is the cache key, so it is correctness-critical.** Each file is hashed to its own digest and the digests are combined in path order. Digests are deliberately *not* shared across the tasks of a run: a path-keyed cache would have to prove nothing rewrote the file since the last task hashed it, and stat (mtime + size) cannot — a same-length rewrite inside one mtime tick is invisible, and serving the stale digest hands a later task a cache key it should have missed. Changing how digests combine changes every cache key; treat that as a deliberate, noted full invalidation.
+- **Bump `SYMBOL_GRAPH_VERSION` whenever extraction changes what an index records.** `symbols.json` reuses each file's entry by content hash, so without a bump an unchanged file keeps the edges an older extractor produced and silently misses the new kind.
 - **`cache.json` is written to a temp file and renamed over the target.** Rename is atomic within a filesystem, so an interrupted run leaves the previous cache intact instead of truncated JSON. `writeCacheSync` is the process-exit safety net and needs this most — do not turn either back into a direct write.
 - **`vcs/git.ts` reads many blobs with one `git cat-file --batch`,** falling back to a `git show` per file if the batch cannot be parsed. The two readers must return identical strings, which is why the batch strips the final newline that execa strips for it.
 - **Git pathspecs are POSIX on every OS.** Pass paths to `git show <ref>:<path>` and `cat-file` through `toPosix()`. A backslash path from `path.relative` on Windows fails as a pathspec, and once was silently swallowed as "new file", so every export classified as breaking.
 - **Test skipping stays off until it is measured.** `impact` is report-only. Every prediction is appended to `.variant/history/impact.jsonl`, and skipping may be enabled only after a false-skip rate, measured by reconciling predictions against real test results, is acceptable. The printed confidence is a graph-resolution score, not a safety number; never present it as one.
 - **Change analysis fails wide, never narrow.** Whatever the semantic pipeline cannot prove widens the result or lowers confidence:
-  - Non-TS changes are `unanalyzed` seeds, not `non-impacting`.
-  - Dynamic `import()` propagates as "names unknowable".
+  - Non-TS changes are `unanalyzed` seeds, not `non-impacting`, and reach every file whose unresolved imports name them (`importersOfUnindexed`).
+  - Dynamic `import()` propagates as "names unknowable". A computed specifier links to everything under its literal prefix; one with no prefix is noted on every run.
+  - A file that does not parse is `breaking` and ungated, as is a changed `export *`: neither has names worth gating on.
   - Unresolved specifiers lower confidence and emit a note.
   - Changes to `package.json`, lockfiles, `tsconfig*.json`, or test/build runner configs select every test.
 

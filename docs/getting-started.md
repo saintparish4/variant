@@ -42,6 +42,7 @@ For a change that only touched the body of one exported function:
 
 ```
 Base ref: HEAD~1
+Workspace: no workspace packages found
 
 You changed 1 file.
   internal       src/math.ts
@@ -52,7 +53,7 @@ Run:   1 test file
 Skip:  1 test file (of 2 total)
 
 Verdict:    build recommended
-Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+Confidence: high (100%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
 ```
 
 Reading it:

@@ -111,7 +111,12 @@ Three consequences:
   TypeScript source.
 - **Tests** (for `impact`): indexed files under a `__tests__/` directory, or
   named `*.test.*` / `*.spec.*`. A `.test.js` file is not indexed, so it is
-  never counted.
+  never counted; with no TypeScript tests at all, `impact` stops with
+  `NO_TEST_FILES`.
+- **Imports:** `import` and `export … from` declarations, `import()`,
+  `require()` and `import x = require()`. A computed `import()` or `require()`
+  is followed as far as its literal start (`` `./locales/${lang}` `` reaches
+  everything under `./locales/`).
 - **Workspace packages:** from `pnpm-workspace.yaml` `packages:`, else
   `package.json` `workspaces`, else the directories `packages/*`, `apps/*` and
   `services/*`. A directory counts only if its `package.json` has a `name`.
@@ -151,20 +156,27 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.d.ts`, …) | Treated as changed; never silently skipped |
+| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …) | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
 
-A change to `package.json`, a lockfile, `tsconfig*.json`, or a
-`vitest`/`jest`/`playwright`/`vite` config selects every test.
+A file that does not parse is `breaking`, whatever the comparison says.
+
+A change to `package.json`, a lockfile, `tsconfig*.json`, a
+`vitest`/`jest`/`playwright`/`vite`/`babel` config, `vitest.workspace.*` or
+`vitest.projects.*`, `.babelrc*`, or a conventionally named test setup file
+selects every test.
 
 The verdict: `build required` if any file is `breaking` or every test was
 selected; `build recommended` if any file is `internal` or `unanalyzed`;
 otherwise `safe to skip build`.
 
-Confidence is the share of the import graph that resolved, lowered by 10 points
-per note (an unresolved import, a dynamic `import()`, a test that may depend on
-fixtures), with a floor of 30%. It is not a probability that skipping is safe.
+Confidence starts at 100% and drops 10 points per note (unresolved imports, a
+dynamic `import()`, unanalyzed files, a test that may depend on fixtures, a
+workspace package discovery may have missed), with a floor of 30%. It prints as
+a bucket first: `high` at 90% and up, `medium` from 70%, `low` below. It is not
+a probability that skipping is safe.
 
-Exits 0.
+The output also says how many workspace packages were found. Exits 0, or 1 with
+`GIT_REF_ERROR` or `NO_TEST_FILES`.
 
 ### `impact verify`
 

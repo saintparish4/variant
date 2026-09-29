@@ -169,6 +169,14 @@ Locally, `git rev-parse --verify <ref>` confirms a ref exists. The [example work
 
 ---
 
+## 10. `[NO_TEST_FILES] No test files found, so there is nothing to predict`
+
+**Cause:** `impact` found no TypeScript test file. It indexes `*.test.ts` and `*.spec.ts` (and the `.tsx`, `.mts` and `.cts` forms) and anything under a `__tests__/` directory. Tests written in JavaScript, or named another way (`*.cy.ts`, `*.e2e.ts`), are not counted. It stops rather than printing "0 of 0 tests", which would read as "run nothing".
+
+**Fix:** Rename the tests to a pattern above, or run `impact` from the directory that holds the TypeScript tests. JavaScript tests cannot be predicted for yet; run them in full.
+
+---
+
 ## Still stuck?
 
 Run `variant doctor` — it checks the most common issues automatically. If the problem persists, open an issue at [github.com/saintparish4/variant](https://github.com/saintparish4/variant/issues) with the output of:

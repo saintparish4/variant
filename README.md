@@ -182,24 +182,34 @@ confidence wherever it can tell it is missing something, but some edges it
 cannot see at all:
 
 - **Runtime-only wiring is invisible.** Dependency injection by token,
-  string-keyed registries, computed `require()` and `eval` never appear as
-  imports. A test that reaches code only this way is not selected, and nothing
-  in the output says so. This is the largest blind spot.
+  string-keyed registries and `eval` never appear as imports. A test that
+  reaches code only this way is not selected, and nothing in the output says
+  so. This is the largest blind spot.
 - **Service boundaries end the graph.** An end-to-end test that calls a running
   server imports none of the code it exercises.
 - **Setup files are recognized by name.** `vitest.setup.ts`, `setupTests.ts`,
   `global-setup.ts` and the like select every test; a setup file named
   anything else selects none. variant does not read the runner config.
-- **Fixtures, snapshots and non-TypeScript assets** a test reads at runtime are
-  outside its import closure. Unresolved imports lower the confidence score and
-  add a note, but the missing edges stay missing.
+- **Files read at runtime are outside the closure.** A changed stylesheet or
+  JSON file that a TypeScript file imports selects that file's tests, but a
+  fixture, snapshot or asset a test reads with `fs` is invisible. A changed
+  file that reaches no test is listed as `Unreached`.
+- **JavaScript is not indexed.** A changed `.js` file reaches the TypeScript
+  files that import it, but `.js` tests are not counted. A repository with no
+  TypeScript tests stops with `NO_TEST_FILES` instead of predicting nothing.
+- **Computed imports are followed only as far as their literal start.**
+  `` import(`./locales/${lang}.js`) `` reaches everything under `./locales/`;
+  `import(name)` could load anything, and is noted on every run.
 - **Dynamic `import()` is assumed to use everything.** The change propagates
   and a note is printed; the run gets wider, not narrower.
+- **Workspace discovery can miss a package**, and a bare import of a package it
+  missed counts as external. `impact` prints how many packages it found and
+  notes imports no discovered package or manifest accounts for.
 - **Type-only changes are not narrowed.** Changing an interface selects every
   test that imports the file, though no runtime behavior changed.
 - **The confidence score is not a safety number.** It says how much of the
-  import graph resolved. Only the false-skip rate says how safe a skip would
-  have been.
+  import graph resolved, as `high`, `medium` or `low` and a percentage. Only
+  the false-skip rate says how safe a skip would have been.
 
 The full list, with how each case is handled, is in
 [Impact & workspace](./docs/impact-and-workspace.md#limitations).
