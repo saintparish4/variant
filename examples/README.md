@@ -18,7 +18,7 @@ Copy a file into your repository's `.github/workflows/`. Each one assumes:
 
 They run `npx --yes @blzsky/variant`, which fetches the latest release on each
 run. variant is `0.x` and can break in a minor release, so pin a version for
-reproducible CI: `npx --yes @blzsky/variant@0.2.0`.
+reproducible CI: `npx --yes @blzsky/variant@0.2.1`.
 
 The two workflows that diff (`pr-report.yml`, `impact-shadow.yml`) check out
 with `fetch-depth: 0` and pass the target branch as `origin/<branch>`. Both

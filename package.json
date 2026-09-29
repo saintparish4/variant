@@ -1,6 +1,6 @@
 {
   "name": "@blzsky/variant",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Change intelligence for TypeScript monorepos — AST-level blast radius, test impact, and a cached task DAG",
   "type": "module",
   "main": "dist/index.js",

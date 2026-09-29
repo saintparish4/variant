@@ -14,6 +14,8 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
 ### Added
 
 - **`docs/tutorial.md`**, a fifteen-minute walkthrough of every
@@ -242,6 +244,7 @@ ship in minor releases and are recorded here.
 - The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
   config. Quoted-argv parsing is covered by the executor's unit tests.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.2.0...HEAD
+[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.2.1...HEAD
+[0.2.1]: https://github.com/saintparish4/variant/compare/variant@0.2.0...variant@0.2.1
 [0.2.0]: https://github.com/saintparish4/variant/compare/variant@0.1.0...variant@0.2.0
 [0.1.0]: https://github.com/saintparish4/variant/releases/tag/variant@0.1.0
