@@ -104,6 +104,36 @@ describe("buildSymbolGraph", () => {
 		expect(byModule.get("./g.js")?.kind).toBe("dynamic");
 	});
 
+	it("records require() and import-equals as whole-module imports", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, {
+			"src/m.ts": [
+				'import legacy = require("./legacy.js");',
+				'import type Types = require("./types.js");',
+				'const config = require("./config.js");',
+				"export const both: Types.T = [legacy, config];",
+			].join("\n"),
+		});
+
+		const { graph } = await buildSymbolGraph(dir);
+		const imports = graph.files["src/m.ts"]?.imports ?? [];
+		const byModule = new Map(imports.map((i) => [i.module, i]));
+
+		expect(byModule.get("./legacy.js")).toEqual({
+			module: "./legacy.js",
+			kind: "static",
+			typeOnly: false,
+			names: ["*"],
+		});
+		expect(byModule.get("./types.js")?.typeOnly).toBe(true);
+		expect(byModule.get("./config.js")).toEqual({
+			module: "./config.js",
+			kind: "static",
+			typeOnly: false,
+			names: ["*"],
+		});
+	});
+
 	it("notes dynamic imports with non-literal specifiers", async () => {
 		const dir = makeTmpDir();
 		writeFixture(dir, {

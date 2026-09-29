@@ -25,6 +25,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **`require()` and `import x = require()` are import edges.** The symbol
+  index recorded only `import` declarations, `export … from` and `import()`,
+  so a file loaded with `require("./x")` was in no test's closure and changing
+  it selected nothing, with no note. Literal specifiers now count as imports of
+  every name; a computed `require()` gets the same note as a computed
+  `import()`. The index format version is bumped, so the first run rebuilds
+  `.variant/graph/symbols.json`.
 - **A changed `export *` reaches every importer in the blast radius.**
   Swapping `export * from "./a"` for `export * from "./b"` recorded the
   impacted name as `* from ./a`, which no importer's names ever match, so every

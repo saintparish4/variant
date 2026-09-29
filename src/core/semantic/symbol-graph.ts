@@ -21,7 +21,12 @@ import { GraphError } from "../errors.js";
 import type { SymbolKind, TsMorph } from "./surface.js";
 import { collectExportedSurface } from "./surface.js";
 
-export const SYMBOL_GRAPH_VERSION = 1;
+/**
+ * Bumped whenever extraction changes what an index records. Per-file entries
+ * are reused by content hash, so without a bump an unchanged file keeps the
+ * edges an older extractor produced (and silently misses the new ones).
+ */
+export const SYMBOL_GRAPH_VERSION = 2;
 
 const GRAPH_FILENAME = "symbols.json";
 
@@ -336,20 +341,55 @@ function collectImports(
 		});
 	}
 
-	for (const call of file.getDescendantsOfKind(tsm.SyntaxKind.CallExpression)) {
-		if (call.getExpression().getKind() !== tsm.SyntaxKind.ImportKeyword) {
+	// `import x = require("m")`. Which names the file uses is not tracked, so
+	// the edge takes all of them.
+	for (const decl of file.getDescendantsOfKind(
+		tsm.SyntaxKind.ImportEqualsDeclaration,
+	)) {
+		const reference = decl.getModuleReference();
+		if (!tsm.Node.isExternalModuleReference(reference)) continue;
+		const expression = reference.getExpression();
+		if (expression === undefined || !tsm.Node.isStringLiteral(expression)) {
 			continue;
 		}
+		imports.push({
+			module: expression.getLiteralValue(),
+			kind: "static",
+			typeOnly: decl.isTypeOnly(),
+			names: ["*"],
+		});
+	}
+
+	for (const call of file.getDescendantsOfKind(tsm.SyntaxKind.CallExpression)) {
+		const callee = call.getExpression();
+		const isImport = callee.getKind() === tsm.SyntaxKind.ImportKeyword;
+		// Any call to an identifier named `require` counts. A local function of
+		// that name only adds an edge, which widens the result, never narrows it.
+		const isRequire =
+			tsm.Node.isIdentifier(callee) && callee.getText() === "require";
+		if (!isImport && !isRequire) continue;
+
 		const arg = call.getArguments()[0];
 		if (arg !== undefined && tsm.Node.isStringLiteral(arg)) {
-			imports.push({
-				module: arg.getLiteralValue(),
-				kind: "dynamic",
-				typeOnly: false,
-				names: [],
-			});
+			imports.push(
+				isImport
+					? {
+							module: arg.getLiteralValue(),
+							kind: "dynamic",
+							typeOnly: false,
+							names: [],
+						}
+					: {
+							module: arg.getLiteralValue(),
+							kind: "static",
+							typeOnly: false,
+							names: ["*"],
+						},
+			);
 		} else {
-			notes.push("dynamic import() with a non-literal specifier");
+			notes.push(
+				`${isImport ? "dynamic import()" : "require()"} with a non-literal specifier`,
+			);
 		}
 	}
 
