@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { captureOutput } from "../../../__tests__/helpers/cli-harness.js";
 import type { ImpactReport } from "../../../core/impact/predict.js";
 import type {
@@ -6,7 +6,12 @@ import type {
 	FileImpact,
 } from "../../../core/semantic/blast-radius.js";
 import type { TestImpact } from "../../../core/semantic/test-impact.js";
+import { writeGlobalColorChoice } from "../../visuals/color.js";
 import { renderImpact, renderImpactJson } from "../impact.js";
+
+beforeEach(() => {
+	writeGlobalColorChoice("never");
+});
 
 function fileImpact(
 	filePath: string,
