@@ -119,6 +119,23 @@ describe("assembleBlastRadius", () => {
 		expect(radius.affectedFiles).not.toContain("src/uses-version.ts");
 	});
 
+	it("a changed export-star reaches every importer, whatever names it takes", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/auth.ts", ["* from ./a"])],
+			GATING_GRAPH,
+		);
+		expect(radius.affectedFiles).toEqual([
+			"src/auth.ts",
+			"src/downstream.ts",
+			"src/dynamic.ts",
+			"src/gated-child.ts",
+			"src/star.ts",
+			"src/uses-login.ts",
+			"src/uses-version.ts",
+		]);
+	});
+
 	it("unanalyzed files are seeds that never propagate", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({
@@ -234,6 +251,21 @@ describe("toFileImpact", () => {
 		expect(impact.notes).toEqual([
 			'src/a.ts: export * from "./x" hides which names are exported',
 		]);
+	});
+
+	it("counts an added export-star as impacted, since it can shadow names", () => {
+		const impact = toFileImpact({
+			filePath: "src/index.ts",
+			classification: "breaking",
+			exportedSymbols: {
+				added: ["* from ./b", "fresh"],
+				removed: [],
+				changed: [],
+			},
+			confidence: 0.85,
+			confidenceNotes: [],
+		});
+		expect(impact.impactedSymbols).toEqual(["* from ./b"]);
 	});
 
 	it("internal results do not propagate", () => {

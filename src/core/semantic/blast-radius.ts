@@ -37,6 +37,7 @@ import { readPathAliases } from "../graph/tsconfig-paths.js";
 import { readFileAtRef, readFilesAtRef } from "../vcs/git.js";
 import type { ClassifyResult, SemanticClass } from "./differ.js";
 import { createClassifier } from "./differ.js";
+import { isStarReexportKey } from "./surface.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
 
 /** `unanalyzed` = changed file the semantic differ cannot parse (non-TS). */
@@ -227,6 +228,10 @@ export function assembleBlastRadius(
 		affected.add(impact.filePath);
 		if (!impact.propagates) continue;
 
+		// A changed star re-export changes which names the file exports, and
+		// those names cannot be listed, so no importer can be gated out.
+		const starChanged = impact.impactedSymbols.some(isStarReexportKey);
+
 		for (const dependent of importGraph.dependents.get(impact.filePath) ?? []) {
 			const edge = importGraph.edges.get(dependent)?.get(impact.filePath);
 			if (edge === undefined) {
@@ -241,7 +246,7 @@ export function assembleBlastRadius(
 				firstHop.add(dependent);
 				continue;
 			}
-			if (edge.names.has("*")) {
+			if (starChanged || edge.names.has("*")) {
 				firstHop.add(dependent);
 				continue;
 			}
@@ -300,9 +305,15 @@ export function assembleBlastRadius(
 	};
 }
 
-/** Convert a differ result into the gate-ready impact shape. */
+/**
+ * Convert a differ result into the gate-ready impact shape. An added export is
+ * normally harmless to existing importers, but an added star re-export can
+ * shadow a name another star provided (two stars exporting one name make it
+ * ambiguous, so neither exports it), so it counts as impacted.
+ */
 export function toFileImpact(result: ClassifyResult): FileImpact {
 	const impactedSymbols = [
+		...result.exportedSymbols.added.filter(isStarReexportKey),
 		...result.exportedSymbols.removed,
 		...result.exportedSymbols.changed
 			.filter((c) => c.kind !== "body")

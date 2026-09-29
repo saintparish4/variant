@@ -23,6 +23,17 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   whose tests are `.js`, or named like `*.cy.ts`, used to get an empty
   prediction that read as "run nothing".
 
+### Fixed
+
+- **A changed `export *` reaches every importer in the blast radius.**
+  Swapping `export * from "./a"` for `export * from "./b"` recorded the
+  impacted name as `* from ./a`, which no importer's names ever match, so every
+  file importing named exports from the barrel dropped out of the affected
+  files, packages and tasks. Adding a star re-export now counts too: two stars
+  exporting the same name make it ambiguous, so it disappears. Test selection
+  was not affected, because it follows every test that imports the changed
+  file.
+
 ## [0.2.1] - 2026-09-28
 
 ### Added

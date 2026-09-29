@@ -48,6 +48,21 @@ export interface FileSurface {
 	notes: string[];
 }
 
+const STAR_REEXPORT_PREFIX = "* from ";
+
+/**
+ * Surface key for `export * from "<module>"`, whose names are unknowable from
+ * one file. Consumers that gate on names must treat such a key as matching
+ * every name.
+ */
+export function starReexportKey(moduleSpec: string): string {
+	return `${STAR_REEXPORT_PREFIX}${moduleSpec}`;
+}
+
+export function isStarReexportKey(name: string): boolean {
+	return name.startsWith(STAR_REEXPORT_PREFIX);
+}
+
 export function collectExportedSurface(
 	file: SourceFile,
 	tsm: TsMorph,
@@ -106,7 +121,7 @@ export function collectExportedSurface(
 		}
 
 		// `export * from "./m"` — the exported names are unknowable per-file.
-		symbols.set(`* from ${moduleSpec}`, {
+		symbols.set(starReexportKey(moduleSpec), {
 			signature: reexportSignature("*", moduleSpec, declTypeOnly),
 			body: "",
 			typeSpace: declTypeOnly,
