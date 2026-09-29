@@ -51,6 +51,12 @@ export interface ClassifyResult {
 	confidence: number;
 	/** Reasons the confidence was lowered (empty when confidence is 1). */
 	confidenceNotes: string[];
+	/**
+	 * True when either version does not parse. The comparison of a recovered
+	 * syntax tree can be wrong in either direction, so such a file is
+	 * `breaking` whatever the comparison said.
+	 */
+	syntaxErrors: boolean;
 }
 
 export type ChangeClassifier = (
@@ -88,15 +94,18 @@ export function createClassifier(): ChangeClassifier {
 		const { tsm, project } = await host;
 
 		// Distinct names per call: two classifications in flight at once must
-		// not overwrite each other's source files in the shared Project.
+		// not overwrite each other's source files in the shared Project. The
+		// extension decides the grammar, so a .tsx file must stay .tsx: JSX is a
+		// syntax error in a .ts file.
 		const id = nextId++;
+		const ext = sourceExtension(input.filePath);
 		const beforeFile = project.createSourceFile(
-			`__before_${id}.ts`,
+			`__before_${id}${ext}`,
 			input.before,
 			{ overwrite: true },
 		);
 		const afterFile = project.createSourceFile(
-			`__after_${id}.ts`,
+			`__after_${id}${ext}`,
 			input.after,
 			{ overwrite: true },
 		);
@@ -159,8 +168,16 @@ function compareSurfaces(
 		removed.length > 0 ||
 		changed.some((c) => c.kind !== "body");
 
+	const parseNotes = [
+		...(hasParseErrors(beforeFile) ? ["base"] : []),
+		...(hasParseErrors(afterFile) ? ["working-tree"] : []),
+	].map(
+		(side) =>
+			`the ${side} version does not parse; classified as breaking without trusting the comparison`,
+	);
+
 	let classification: SemanticClass;
-	if (surfaceChanged) {
+	if (surfaceChanged || parseNotes.length > 0) {
 		classification = "breaking";
 	} else if (
 		changed.length > 0 ||
@@ -171,7 +188,9 @@ function compareSurfaces(
 		classification = "non-impacting";
 	}
 
-	const confidenceNotes = [...new Set([...beforeApi.notes, ...afterApi.notes])];
+	const confidenceNotes = [
+		...new Set([...parseNotes, ...beforeApi.notes, ...afterApi.notes]),
+	];
 	const confidence = Math.max(
 		0.3,
 		Math.round((1 - confidenceNotes.length * 0.15) * 100) / 100,
@@ -183,5 +202,26 @@ function compareSurfaces(
 		exportedSymbols: { added, removed, changed },
 		confidence,
 		confidenceNotes,
+		syntaxErrors: parseNotes.length > 0,
 	};
+}
+
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
+
+function sourceExtension(filePath: string): string {
+	const dot = filePath.lastIndexOf(".");
+	const ext = dot === -1 ? "" : filePath.slice(dot);
+	return SOURCE_EXTENSIONS.has(ext) ? ext : ".ts";
+}
+
+/**
+ * `parseDiagnostics` is internal to the TypeScript compiler, but it has held
+ * the parser's errors for years and reading it is free. The public routes to
+ * the same answer build a Program or parse the file a second time.
+ */
+function hasParseErrors(file: SourceFile): boolean {
+	const { parseDiagnostics } = file.compilerNode as {
+		parseDiagnostics?: readonly unknown[];
+	};
+	return (parseDiagnostics?.length ?? 0) > 0;
 }

@@ -21,6 +21,7 @@ function classified(
 		},
 		confidence: 1,
 		confidenceNotes: [],
+		syntaxErrors: false,
 	};
 }
 

@@ -58,6 +58,11 @@ export interface FileImpact {
 	impactedSymbols: string[];
 	/** True when this change propagates through the reverse import graph. */
 	propagates: boolean;
+	/**
+	 * True when no importer can be gated out by the names it takes: a changed
+	 * star re-export, or a file that does not parse.
+	 */
+	ungated?: boolean;
 	notes: string[];
 }
 
@@ -257,9 +262,8 @@ export function assembleBlastRadius(
 		}
 		if (!impact.propagates) continue;
 
-		// A changed star re-export changes which names the file exports, and
-		// those names cannot be listed, so no importer can be gated out.
-		const starChanged = impact.impactedSymbols.some(isStarReexportKey);
+		const ungated =
+			impact.ungated === true || impact.impactedSymbols.some(isStarReexportKey);
 
 		for (const dependent of importGraph.dependents.get(impact.filePath) ?? []) {
 			const edge = importGraph.edges.get(dependent)?.get(impact.filePath);
@@ -275,7 +279,7 @@ export function assembleBlastRadius(
 				firstHop.add(dependent);
 				continue;
 			}
-			if (starChanged || edge.names.has("*")) {
+			if (ungated || edge.names.has("*")) {
 				firstHop.add(dependent);
 				continue;
 			}
@@ -373,11 +377,16 @@ export function toFileImpact(result: ClassifyResult): FileImpact {
 			.filter((c) => c.kind !== "body")
 			.map((c) => c.name),
 	].sort();
+	// A changed star re-export changes names that cannot be listed, and a file
+	// that does not parse has no trustworthy names at all.
+	const ungated =
+		result.syntaxErrors || impactedSymbols.some(isStarReexportKey);
 	return {
 		filePath: result.filePath,
 		classification: result.classification,
 		impactedSymbols,
 		propagates: result.classification === "breaking",
+		...(ungated && { ungated: true }),
 		notes: result.confidenceNotes.map((n) => `${result.filePath}: ${n}`),
 	};
 }

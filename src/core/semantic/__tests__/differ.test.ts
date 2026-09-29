@@ -15,6 +15,31 @@ describe("classifyChange", () => {
 		expect(r.classification).toBe("non-impacting");
 	});
 
+	it("classifies a file that does not parse as breaking, with a note", async () => {
+		const r = await classifyChange({
+			filePath: "src/a.ts",
+			before: "export function f(a: string): string { return a; }",
+			after: "export function f(a: string { return a; }",
+		});
+		expect(r.classification).toBe("breaking");
+		expect(r.syntaxErrors).toBe(true);
+		expect(r.confidenceNotes).toContain(
+			"the working-tree version does not parse; classified as breaking without trusting the comparison",
+		);
+	});
+
+	it("parses a .tsx file as TSX", async () => {
+		const before =
+			'export function Button(props: { label: string }) {\n\treturn <button className="a">{props.label}</button>;\n}\n';
+		const r = await classifyChange({
+			filePath: "src/Button.tsx",
+			before,
+			after: before.replace('"a"', '"b"'),
+		});
+		expect(r.syntaxErrors).toBe(false);
+		expect(r.classification).toBe("internal");
+	});
+
 	it("flags non-exported body changes as internal", async () => {
 		const r = await classifyChange({
 			filePath: "x.ts",

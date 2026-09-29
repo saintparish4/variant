@@ -119,6 +119,16 @@ describe("assembleBlastRadius", () => {
 		expect(radius.affectedFiles).not.toContain("src/uses-version.ts");
 	});
 
+	it("an ungated change reaches every importer", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[{ ...breaking("src/auth.ts", []), ungated: true }],
+			GATING_GRAPH,
+		);
+		expect(radius.affectedFiles).toContain("src/uses-login.ts");
+		expect(radius.affectedFiles).toContain("src/gated-child.ts");
+	});
+
 	it("a changed export-star reaches every importer, whatever names it takes", () => {
 		const radius = assembleBlastRadius(
 			"HEAD~1",
@@ -312,6 +322,7 @@ describe("toFileImpact", () => {
 			},
 			confidence: 0.85,
 			confidenceNotes: ['export * from "./x" hides which names are exported'],
+			syntaxErrors: false,
 		});
 
 		expect(impact.impactedSymbols).toEqual(["gone", "resized", "retyped"]);
@@ -332,8 +343,21 @@ describe("toFileImpact", () => {
 			},
 			confidence: 0.85,
 			confidenceNotes: [],
+			syntaxErrors: false,
 		});
 		expect(impact.impactedSymbols).toEqual(["* from ./b"]);
+	});
+
+	it("does not gate a file that does not parse", () => {
+		const impact = toFileImpact({
+			filePath: "src/a.ts",
+			classification: "breaking",
+			exportedSymbols: { added: [], removed: [], changed: [] },
+			confidence: 0.85,
+			confidenceNotes: [],
+			syntaxErrors: true,
+		});
+		expect(impact.ungated).toBe(true);
 	});
 
 	it("internal results do not propagate", () => {
@@ -347,6 +371,7 @@ describe("toFileImpact", () => {
 			},
 			confidence: 1,
 			confidenceNotes: [],
+			syntaxErrors: false,
 		});
 		expect(impact.propagates).toBe(false);
 		expect(impact.impactedSymbols).toEqual([]);

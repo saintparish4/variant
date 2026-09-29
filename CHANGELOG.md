@@ -43,6 +43,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **A file that does not parse is `breaking`.** A mid-edit file on disk was
+  classified from whatever syntax tree the parser recovered, which can be
+  wrong in either direction. Either version failing to parse now makes the
+  file `breaking`, reaching every importer whatever names it takes, with a
+  note saying which version failed; `diff --json` carries `syntaxErrors`.
+- **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
+  where JSX is a syntax error, and classified `.tsx` files from the recovered
+  tree.
 - `vitest.workspace.*`, `vitest.projects.*`, `babel.config.*` and `.babelrc*`
   select every test when they change, like the other runner configs. They
   selected nothing: no test imports them.
