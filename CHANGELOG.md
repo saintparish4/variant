@@ -51,6 +51,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
   where JSX is a syntax error, and classified `.tsx` files from the recovered
   tree.
+- **The symbol index records the same entry for a file however it was
+  built.** Every file of a run was parsed into one shared ts-morph project, so
+  an inferred export such as `export const b = a` took its type from whichever
+  imports happened to be parsed earlier in that run. An entry reused by content
+  hash could then disagree with a cold build of the same tree. Each file is now
+  indexed alone, as the differ already classifies it. The index format version
+  is bumped, so the first run rebuilds `.variant/graph/symbols.json`.
 - A file deleted while the symbol index is being built is skipped instead of
   failing the command with `ENOENT`.
 - `diff` with a path outside the repository fails (`CLI_USAGE`, exit 1).

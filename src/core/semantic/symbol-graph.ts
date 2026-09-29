@@ -26,7 +26,7 @@ import { collectExportedSurface } from "./surface.js";
  * are reused by content hash, so without a bump an unchanged file keeps the
  * edges an older extractor produced (and silently misses the new ones).
  */
-export const SYMBOL_GRAPH_VERSION = 3;
+export const SYMBOL_GRAPH_VERSION = 4;
 
 const GRAPH_FILENAME = "symbols.json";
 
@@ -196,7 +196,15 @@ export async function buildSymbolGraph(
 		const sourceFile = project.createSourceFile(relPath, content, {
 			overwrite: true,
 		});
-		out[relPath] = indexSourceFile(sourceFile, contentHash, tsm);
+		// Each file is indexed alone. With earlier files left in the Project,
+		// an inferred type such as `export const b = a` resolved through
+		// whichever imports happened to be parsed this run, so an entry reused
+		// by content hash disagreed with a cold build of the same tree.
+		try {
+			out[relPath] = indexSourceFile(sourceFile, contentHash, tsm);
+		} finally {
+			project.removeSourceFile(sourceFile);
+		}
 		stats.parsed++;
 	}
 
