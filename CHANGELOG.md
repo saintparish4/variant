@@ -32,6 +32,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   every name; a computed `require()` gets the same note as a computed
   `import()`. The index format version is bumped, so the first run rebuilds
   `.variant/graph/symbols.json`.
+- **A changed stylesheet, JSON or JavaScript file selects the tests of the
+  files that import it.** The index covers TypeScript only, so a changed
+  `button.css` had no node in the graph: no test's closure could contain it,
+  and the prediction was zero tests, softened only by a lower confidence
+  score. The import graph now remembers which path every unresolved specifier
+  names (relative, workspace-package and alias specifiers alike, and the
+  prefixes of computed ones), and a changed file that is not indexed reaches
+  the files whose imports name it. A changed file that still reaches no test
+  gets its own `Unreached:` line in the output, and `unreached` in the JSON.
 - **A computed `import()` or `require()` reaches what it can load.** A file
   loaded only through `` import(`./locales/${lang}.js`) `` was in no test's
   closure, so changing it selected nothing, and the note about the computed

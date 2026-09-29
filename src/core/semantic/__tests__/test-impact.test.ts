@@ -188,6 +188,39 @@ describe("computeTestImpact", () => {
 		expect(impact.affectedTests).toEqual([]);
 	});
 
+	it("lists changed non-TypeScript files that reach no test", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/button.ts": [namedImport("./button.css", [])],
+				"src/__tests__/button.test.ts": [
+					namedImport("../button.js", ["Button"]),
+				],
+			}),
+		);
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("src/button.css"), unanalyzed("src/orphan.css")],
+				affectedFiles: ["src/button.css", "src/button.ts", "src/orphan.css"],
+				confidence: 1,
+			},
+			graph,
+		);
+		expect(impact.affectedTests).toEqual(["src/__tests__/button.test.ts"]);
+		expect(impact.unreached).toEqual(["src/orphan.css"]);
+	});
+
+	it("a select-all trigger is never unreached", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("package.json")],
+				affectedFiles: ["package.json"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.unreached).toEqual([]);
+	});
+
 	it("unresolved imports in a selected closure lower confidence with one note", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({

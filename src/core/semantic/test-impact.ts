@@ -20,7 +20,10 @@
  */
 
 import type { ImportGraph } from "../graph/import-graph.js";
-import { buildImportGraph } from "../graph/import-graph.js";
+import {
+	buildImportGraph,
+	importersOfUnindexed,
+} from "../graph/import-graph.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
 import type { BlastRadius, TraceBlastRadiusOptions } from "./blast-radius.js";
 import {
@@ -46,6 +49,12 @@ export interface TestImpact {
 	totalTests: number;
 	/** True when narrowing is unsafe (build/test configuration changed). */
 	selectAll: boolean;
+	/**
+	 * Changed files the index does not cover (not TypeScript) that no test
+	 * imports, directly or through an importer. They select nothing, and that
+	 * is a blind spot rather than a finding, so it is reported on its own.
+	 */
+	unreached: string[];
 	/** Blast-radius confidence further lowered by closure blind spots. */
 	confidence: number;
 	notes: string[];
@@ -147,6 +156,19 @@ export function computeTestImpact(
 		}
 	}
 
+	const unreached: string[] = [];
+	if (!selectAll) {
+		for (const impact of radius.changed) {
+			if (impact.classification !== "unanalyzed") continue;
+			// Closures are transitive, so a test reaching any dependent of an
+			// importer also reaches the importer itself.
+			const reached = [...importersOfUnindexed(graph, impact.filePath)].some(
+				(importer) => (coverage.testsFor.get(importer)?.size ?? 0) > 0,
+			);
+			if (!reached) unreached.push(impact.filePath);
+		}
+	}
+
 	// Static closures cannot see fixtures, snapshots, or non-TS assets; count
 	// the selected tests whose closure has unresolved imports as one signal.
 	let blindSpots = 0;
@@ -177,6 +199,7 @@ export function computeTestImpact(
 		affectedTests: [...affected].sort(),
 		totalTests: allTests.length,
 		selectAll,
+		unreached,
 		confidence,
 		notes: noteList,
 	};

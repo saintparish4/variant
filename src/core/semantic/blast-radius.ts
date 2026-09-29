@@ -8,6 +8,8 @@
  * The semantic gating is what separates this from "it imported the file, so
  * rerun it":
  * - `non-impacting` changes are not even seeds;
+ * - `unanalyzed` changes (files the index does not cover, such as a
+ *   stylesheet or JSON) reach the files whose unresolved imports name them;
  * - `internal` (body-only) changes affect the file itself but do NOT
  *   propagate to dependents;
  * - `breaking` (signature/type) changes propagate — and the first hop is
@@ -30,6 +32,7 @@ import type { ImportGraph } from "../graph/import-graph.js";
 import {
 	buildImportGraph,
 	computeAffectedFiles,
+	importersOfUnindexed,
 } from "../graph/import-graph.js";
 import type { PackageGraph } from "../graph/package-graph.js";
 import type { PathAlias } from "../graph/tsconfig-paths.js";
@@ -229,6 +232,16 @@ export function assembleBlastRadius(
 		for (const note of impact.notes) notes.add(note);
 		if (impact.classification === "non-impacting") continue;
 		affected.add(impact.filePath);
+		if (impact.classification === "unanalyzed") {
+			// No surface to gate on, so every importer is a first hop.
+			for (const importer of importersOfUnindexed(
+				importGraph,
+				impact.filePath,
+			)) {
+				firstHop.add(importer);
+			}
+			continue;
+		}
 		if (!impact.propagates) continue;
 
 		// A changed star re-export changes which names the file exports, and

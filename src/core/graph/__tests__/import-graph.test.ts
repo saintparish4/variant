@@ -5,6 +5,7 @@ import {
 	buildImportGraph,
 	computeAffectedFiles,
 	getDependents,
+	importersOfUnindexed,
 } from "../import-graph.js";
 import { toPathAliases } from "../tsconfig-paths.js";
 
@@ -28,6 +29,36 @@ function makeGraph(files: Record<string, ImportEntry[]>): SymbolGraph {
 function sorted(set: ReadonlySet<string> | undefined): string[] {
 	return [...(set ?? [])].sort();
 }
+
+describe("importersOfUnindexed", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"src/button.ts": [staticImport("./button.css")],
+			"src/legacy-user.ts": [staticImport("./legacy")],
+			"src/typed.ts": [staticImport("./types.js")],
+			"src/i18n.ts": [patternImport("./locales/")],
+			"apps/web/src/page.ts": [staticImport("@org/ui/theme.css")],
+			"src/aliased.ts": [staticImport("@/data/seed.json")],
+		}),
+		{
+			packageDirs: { "@org/ui": "packages/ui" },
+			pathAliases: toPathAliases("/r", { "@/*": ["src/*"] }, "/r"),
+		},
+	);
+
+	it.each([
+		["src/button.css", ["src/button.ts"]],
+		["src/legacy.js", ["src/legacy-user.ts"]],
+		["src/types.d.ts", ["src/typed.ts"]],
+		["src/locales/en.json", ["src/i18n.ts"]],
+		["packages/ui/theme.css", ["apps/web/src/page.ts"]],
+		["packages/ui/src/theme.css", ["apps/web/src/page.ts"]],
+		["src/data/seed.json", ["src/aliased.ts"]],
+		["src/unrelated.css", []],
+	])("finds the files whose unresolved imports name %s", (file, expected) => {
+		expect(sorted(importersOfUnindexed(graph, file))).toEqual(expected);
+	});
+});
 
 describe("computed specifiers", () => {
 	it("reach every indexed file under a relative static prefix", () => {

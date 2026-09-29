@@ -130,6 +130,25 @@ describe("predictImpact", () => {
 		expect(report.result.tests.affectedTests).toEqual(["src/i18n.test.ts"]);
 	});
 
+	it("selects the tests of a component whose stylesheet changed", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/button.css": ".button { color: red; }",
+			"src/button.ts":
+				'import "./button.css";\nexport const Button = (): string => "button";',
+			"src/button.test.ts": 'import { Button } from "./button.js";\nButton();',
+			"src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/button.css"],
+			readBefore: async () => null,
+		});
+
+		expect(report.result.tests.affectedTests).toEqual(["src/button.test.ts"]);
+		expect(report.result.tests.unreached).toEqual([]);
+	});
+
 	it("fails instead of predicting over zero test files", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

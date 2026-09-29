@@ -41,6 +41,7 @@ function report(overrides: {
 		affectedTests: [],
 		totalTests: 0,
 		selectAll: false,
+		unreached: [],
 		confidence: 1,
 		notes: [],
 		...overrides.tests,
@@ -176,6 +177,27 @@ describe("renderImpact", () => {
 		expect(capture.stdout()).toContain("Notes:");
 		expect(capture.stdout()).toContain("- radius note");
 		expect(capture.stdout()).toContain("- test note");
+	});
+
+	it("warns about changed files no test can reach", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({ tests: { unreached: ["src/orphan.css"] } }),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Unreached: 1 changed file that variant cannot analyze and no test imports (src/orphan.css).",
+		);
+	});
+
+	it("says nothing about unreached files when every change reaches a test", () => {
+		const capture = captureOutput();
+
+		renderImpact(report({}), capture.printer);
+
+		expect(capture.stdout()).not.toContain("Unreached");
 	});
 
 	it("omits the notes section when there is nothing to note", () => {

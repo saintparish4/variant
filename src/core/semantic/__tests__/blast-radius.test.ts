@@ -136,7 +136,35 @@ describe("assembleBlastRadius", () => {
 		]);
 	});
 
-	it("unanalyzed files are seeds that never propagate", () => {
+	it("a changed non-TypeScript file reaches the files that import it", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/button.ts": [namedImport("./button.css", [])],
+				"src/page.ts": [namedImport("./button.js", ["Button"])],
+				"src/other.ts": [],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[
+				{
+					filePath: "src/button.css",
+					classification: "unanalyzed",
+					impactedSymbols: [],
+					propagates: false,
+					notes: [],
+				},
+			],
+			graph,
+		);
+		expect(radius.affectedFiles).toEqual([
+			"src/button.css",
+			"src/button.ts",
+			"src/page.ts",
+		]);
+	});
+
+	it("an unanalyzed file nothing imports goes nowhere", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({
 				"src/a.ts": [],

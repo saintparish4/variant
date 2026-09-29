@@ -51,6 +51,15 @@ export interface ImportGraph {
 	 * stands for it.
 	 */
 	computed: ReadonlySet<string>;
+	/**
+	 * Workspace path an unresolved specifier names -> files importing it. A
+	 * changed file the index does not cover (a stylesheet, JSON, JavaScript)
+	 * has no node in the graph, and this is how it still reaches its importers.
+	 * See `importersOfUnindexed`.
+	 */
+	unresolvedTargets: ReadonlyMap<string, ReadonlySet<string>>;
+	/** Static prefix of a computed specifier -> files loading through it. */
+	patternTargets: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 export interface ImportEdge {
@@ -88,6 +97,8 @@ export interface ImportGraphOptions {
 
 const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"] as const;
 
+const JS_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".jsx"]);
+
 const JS_TO_TS: Record<string, readonly string[]> = {
 	".js": [".ts", ".tsx"],
 	".mjs": [".mts"],
@@ -111,6 +122,8 @@ export function buildImportGraph(
 	const unresolved = new Map<string, Set<string>>();
 	const edges = new Map<string, Map<string, MutableImportEdge>>();
 	const computed = new Set<string>();
+	const unresolvedTargets = new Map<string, Set<string>>();
+	const patternTargets = new Map<string, Set<string>>();
 	const sortedFiles = [...files].sort();
 	for (const file of sortedFiles) {
 		imports.set(file, new Set());
@@ -134,6 +147,18 @@ export function buildImportGraph(
 		edge.typeOnly = edge.typeOnly && imp.typeOnly;
 	};
 
+	const addUnresolved = (
+		from: string,
+		spec: string,
+		bases: readonly string[],
+	): void => {
+		unresolved.get(from)?.add(spec);
+		for (const base of bases) {
+			for (const key of unresolvedKeys(base))
+				addTo(unresolvedTargets, key, from);
+		}
+	};
+
 	for (const file of sortedFiles) {
 		const index = symbolGraph.files[file];
 		if (index === undefined) continue;
@@ -145,6 +170,7 @@ export function buildImportGraph(
 					computed.add(file);
 					continue;
 				}
+				for (const base of bases) addTo(patternTargets, base, file);
 				// Every indexed file the specifier could name gets an edge: wider
 				// than the truth, but a missed edge is a missed test.
 				for (const target of sortedFiles) {
@@ -156,8 +182,12 @@ export function buildImportGraph(
 			}
 			if (spec.startsWith("./") || spec.startsWith("../")) {
 				const resolved = resolveRelativeImport(file, spec, files);
-				if (resolved === undefined) unresolved.get(file)?.add(spec);
-				else addEdge(file, resolved, imp);
+				if (resolved !== undefined) {
+					addEdge(file, resolved, imp);
+					continue;
+				}
+				const base = path.posix.join(path.posix.dirname(file), spec);
+				addUnresolved(file, spec, base.startsWith("../") ? [] : [base]);
 				continue;
 			}
 			if (spec.startsWith("node:")) {
@@ -172,8 +202,20 @@ export function buildImportGraph(
 					files,
 					packageExports[pkg.name],
 				);
-				if (resolved === undefined) unresolved.get(file)?.add(spec);
-				else addEdge(file, resolved, imp);
+				if (resolved !== undefined) {
+					addEdge(file, resolved, imp);
+					continue;
+				}
+				addUnresolved(
+					file,
+					spec,
+					pkg.subpath === ""
+						? [pkg.dir]
+						: [
+								path.posix.join(pkg.dir, pkg.subpath),
+								path.posix.join(pkg.dir, "src", pkg.subpath),
+							],
+				);
 				continue;
 			}
 			const aliased = resolveAliasImport(spec, pathAliases, files);
@@ -184,8 +226,9 @@ export function buildImportGraph(
 			// An alias that matched a pattern but named no indexed file is a
 			// missed internal edge, not a third-party package — say so rather
 			// than quietly counting it as external.
-			if (matchPathAlias(spec, pathAliases).length > 0) {
-				unresolved.get(file)?.add(spec);
+			const aliasBases = matchPathAlias(spec, pathAliases);
+			if (aliasBases.length > 0) {
+				addUnresolved(file, spec, aliasBases);
 				continue;
 			}
 			externals.get(file)?.add(spec);
@@ -198,7 +241,76 @@ export function buildImportGraph(
 		}
 	}
 
-	return { imports, dependents, externals, unresolved, edges, computed };
+	return {
+		imports,
+		dependents,
+		externals,
+		unresolved,
+		edges,
+		computed,
+		unresolvedTargets,
+		patternTargets,
+	};
+}
+
+/**
+ * Files whose unresolved imports, or computed specifiers, could name `file`.
+ * For a file the index does not cover this stands in for `dependents`: a
+ * TypeScript file importing `./button.css` has that specifier in
+ * `unresolved`, and a change to the stylesheet reaches it through here.
+ */
+export function importersOfUnindexed(
+	graph: ImportGraph,
+	file: string,
+): Set<string> {
+	const target = toPosix(file);
+	const stem = stripSourceExtension(target);
+	const keys = [target, stem];
+	if (path.posix.basename(stem) === "index") {
+		keys.push(path.posix.dirname(stem));
+	}
+
+	const importers = new Set<string>();
+	for (const key of keys) {
+		for (const importer of graph.unresolvedTargets.get(key) ?? []) {
+			importers.add(importer);
+		}
+	}
+	for (const [prefix, loaders] of graph.patternTargets) {
+		if (!target.startsWith(prefix)) continue;
+		for (const loader of loaders) importers.add(loader);
+	}
+	return importers;
+}
+
+/**
+ * Keys an unresolved base is filed under: as written, and without a JS
+ * extension, since `./legacy.js` may name `legacy.jsx` or a `legacy.d.ts`.
+ */
+function unresolvedKeys(base: string): string[] {
+	const ext = path.posix.extname(base);
+	return JS_EXTENSIONS.has(ext) ? [base, base.slice(0, -ext.length)] : [base];
+}
+
+/** `a/b.d.ts` -> `a/b`, `a/b.css` -> `a/b`. */
+function stripSourceExtension(file: string): string {
+	const declaration = /\.d\.[cm]?ts$/.exec(file);
+	if (declaration !== null) return file.slice(0, declaration.index);
+	const ext = path.posix.extname(file);
+	return ext === "" ? file : file.slice(0, -ext.length);
+}
+
+function addTo(
+	map: Map<string, Set<string>>,
+	key: string,
+	value: string,
+): void {
+	let set = map.get(key);
+	if (set === undefined) {
+		set = new Set();
+		map.set(key, set);
+	}
+	set.add(value);
 }
 
 interface MutableImportEdge {
