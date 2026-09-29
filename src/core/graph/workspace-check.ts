@@ -141,7 +141,8 @@ function fileToPackage(
 	let best: WorkspacePackageInfo | undefined;
 	let bestLength = -1;
 	for (const pkg of packages) {
-		const prefix = `${pkg.dir}/`;
+		// A root package's dir is "" and owns every file no deeper package does.
+		const prefix = pkg.dir === "" ? "" : `${pkg.dir}/`;
 		if (file.startsWith(prefix) && prefix.length > bestLength) {
 			best = pkg;
 			bestLength = prefix.length;

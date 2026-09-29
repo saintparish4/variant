@@ -70,6 +70,21 @@ describe("checkWorkspace", () => {
 		expect(result.violations).toEqual([]);
 	});
 
+	it("checks files of a root package against its manifest", () => {
+		const result = run({ "scripts/build.ts": [bare("left-pad")] }, [
+			pkg("root", ""),
+			pkg("@org/a", "packages/a"),
+		]);
+		expect(result.violations).toEqual([
+			{
+				kind: "undeclared-external-dep",
+				package: "root",
+				target: "left-pad",
+				files: ["scripts/build.ts"],
+			},
+		]);
+	});
+
 	it("accepts a declared workspace dependency", () => {
 		const result = run(
 			{

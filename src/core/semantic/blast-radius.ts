@@ -430,7 +430,8 @@ function fileToPackage(
 	let bestName: string | undefined;
 	let bestLength = -1;
 	for (const [name, dir] of Object.entries(packageDirs)) {
-		const prefix = `${dir}/`;
+		// A root package's dir is "" and owns every file no deeper package does.
+		const prefix = dir === "" ? "" : `${dir}/`;
 		if (file.startsWith(prefix) && prefix.length > bestLength) {
 			bestName = name;
 			bestLength = prefix.length;

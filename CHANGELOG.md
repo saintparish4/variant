@@ -51,6 +51,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
   where JSX is a syntax error, and classified `.tsx` files from the recovered
   tree.
+- A workspace that lists its root as a package (`.` in
+  `pnpm-workspace.yaml` or `workspaces`) maps root-level files to it:
+  `impact` counts the root package as affected, and `workspace check` checks
+  those files against the root manifest. Both skipped them.
 - `vitest.workspace.*`, `vitest.projects.*`, `babel.config.*` and `.babelrc*`
   select every test when they change, like the other runner configs. They
   selected nothing: no test imports them.

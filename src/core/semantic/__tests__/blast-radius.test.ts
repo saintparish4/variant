@@ -289,6 +289,19 @@ describe("assembleBlastRadius", () => {
 		]);
 	});
 
+	it("maps files outside every package dir to a root package", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({ "scripts/build.ts": [], "packages/a/src/x.ts": [] }),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("scripts/build.ts", []), breaking("packages/a/src/x.ts", [])],
+			graph,
+			{ packageDirs: { root: "", "@org/a": "packages/a" } },
+		);
+		expect(radius.affectedPackages).toEqual(["@org/a", "root"]);
+	});
+
 	it("clamps confidence at the floor", () => {
 		const impacts: FileImpact[] = Array.from({ length: 10 }, (_, i) => ({
 			filePath: `src/f${i}.ts`,
