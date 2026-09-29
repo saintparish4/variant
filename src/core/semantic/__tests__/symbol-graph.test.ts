@@ -134,6 +134,31 @@ describe("buildSymbolGraph", () => {
 		});
 	});
 
+	it("records the static prefix of a computed specifier as a pattern", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, {
+			"src/m.ts": [
+				`export const load = (lang: string) => import(\`./locales/\${lang}.js\`);`,
+				'export const plugin = (name: string) => require("./plugins/" + name + ".js");',
+				"export const literal = () => import(`./g.js`);",
+				"export const anything = (p: string) => import(p);",
+			].join("\n"),
+		});
+
+		const { graph } = await buildSymbolGraph(dir);
+		const imports = graph.files["src/m.ts"]?.imports ?? [];
+
+		expect(imports).toEqual(
+			expect.arrayContaining([
+				{ module: "./locales/", kind: "pattern", typeOnly: false, names: [] },
+				{ module: "./plugins/", kind: "pattern", typeOnly: false, names: [] },
+				{ module: "./g.js", kind: "dynamic", typeOnly: false, names: [] },
+				{ module: "", kind: "pattern", typeOnly: false, names: [] },
+			]),
+		);
+		expect(imports).toHaveLength(4);
+	});
+
 	it("notes dynamic imports with non-literal specifiers", async () => {
 		const dir = makeTmpDir();
 		writeFixture(dir, {

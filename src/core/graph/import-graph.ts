@@ -45,6 +45,12 @@ export interface ImportGraph {
 	 * propagation per symbol instead of per file.
 	 */
 	edges: ReadonlyMap<string, ReadonlyMap<string, ImportEdge>>;
+	/**
+	 * Files that load a module through a computed specifier with no static
+	 * prefix (`import(name)`). What they load cannot be bounded, so no edge
+	 * stands for it.
+	 */
+	computed: ReadonlySet<string>;
 }
 
 export interface ImportEdge {
@@ -55,7 +61,10 @@ export interface ImportEdge {
 	names: ReadonlySet<string>;
 	/** True when every import contributing to this edge is type-only. */
 	typeOnly: boolean;
-	/** True when a dynamic import() contributes — the names are unknowable. */
+	/**
+	 * True when a dynamic `import()` or a computed specifier contributes — the
+	 * names are unknowable.
+	 */
 	dynamic: boolean;
 }
 
@@ -101,7 +110,9 @@ export function buildImportGraph(
 	const externals = new Map<string, Set<string>>();
 	const unresolved = new Map<string, Set<string>>();
 	const edges = new Map<string, Map<string, MutableImportEdge>>();
-	for (const file of [...files].sort()) {
+	const computed = new Set<string>();
+	const sortedFiles = [...files].sort();
+	for (const file of sortedFiles) {
 		imports.set(file, new Set());
 		dependents.set(file, new Set());
 		externals.set(file, new Set());
@@ -119,15 +130,30 @@ export function buildImportGraph(
 			perFile.set(to, edge);
 		}
 		for (const name of imp.names) edge.names.add(name);
-		if (imp.kind === "dynamic") edge.dynamic = true;
+		if (imp.kind === "dynamic" || imp.kind === "pattern") edge.dynamic = true;
 		edge.typeOnly = edge.typeOnly && imp.typeOnly;
 	};
 
-	for (const file of [...files].sort()) {
+	for (const file of sortedFiles) {
 		const index = symbolGraph.files[file];
 		if (index === undefined) continue;
 		for (const imp of index.imports) {
 			const spec = imp.module;
+			if (imp.kind === "pattern") {
+				const bases = patternBases(file, spec, packageDirs, pathAliases);
+				if (bases === undefined) {
+					computed.add(file);
+					continue;
+				}
+				// Every indexed file the specifier could name gets an edge: wider
+				// than the truth, but a missed edge is a missed test.
+				for (const target of sortedFiles) {
+					if (target !== file && bases.some((b) => target.startsWith(b))) {
+						addEdge(file, target, imp);
+					}
+				}
+				continue;
+			}
 			if (spec.startsWith("./") || spec.startsWith("../")) {
 				const resolved = resolveRelativeImport(file, spec, files);
 				if (resolved === undefined) unresolved.get(file)?.add(spec);
@@ -172,7 +198,7 @@ export function buildImportGraph(
 		}
 	}
 
-	return { imports, dependents, externals, unresolved, edges };
+	return { imports, dependents, externals, unresolved, edges, computed };
 }
 
 interface MutableImportEdge {
@@ -266,6 +292,55 @@ export function resolveRelativeImport(
 	// Escapes the workspace root — cannot be an indexed file.
 	if (base.startsWith("../")) return undefined;
 	return firstExisting(candidatePaths(base), files);
+}
+
+/**
+ * Path prefixes a computed specifier's static prefix can name. Undefined when
+ * it could name anything; [] when it can only name something outside the
+ * workspace (a third-party package, a node builtin, a path above the root).
+ */
+function patternBases(
+	fromFile: string,
+	prefix: string,
+	packageDirs: Record<string, string>,
+	aliases: readonly PathAlias[],
+): string[] | undefined {
+	if (prefix === "") return undefined;
+
+	if (prefix.startsWith(".")) {
+		const base = path.posix.join(path.posix.dirname(fromFile), prefix);
+		if (base === ".." || base.startsWith("../")) return [];
+		return [base === "." || base === "./" ? "" : base];
+	}
+	if (prefix.startsWith("node:")) return [];
+
+	const bases: string[] = [];
+	for (const [name, dir] of Object.entries(packageDirs)) {
+		// A subpath could resolve anywhere in the package through `exports`, so
+		// the whole package is the bound.
+		if (prefix.startsWith(`${name}/`) || name.startsWith(prefix)) {
+			bases.push(`${toPosix(dir)}/`);
+		}
+	}
+	for (const alias of aliases) {
+		for (const target of alias.targets) {
+			const targetStem = alias.wildcard
+				? target.slice(0, target.indexOf("*"))
+				: target;
+			if (alias.wildcard && prefix.startsWith(alias.prefix)) {
+				bases.push(targetStem + prefix.slice(alias.prefix.length));
+			} else if (alias.prefix.startsWith(prefix)) {
+				bases.push(targetStem);
+			}
+		}
+	}
+	if (bases.length > 0) return bases;
+
+	// A complete package name followed by `/` names a package variant does not
+	// index. A prefix that stops inside the name could be any package at all.
+	const segments = prefix.split("/");
+	const nameLength = prefix.startsWith("@") ? 2 : 1;
+	return segments.length > nameLength ? [] : undefined;
 }
 
 function resolvePackageImport(

@@ -179,6 +179,26 @@ describe("assembleBlastRadius", () => {
 		).toBe(true);
 	});
 
+	it("notes files whose computed specifiers could name anything", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/a.ts": [],
+				"src/loader.ts": [
+					{ module: "", kind: "pattern", typeOnly: false, names: [] },
+				],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/a.ts", ["x"])],
+			graph,
+		);
+		expect(radius.notes).toContain(
+			"1 file(s) load a module through a fully computed import() or require() specifier (src/loader.ts); a change reached only that way selects no tests",
+		);
+		expect(radius.confidence).toBe(0.9);
+	});
+
 	it("maps affected files to packages and tasks", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({

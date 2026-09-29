@@ -12,6 +12,10 @@ function staticImport(module: string): ImportEntry {
 	return { module, kind: "static", typeOnly: false, names: [] };
 }
 
+function patternImport(prefix: string): ImportEntry {
+	return { module: prefix, kind: "pattern", typeOnly: false, names: [] };
+}
+
 /** SymbolGraph literal where each file maps to its import entries. */
 function makeGraph(files: Record<string, ImportEntry[]>): SymbolGraph {
 	const out: SymbolGraph["files"] = {};
@@ -24,6 +28,84 @@ function makeGraph(files: Record<string, ImportEntry[]>): SymbolGraph {
 function sorted(set: ReadonlySet<string> | undefined): string[] {
 	return [...(set ?? [])].sort();
 }
+
+describe("computed specifiers", () => {
+	it("reach every indexed file under a relative static prefix", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/i18n.ts": [patternImport("./locales/")],
+				"src/locales/en.ts": [],
+				"src/locales/fr.ts": [],
+				"src/other.ts": [],
+			}),
+		);
+
+		expect(sorted(graph.imports.get("src/i18n.ts"))).toEqual([
+			"src/locales/en.ts",
+			"src/locales/fr.ts",
+		]);
+		expect(graph.edges.get("src/i18n.ts")?.get("src/locales/en.ts")).toEqual({
+			names: new Set(),
+			typeOnly: false,
+			dynamic: true,
+		});
+		expect(graph.computed.size).toBe(0);
+	});
+
+	it("reach whole workspace packages when the package name is in the prefix", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/load.ts": [patternImport("@org/plugins/")],
+				"src/pick.ts": [patternImport("@org/")],
+				"packages/plugins/src/a.ts": [],
+				"packages/theme/src/b.ts": [],
+			}),
+			{
+				packageDirs: {
+					"@org/plugins": "packages/plugins",
+					"@org/theme": "packages/theme",
+				},
+			},
+		);
+
+		expect(sorted(graph.imports.get("src/load.ts"))).toEqual([
+			"packages/plugins/src/a.ts",
+		]);
+		expect(sorted(graph.imports.get("src/pick.ts"))).toEqual([
+			"packages/plugins/src/a.ts",
+			"packages/theme/src/b.ts",
+		]);
+	});
+
+	it("reach alias targets through a tsconfig paths wildcard", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/page.ts": [patternImport("@/widgets/")],
+				"src/widgets/card.ts": [],
+				"src/other.ts": [],
+			}),
+			{ pathAliases: toPathAliases("/r", { "@/*": ["src/*"] }, "/r") },
+		);
+
+		expect(sorted(graph.imports.get("src/page.ts"))).toEqual([
+			"src/widgets/card.ts",
+		]);
+	});
+
+	it("treat a named external package as external, and an empty prefix as unbounded", () => {
+		const graph = buildImportGraph(
+			makeGraph({
+				"src/fmt.ts": [patternImport("lodash/")],
+				"src/any.ts": [patternImport("")],
+				"src/x.ts": [],
+			}),
+		);
+
+		expect(sorted(graph.imports.get("src/fmt.ts"))).toEqual([]);
+		expect(sorted(graph.imports.get("src/any.ts"))).toEqual([]);
+		expect([...graph.computed]).toEqual(["src/any.ts"]);
+	});
+});
 
 describe("buildImportGraph", () => {
 	it("resolves .js specifiers to .ts sources and inverts them", () => {

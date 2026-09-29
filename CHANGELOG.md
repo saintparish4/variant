@@ -32,6 +32,16 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   every name; a computed `require()` gets the same note as a computed
   `import()`. The index format version is bumped, so the first run rebuilds
   `.variant/graph/symbols.json`.
+- **A computed `import()` or `require()` reaches what it can load.** A file
+  loaded only through `` import(`./locales/${lang}.js`) `` was in no test's
+  closure, so changing it selected nothing, and the note about the computed
+  specifier sat on the loader, which was not in the blast radius. The literal
+  text the specifier starts with (from a template or a `"./x/" + name`
+  concatenation) now links the loader to every indexed file under that
+  prefix, whole workspace packages when the prefix names one, and
+  `tsconfig` alias targets. A specifier with no literal start is noted on
+  every run, since any change could be what it loads. `` import(`./g.js`) ``
+  with no substitution now counts as a literal import.
 - **A changed `export *` reaches every importer in the blast radius.**
   Swapping `export * from "./a"` for `export * from "./b"` recorded the
   impacted name as `* from ./a`, which no importer's names ever match, so every

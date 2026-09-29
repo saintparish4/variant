@@ -71,6 +71,9 @@ export interface BlastRadius {
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
+/** Files named in one aggregated note before the rest become a count. */
+const MAX_NOTE_FILES = 3;
+
 /**
  * Classification is CPU-bound in ts-morph, so this is not about parallel
  * parsing — it is about overlapping each file's working-tree read with the
@@ -270,6 +273,19 @@ export function assembleBlastRadius(
 				`${file}: unresolved imports (${[...fileUnresolved].sort().join(", ")})`,
 			);
 		}
+	}
+
+	// Any changed file could be what such a loader loads, so this applies to
+	// every prediction, not only those that touch the loader.
+	if (importGraph.computed.size > 0) {
+		const loaders = [...importGraph.computed].sort();
+		const listed =
+			loaders.length > MAX_NOTE_FILES
+				? `${loaders.slice(0, MAX_NOTE_FILES).join(", ")}, … ${loaders.length - MAX_NOTE_FILES} more`
+				: loaders.join(", ");
+		notes.add(
+			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listed}); a change reached only that way selects no tests`,
+		);
 	}
 
 	const packageDirs = options.packageDirs ?? {};

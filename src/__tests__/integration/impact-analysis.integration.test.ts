@@ -113,6 +113,23 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
+	it("selects the loader's tests when a file behind a computed import() changes", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/i18n.ts": `export const load = (lang: string) => import(\`./locales/\${lang}.js\`);`,
+			"src/locales/en.ts": 'export const hello = "hello";',
+			"src/i18n.test.ts": 'import { load } from "./i18n.js";\nload("en");',
+			"src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/locales/en.ts"],
+			readBefore: async () => 'export const hello = "hi";',
+		});
+
+		expect(report.result.tests.affectedTests).toEqual(["src/i18n.test.ts"]);
+	});
+
 	it("fails instead of predicting over zero test files", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

@@ -85,6 +85,8 @@ export function checkWorkspace(input: {
 		if (owner === undefined) continue;
 
 		for (const imp of symbolGraph.files[file]?.imports ?? []) {
+			// A computed specifier's prefix is not a package name to check.
+			if (imp.kind === "pattern") continue;
 			const spec = imp.module;
 
 			if (spec.startsWith("./") || spec.startsWith("../")) {

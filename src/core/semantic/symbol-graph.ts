@@ -16,7 +16,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Project, SourceFile } from "ts-morph";
+import type { Node, Project, SourceFile } from "ts-morph";
 import { GraphError } from "../errors.js";
 import type { SymbolKind, TsMorph } from "./surface.js";
 import { collectExportedSurface } from "./surface.js";
@@ -26,7 +26,7 @@ import { collectExportedSurface } from "./surface.js";
  * are reused by content hash, so without a bump an unchanged file keeps the
  * edges an older extractor produced (and silently misses the new ones).
  */
-export const SYMBOL_GRAPH_VERSION = 2;
+export const SYMBOL_GRAPH_VERSION = 3;
 
 const GRAPH_FILENAME = "symbols.json";
 
@@ -44,9 +44,17 @@ export interface SymbolEntry {
 
 /** One module dependency of a file. */
 export interface ImportEntry {
-	/** Module specifier as written (relative path or package name). */
+	/**
+	 * Module specifier as written (relative path or package name). For a
+	 * `pattern`, the literal text a computed specifier starts with, or "" when
+	 * nothing about it is known.
+	 */
 	module: string;
-	kind: "static" | "reexport" | "dynamic";
+	/**
+	 * `pattern` is an `import()` or `require()` whose specifier is computed:
+	 * the file may load any module whose specifier starts with `module`.
+	 */
+	kind: "static" | "reexport" | "dynamic" | "pattern";
 	typeOnly: boolean;
 	/**
 	 * Names taken from the module: exported names for named imports,
@@ -370,7 +378,11 @@ function collectImports(
 		if (!isImport && !isRequire) continue;
 
 		const arg = call.getArguments()[0];
-		if (arg !== undefined && tsm.Node.isStringLiteral(arg)) {
+		if (
+			arg !== undefined &&
+			(tsm.Node.isStringLiteral(arg) ||
+				tsm.Node.isNoSubstitutionTemplateLiteral(arg))
+		) {
 			imports.push(
 				isImport
 					? {
@@ -386,7 +398,17 @@ function collectImports(
 							names: ["*"],
 						},
 			);
-		} else {
+			continue;
+		}
+
+		const prefix = arg === undefined ? "" : staticPrefix(arg, tsm);
+		imports.push({
+			module: prefix,
+			kind: "pattern",
+			typeOnly: false,
+			names: [],
+		});
+		if (prefix === "") {
 			notes.push(
 				`${isImport ? "dynamic import()" : "require()"} with a non-literal specifier`,
 			);
@@ -394,6 +416,31 @@ function collectImports(
 	}
 
 	return { imports, notes };
+}
+
+/**
+ * The literal text a computed specifier is known to start with: `./locales/`
+ * for `` `./locales/${lang}` `` or `"./locales/" + lang`, and "" when nothing
+ * is known.
+ */
+function staticPrefix(arg: Node, tsm: TsMorph): string {
+	if (tsm.Node.isTemplateExpression(arg)) {
+		return arg.getHead().getLiteralText();
+	}
+	if (
+		tsm.Node.isBinaryExpression(arg) &&
+		arg.getOperatorToken().getKind() === tsm.SyntaxKind.PlusToken
+	) {
+		const left = arg.getLeft();
+		if (
+			tsm.Node.isStringLiteral(left) ||
+			tsm.Node.isNoSubstitutionTemplateLiteral(left)
+		) {
+			return left.getLiteralValue();
+		}
+		return staticPrefix(left, tsm);
+	}
+	return "";
 }
 
 function sha256(text: string): string {

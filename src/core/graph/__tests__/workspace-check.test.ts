@@ -55,6 +55,18 @@ describe("checkWorkspace", () => {
 		]);
 	});
 
+	it("does not read a computed specifier's prefix as a package name", () => {
+		const result = run(
+			{
+				"apps/web/src/page.ts": [
+					{ module: "@org/", kind: "pattern", typeOnly: false, names: [] },
+				],
+			},
+			[pkg("@org/web", "apps/web")],
+		);
+		expect(result.violations).toEqual([]);
+	});
+
 	it("accepts a declared workspace dependency", () => {
 		const result = run(
 			{
