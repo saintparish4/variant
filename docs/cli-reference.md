@@ -74,6 +74,7 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `CACHE_ERROR` | The task cache cannot be read or written. Deleting `.variant/cache/` fixes it. |
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
 | `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
+| `NO_TEST_FILES` | `impact` found no TypeScript test file to predict over (`*.test.ts`, `*.spec.ts`, or under `__tests__/`; JavaScript is not indexed) |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs

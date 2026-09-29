@@ -14,6 +14,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Changed
+
+- **`impact` fails when it finds no test files** (`NO_TEST_FILES`, exit 1)
+  instead of predicting "0 of 0 tests" and logging it as a clean run. Only
+  TypeScript tests are indexed (`*.test.ts`, `*.spec.ts`, and the `.tsx`,
+  `.mts` and `.cts` forms, or anything under `__tests__/`), so a repository
+  whose tests are `.js`, or named like `*.cy.ts`, used to get an empty
+  prediction that read as "run nothing".
+
 ## [0.2.1] - 2026-09-28
 
 ### Added

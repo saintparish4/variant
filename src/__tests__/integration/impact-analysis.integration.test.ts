@@ -113,6 +113,22 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
+	it("fails instead of predicting over zero test files", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/app.ts": FIXTURE["src/app.ts"],
+			// JavaScript is not indexed, so this is not a test variant can see.
+			"src/app.test.js": 'import { boot } from "./app.js";\nboot();',
+			"src/auth.ts":
+				"export function login(name: string, strict: boolean): string { return name; }",
+		});
+
+		await expect(
+			predictImpact(dir, { changedFiles: ["src/auth.ts"], readBefore }),
+		).rejects.toMatchObject({ code: "NO_TEST_FILES" });
+		expect(await readImpactPredictions(defaultHistoryDir(dir))).toEqual([]);
+	});
+
 	it("rejects a base ref outside a git repository", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, { "src/a.ts": "export const a = 1;" });
