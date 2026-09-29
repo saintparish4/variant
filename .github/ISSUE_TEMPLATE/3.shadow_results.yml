@@ -1,0 +1,52 @@
+name: Share shadow-mode results
+description: Send the false-skip counts from running impact in report-only mode.
+title: "[results] "
+labels: ["measurement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Test skipping stays off until its false-skip rate is measured on real repositories. These counts are that measurement. Thank you for running it.
+
+        [`impact-shadow.yml`](https://github.com/saintparish4/variant/blob/master/examples/github-actions/impact-shadow.yml) uploads `reconciliation.jsonl` as the `variant-reconciliation` artifact on each run. It holds counts, commit SHAs and base refs, and no file paths. Remove the SHAs and refs before pasting if you prefer; only the counts are needed.
+
+  - type: textarea
+    id: reconciliation
+    attributes:
+      label: reconciliation.jsonl
+      description: The contents of `.variant/history/reconciliation.jsonl`, one JSON record per line.
+      render: json
+    validations:
+      required: true
+
+  - type: input
+    id: variant-version
+    attributes:
+      label: variant version
+      placeholder: "0.2.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner
+    attributes:
+      label: Test runner
+      options:
+        - Vitest
+        - Jest
+    validations:
+      required: true
+
+  - type: input
+    id: repo-shape
+    attributes:
+      label: Repository shape
+      description: Roughly how many workspace packages and test files.
+      placeholder: "12 packages, ~400 test files"
+
+  - type: textarea
+    id: false-skips
+    attributes:
+      label: False skips worth a look
+      description: |
+        Optional. For a false skip you could explain (a fixture, a dynamic import, a flaky test), what caused it. This is how blind spots get found.

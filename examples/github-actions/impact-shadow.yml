@@ -64,3 +64,15 @@ jobs:
         with:
           path: .variant/history
           key: variant-history-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The cache keeps the history for the next run but cannot be downloaded.
+      # This makes the accumulated counts downloadable from the run page. It is
+      # reconciliation.jsonl only: counts, commit SHAs and base refs, no file
+      # paths, so it is safe to share from a private repository.
+      - name: Upload reconciliation counts
+        if: ${{ !cancelled() && hashFiles('.variant/history/reconciliation.jsonl') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: variant-reconciliation
+          path: .variant/history/reconciliation.jsonl
+          retention-days: 90

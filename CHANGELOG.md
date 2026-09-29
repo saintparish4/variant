@@ -14,6 +14,8 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
 ### Added
 
 - **`docs/tutorial.md`**, a fifteen-minute walkthrough of every
@@ -30,15 +32,33 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   shadow-mode reconciliation with `impact verify`.
 - Terminal demos in `docs/assets/`, recorded from the real CLI by
   `scripts/record-demos.mjs`.
+- `docs/impact-and-workspace.md` defines the false-skip rate (false skips over
+  failed test files, flakes included) and lists four more blind spots:
+  runtime-only wiring, service boundaries, setup files with unconventional
+  names, and type-only
+  changes, which are not narrowed.
+- `impact-shadow.yml` uploads `reconciliation.jsonl` as a downloadable
+  artifact, and a "Share shadow-mode results" issue form collects the counts.
 
 ### Changed
 
-- The README is now for users: logo, badges, a recorded demo, a quick start and
-  a documentation index. Setup, architecture, testing and release notes moved
-  to `CONTRIBUTORS.md`.
+- The README is now for users: what variant is and its status, install and
+  usage, CI benchmark numbers, a comparison with Nx, Turborepo and
+  `vitest related`, limitations, and a documentation index. Setup,
+  architecture, testing and release notes moved to `CONTRIBUTORS.md`.
 
 ### Fixed
 
+- **Editing a TypeScript runner config selects every test.** A change to
+  `vitest.config.ts`, `jest.config.ts`, `vite.config.ts` or
+  `playwright.config.ts` selected no tests at 100% confidence: the select-all
+  rule only fired for files the differ could not analyze, and a `.ts` config
+  analyzes as ordinary code. Only JSON triggers such as `package.json` and
+  `tsconfig.json` worked. The rule now matches by path alone.
+- **Changing a test setup file selects every test.** No test imports
+  `vitest.setup.ts`, `jest.setup.*`, `setupTests.*`, `global-setup.*` or
+  `test/setup.*`, so a change to one selected nothing. They are now select-all
+  triggers. A setup file with another name is still missed; see Limitations.
 - **A `--base` ref that names no commit is now an error** (`GIT_REF_ERROR`,
   exit 1) in `impact`, `diff`, `pr check` and `pr report`. `pr check` and
   `pr report` used to report zero changed files and `safe to skip build`, and
@@ -224,6 +244,7 @@ ship in minor releases and are recorded here.
 - The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
   config. Quoted-argv parsing is covered by the executor's unit tests.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.2.0...HEAD
+[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.2.1...HEAD
+[0.2.1]: https://github.com/saintparish4/variant/compare/variant@0.2.0...variant@0.2.1
 [0.2.0]: https://github.com/saintparish4/variant/compare/variant@0.1.0...variant@0.2.0
 [0.1.0]: https://github.com/saintparish4/variant/releases/tag/variant@0.1.0
