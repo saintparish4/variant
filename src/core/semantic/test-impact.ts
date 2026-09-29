@@ -86,7 +86,7 @@ export function defaultIsTestFile(file: string): boolean {
  * unconventional name is still missed.
  */
 const TEST_CONFIG_FILE =
-	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite)\.config\.[^/.]+(\.[^/]+)?)$/;
+	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite|babel)\.config\.[^/.]+(\.[^/]+)?|vitest\.(workspace|projects)\.[^/.]+|\.babelrc(\.[^/]+)?)$/;
 
 const TEST_SETUP_FILE =
 	/(^|\/)((vitest|jest)\.setup|setup-?tests|global-?(setup|teardown)|tests?\/setup)\.[cm]?[jt]sx?$/i;

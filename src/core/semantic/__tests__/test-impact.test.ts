@@ -128,6 +128,21 @@ describe("computeTestImpact", () => {
 		);
 	});
 
+	it.each([
+		"vitest.workspace.ts",
+		"vitest.projects.mjs",
+		"babel.config.js",
+		"packages/web/babel.config.cjs",
+		".babelrc",
+		".babelrc.json",
+	])("%s triggers select-all", (file) => {
+		const impact = computeTestImpact(
+			{ changed: [unanalyzed(file)], affectedFiles: [file], confidence: 1 },
+			GRAPH,
+		);
+		expect(impact.selectAll).toBe(true);
+	});
+
 	it("vitest config changes also trigger select-all", () => {
 		const impact = computeTestImpact(
 			{

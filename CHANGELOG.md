@@ -43,6 +43,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- `vitest.workspace.*`, `vitest.projects.*`, `babel.config.*` and `.babelrc*`
+  select every test when they change, like the other runner configs. They
+  selected nothing: no test imports them.
 - **A workspace package that discovery missed is noted instead of silently
   dropping out.** A bare import of a package variant did not discover counted
   as a third-party dependency, with no edge and no note, so a change to that
