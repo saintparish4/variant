@@ -23,8 +23,24 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   whose tests are `.js`, or named like `*.cy.ts`, used to get an empty
   prediction that read as "run nothing".
 
+### Added
+
+- `impact` prints how many workspace packages it found (`Workspace: 3
+  packages`, or `no workspace packages found`), and `--json` carries it as
+  `packagesFound`. Bare imports of a package discovery missed count as
+  external, so "none found" in a monorepo explains an empty prediction.
+
 ### Fixed
 
+- **A workspace package that discovery missed is noted instead of silently
+  dropping out.** A bare import of a package variant did not discover counted
+  as a third-party dependency, with no edge and no note, so a change to that
+  package reached none of its importers. `impact` now notes a dependency
+  declared with a local protocol (`workspace:`, `link:`, `file:`, `portal:`)
+  that no discovered package provides, and bare imports that are neither
+  workspace packages nor declared by the importing file's nearest
+  `package.json` or the root (a missed package, or an alias from a
+  `tsconfig.json` variant does not read).
 - **`require()` and `import x = require()` are import edges.** The symbol
   index recorded only `import` declarations, `export … from` and `import()`,
   so a file loaded with `require("./x")` was in no test's closure and changing

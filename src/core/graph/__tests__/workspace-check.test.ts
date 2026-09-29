@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ImportEntry, SymbolGraph } from "../../semantic/symbol-graph.js";
-import type { WorkspacePackageInfo } from "../workspace-check.js";
-import { checkWorkspace } from "../workspace-check.js";
+import type {
+	PackageManifest,
+	WorkspacePackageInfo,
+} from "../workspace-check.js";
+import { checkWorkspace, workspaceBlindSpots } from "../workspace-check.js";
 
 function makeSymbolGraph(files: Record<string, ImportEntry[]>): SymbolGraph {
 	const out: SymbolGraph["files"] = {};
@@ -225,5 +228,84 @@ describe("checkWorkspace", () => {
 			[pkg("@org/web", "apps/web")],
 		);
 		expect(result.violations).toEqual([]);
+	});
+});
+
+describe("workspaceBlindSpots", () => {
+	function externals(
+		files: Record<string, string[]>,
+	): Map<string, Set<string>> {
+		return new Map(
+			Object.entries(files).map(([file, specs]) => [file, new Set(specs)]),
+		);
+	}
+
+	it("names a local-protocol dependency that no discovered package provides", () => {
+		const notes = workspaceBlindSpots({
+			externals: externals({ "apps/web/src/page.ts": ["@org/ui"] }),
+			packageNames: new Set(["@org/web"]),
+			manifests: new Map([
+				["", {}],
+				[
+					"apps/web",
+					{ name: "@org/web", dependencies: { "@org/ui": "workspace:*" } },
+				],
+			]),
+		});
+		expect(notes).toEqual([
+			"1 dependency declared with a local protocol is not a workspace package variant found (@org/ui); imports of it count as external, so a change to it reaches no importer",
+		]);
+	});
+
+	it("names bare imports that are neither workspace packages nor declared", () => {
+		const notes = workspaceBlindSpots({
+			externals: externals({
+				"apps/web/src/page.ts": [
+					"react",
+					"left-pad",
+					"@/lib/format",
+					"node:path",
+					"fs",
+					"virtual:icons",
+					"@org/web/self",
+				],
+				"scripts/build.ts": ["zx", "tsx"],
+			}),
+			packageNames: new Set(["@org/web"]),
+			manifests: new Map([
+				["", { devDependencies: { tsx: "^4.0.0" } }],
+				["apps/web", { name: "@org/web", dependencies: { react: "^19.0.0" } }],
+			]),
+		});
+		expect(notes).toEqual([
+			"3 bare import names are neither workspace packages nor declared dependencies (@/lib, left-pad, zx); if one is a workspace package variant did not find, or a tsconfig alias it did not read, a change behind it reaches no test",
+		]);
+	});
+
+	it("judges a nested package that is not a workspace member by its own manifest", () => {
+		const notes = workspaceBlindSpots({
+			externals: externals({
+				"test/fixtures/repo/packages/web/src/index.ts": ["utils"],
+			}),
+			packageNames: new Set(),
+			manifests: new Map<string, PackageManifest>([
+				["", {}],
+				[
+					"test/fixtures/repo/packages/web",
+					{ name: "web", dependencies: { utils: "workspace:*" } },
+				],
+			]),
+		});
+		expect(notes).toEqual([]);
+	});
+
+	it("says nothing when every bare import is accounted for", () => {
+		expect(
+			workspaceBlindSpots({
+				externals: externals({ "src/a.ts": ["react", "node:fs"] }),
+				packageNames: new Set(),
+				manifests: new Map([["", { dependencies: { react: "^19.0.0" } }]]),
+			}),
+		).toEqual([]);
 	});
 });

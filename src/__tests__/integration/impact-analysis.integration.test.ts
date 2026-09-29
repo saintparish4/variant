@@ -149,6 +149,37 @@ describe("predictImpact", () => {
 		expect(report.result.tests.unreached).toEqual([]);
 	});
 
+	it("notes a workspace dependency that package discovery did not find", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"package.json": JSON.stringify({
+				name: "root",
+				private: true,
+				workspaces: ["apps/*"],
+			}),
+			"apps/web/package.json": JSON.stringify({
+				name: "@org/web",
+				dependencies: { "@org/ui": "workspace:*" },
+			}),
+			"apps/web/src/page.ts":
+				'import { Button } from "@org/ui";\nexport const page = Button;',
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page.js";\nexport const t = page;',
+			"libs/ui/package.json": JSON.stringify({ name: "@org/ui" }),
+			"libs/ui/src/index.ts": "export const Button = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["libs/ui/src/index.ts"],
+			readBefore: async () => "export const Button = 0;",
+		});
+
+		expect(report.packagesFound).toBe(1);
+		expect(report.result.radius.notes).toContain(
+			"1 dependency declared with a local protocol is not a workspace package variant found (@org/ui); imports of it count as external, so a change to it reaches no importer",
+		);
+	});
+
 	it("fails instead of predicting over zero test files", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

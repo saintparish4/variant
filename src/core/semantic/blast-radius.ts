@@ -37,6 +37,8 @@ import {
 import type { PackageGraph } from "../graph/package-graph.js";
 import type { PathAlias } from "../graph/tsconfig-paths.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
+import { readManifests } from "../graph/workspace-audit.js";
+import { workspaceBlindSpots } from "../graph/workspace-check.js";
 import { readFileAtRef, readFilesAtRef } from "../vcs/git.js";
 import type { ClassifyResult, SemanticClass } from "./differ.js";
 import { createClassifier } from "./differ.js";
@@ -204,8 +206,17 @@ export async function traceBlastRadius(
 		);
 	});
 
+	const workspaceNotes = workspaceBlindSpots({
+		externals: importGraph.externals,
+		packageNames: new Set(
+			(options.packageGraph?.packages ?? []).map((pkg) => pkg.manifest.name),
+		),
+		manifests: await readManifests(cwd),
+	});
+
 	return assembleBlastRadius(baseRef, changed, importGraph, {
 		packageDirs,
+		workspaceNotes,
 		...(options.tasks === undefined ? {} : { tasks: options.tasks }),
 	});
 }
@@ -222,9 +233,11 @@ export function assembleBlastRadius(
 	options: {
 		packageDirs?: Record<string, string>;
 		tasks?: Record<string, TaskConfig>;
+		/** Where the graph may be missing edges; see `workspaceBlindSpots`. */
+		workspaceNotes?: readonly string[];
 	} = {},
 ): BlastRadius {
-	const notes = new Set<string>();
+	const notes = new Set<string>(options.workspaceNotes);
 	const affected = new Set<string>();
 	const firstHop = new Set<string>();
 

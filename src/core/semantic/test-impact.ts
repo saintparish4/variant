@@ -87,6 +87,13 @@ const TEST_CONFIG_FILE =
 const TEST_SETUP_FILE =
 	/(^|\/)((vitest|jest)\.setup|setup-?tests|global-?(setup|teardown)|tests?\/setup)\.[cm]?[jt]sx?$/i;
 
+/**
+ * Prose is left out of `unreached`: no test imports a README, and a warning
+ * that fires on every documentation edit is one people learn to skip. This
+ * only quiets the warning; it selects nothing either way.
+ */
+const PROSE_FILE = /\.(?:md|markdown|rst|txt|adoc)$/i;
+
 function invalidatesAllTests(filePath: string): boolean {
 	return TEST_CONFIG_FILE.test(filePath) || TEST_SETUP_FILE.test(filePath);
 }
@@ -160,6 +167,7 @@ export function computeTestImpact(
 	if (!selectAll) {
 		for (const impact of radius.changed) {
 			if (impact.classification !== "unanalyzed") continue;
+			if (PROSE_FILE.test(impact.filePath)) continue;
 			// Closures are transitive, so a test reaching any dependent of an
 			// importer also reaches the importer itself.
 			const reached = [...importersOfUnindexed(graph, impact.filePath)].some(

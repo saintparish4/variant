@@ -25,6 +25,7 @@ function fileImpact(
 function report(overrides: {
 	radius?: Partial<BlastRadius>;
 	tests?: Partial<TestImpact>;
+	packagesFound?: number;
 	historyLogged?: boolean;
 }): ImpactReport {
 	const radius: BlastRadius = {
@@ -50,6 +51,7 @@ function report(overrides: {
 		baseRef: "HEAD~1",
 		result: { radius, tests },
 		verdict: "build-required",
+		packagesFound: overrides.packagesFound ?? 0,
 		historyLogged: overrides.historyLogged ?? true,
 	};
 }
@@ -65,6 +67,17 @@ describe("renderImpact", () => {
 
 		expect(capture.stdout()).toContain("Base ref: HEAD~1");
 		expect(capture.stdout()).toContain("You changed 1 file.");
+	});
+
+	it.each([
+		[0, "Workspace: no workspace packages found"],
+		[3, "Workspace: 3 packages"],
+	])("states how many workspace packages were found (%i)", (found, line) => {
+		const capture = captureOutput();
+
+		renderImpact(report({ packagesFound: found }), capture.printer);
+
+		expect(capture.stdout()).toContain(line);
 	});
 
 	it("lists each changed file with its classification", () => {

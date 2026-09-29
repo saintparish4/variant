@@ -40,6 +40,7 @@ export function renderImpact(
 		printer,
 		"",
 		`Base ref: ${report.baseRef}`,
+		`Workspace: ${report.packagesFound === 0 ? "no workspace packages found" : plural(report.packagesFound, "package")}`,
 		"",
 		`You changed ${plural(radius.changed.length, "file")}.`,
 	);

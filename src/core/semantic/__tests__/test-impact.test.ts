@@ -209,6 +209,18 @@ describe("computeTestImpact", () => {
 		expect(impact.unreached).toEqual(["src/orphan.css"]);
 	});
 
+	it("does not report prose as unreached", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("CHANGELOG.md"), unanalyzed("docs/guide.md")],
+				affectedFiles: ["CHANGELOG.md", "docs/guide.md"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.unreached).toEqual([]);
+	});
+
 	it("a select-all trigger is never unreached", () => {
 		const impact = computeTestImpact(
 			{

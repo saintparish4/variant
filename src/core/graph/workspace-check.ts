@@ -20,6 +20,7 @@
  */
 
 import { builtinModules } from "node:module";
+import path from "node:path";
 import type { SymbolGraph } from "../semantic/symbol-graph.js";
 import { resolveRelativeImport } from "./import-graph.js";
 
@@ -160,4 +161,122 @@ function packageNameOf(spec: string): string | undefined {
 
 function stripNodePrefix(spec: string): string {
 	return spec.startsWith("node:") ? spec.slice(5) : spec;
+}
+
+export interface DependencyManifest {
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+	peerDependencies?: Record<string, string>;
+	optionalDependencies?: Record<string, string>;
+}
+
+export interface PackageManifest extends DependencyManifest {
+	name?: string;
+}
+
+/** Version ranges that point inside the repository rather than at a registry. */
+const LOCAL_PROTOCOL = /^(?:workspace|link|file|portal):/;
+
+/** Names listed in one note before the rest become a count. */
+const MAX_NOTE_NAMES = 3;
+
+/**
+ * Where the import graph can be missing edges because workspace discovery or
+ * alias reading came up short. Resolution treats a bare specifier it cannot
+ * place as a third-party package, so a workspace package discovery missed, or
+ * a `paths` alias from a tsconfig variant did not read, drops out of the graph
+ * without a trace: changes to it reach none of its importers.
+ *
+ * Unlike `checkWorkspace` this covers every file, root included, and returns
+ * notes rather than violations: the missed importer is by definition not in
+ * the blast radius, so scoping this to affected files would hide the case.
+ */
+export function workspaceBlindSpots(input: {
+	/** Bare specifiers per file, as `ImportGraph.externals` records them. */
+	externals: ReadonlyMap<string, ReadonlySet<string>>;
+	/** Names of the workspace packages discovery found. */
+	packageNames: ReadonlySet<string>;
+	/**
+	 * Every `package.json` in the repository by workspace-relative POSIX dir,
+	 * "" for the root. A file's imports are checked against its nearest one,
+	 * so nested packages that are not workspace members (test fixtures,
+	 * examples) are judged by their own manifests.
+	 */
+	manifests: ReadonlyMap<string, PackageManifest>;
+}): string[] {
+	const { packageNames, manifests } = input;
+	const root = manifests.get("") ?? {};
+	const rootDeclared = new Set(Object.keys(allDependencies(root)));
+	const notes: string[] = [];
+
+	const missingLocal = new Set<string>();
+	for (const [dir, manifest] of manifests) {
+		const member =
+			dir === "" ||
+			(manifest.name !== undefined && packageNames.has(manifest.name));
+		if (!member) continue;
+		for (const [name, range] of Object.entries(allDependencies(manifest))) {
+			if (LOCAL_PROTOCOL.test(range) && !packageNames.has(name)) {
+				missingLocal.add(name);
+			}
+		}
+	}
+	if (missingLocal.size > 0) {
+		const one = missingLocal.size === 1;
+		notes.push(
+			`${missingLocal.size} ${one ? "dependency" : "dependencies"} declared with a local protocol ${one ? "is not a workspace package" : "are not workspace packages"} variant found (${listNames(missingLocal)}); imports of ${one ? "it" : "them"} count as external, so a change to ${one ? "it" : "them"} reaches no importer`,
+		);
+	}
+
+	const undeclared = new Set<string>();
+	for (const [file, specs] of input.externals) {
+		const nearest = nearestManifest(file, manifests) ?? root;
+		const declared = allDependencies(nearest);
+		for (const spec of specs) {
+			// `node:`, `virtual:`, `bun:` and similar schemes name no package.
+			if (spec.includes(":")) continue;
+			const name = packageNameOf(spec);
+			if (name === undefined || BUILTINS.has(name)) continue;
+			if (name === nearest.name || packageNames.has(name)) continue;
+			if (name in declared || rootDeclared.has(name)) continue;
+			if (!missingLocal.has(name)) undeclared.add(name);
+		}
+	}
+	if (undeclared.size > 0) {
+		const one = undeclared.size === 1;
+		notes.push(
+			`${undeclared.size} bare import ${one ? "name is" : "names are"} neither workspace packages nor declared dependencies (${listNames(undeclared)}); if one is a workspace package variant did not find, or a tsconfig alias it did not read, a change behind it reaches no test`,
+		);
+	}
+
+	return notes;
+}
+
+function nearestManifest(
+	file: string,
+	manifests: ReadonlyMap<string, PackageManifest>,
+): PackageManifest | undefined {
+	let dir = path.posix.dirname(file);
+	while (true) {
+		const manifest = manifests.get(dir === "." ? "" : dir);
+		if (manifest !== undefined) return manifest;
+		if (dir === "." || dir === "/" || dir === "") return undefined;
+		dir = path.posix.dirname(dir);
+	}
+}
+
+function allDependencies(manifest: DependencyManifest): Record<string, string> {
+	return {
+		...(manifest.dependencies ?? {}),
+		...(manifest.devDependencies ?? {}),
+		...(manifest.peerDependencies ?? {}),
+		...(manifest.optionalDependencies ?? {}),
+	};
+}
+
+function listNames(names: ReadonlySet<string>): string {
+	const sorted = [...names].sort();
+	return sorted.length > MAX_NOTE_NAMES
+		? `${sorted.slice(0, MAX_NOTE_NAMES).join(", ")}, … ${sorted.length - MAX_NOTE_NAMES} more`
+		: sorted.join(", ");
 }

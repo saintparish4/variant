@@ -40,6 +40,11 @@ export interface ImpactReport {
 	baseRef: string;
 	result: TestImpactResult;
 	verdict: BuildVerdict;
+	/**
+	 * Workspace packages discovery found. Printed so that "none" in a monorepo
+	 * is visible: bare imports of an undiscovered package count as external.
+	 */
+	packagesFound: number;
 	/** False when the shadow-mode prediction could not be persisted. */
 	historyLogged: boolean;
 }
@@ -96,5 +101,11 @@ export async function predictImpact(
 		notes: [...result.radius.notes, ...result.tests.notes],
 	});
 
-	return { baseRef, result, verdict, historyLogged };
+	return {
+		baseRef,
+		result,
+		verdict,
+		packagesFound: packageGraph?.packages.length ?? 0,
+		historyLogged,
+	};
 }
