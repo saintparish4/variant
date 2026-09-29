@@ -96,6 +96,8 @@ export interface BuildSymbolGraphOptions {
 	previous?: SymbolGraph | null;
 	/** Concurrency for parallel readFile. Default 32. */
 	parallel?: number;
+	/** DI for tests: read a file by absolute path. */
+	readFile?: (absolutePath: string) => Promise<string>;
 }
 
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
@@ -146,8 +148,10 @@ export async function buildSymbolGraph(
 
 	// Read all candidate files in parallel (same worker-pool shape as
 	// cache/hashing.ts), then parse only the ones whose hash changed.
-	const contents = new Array<string>(files.length);
+	const contents = new Array<string | undefined>(files.length);
 	const limit = Math.max(1, options.parallel ?? 32);
+	const read =
+		options.readFile ?? ((absolutePath) => readFile(absolutePath, "utf8"));
 	let next = 0;
 	const worker = async () => {
 		while (true) {
@@ -155,7 +159,12 @@ export async function buildSymbolGraph(
 			if (i >= files.length) return;
 			const relPath = files[i];
 			if (relPath === undefined) return;
-			contents[i] = await readFile(path.join(cwd, relPath), "utf8");
+			try {
+				contents[i] = await read(path.join(cwd, relPath));
+			} catch (err) {
+				// Deleted after the glob listed it: gone, as if never listed.
+				if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+			}
 		}
 	};
 	await Promise.all(

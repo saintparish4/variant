@@ -1,6 +1,7 @@
 import {
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 	unlinkSync,
 	writeFileSync,
@@ -224,6 +225,22 @@ describe("buildSymbolGraph", () => {
 
 		expect(second.stats.removed).toBe(1);
 		expect(second.graph.files["src/app.ts"]).toBeUndefined();
+	});
+
+	it("skips a file deleted between listing and reading", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, FIXTURE);
+
+		const { graph } = await buildSymbolGraph(dir, {
+			readFile: async (file) => {
+				if (file.endsWith("app.ts")) {
+					throw Object.assign(new Error("gone"), { code: "ENOENT" });
+				}
+				return readFileSync(file, "utf8");
+			},
+		});
+
+		expect(Object.keys(graph.files)).toEqual(["src/auth.ts"]);
 	});
 
 	it("ignores node_modules, dist, and .d.ts files by default", async () => {

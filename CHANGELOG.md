@@ -51,6 +51,8 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
   where JSX is a syntax error, and classified `.tsx` files from the recovered
   tree.
+- A file deleted while the symbol index is being built is skipped instead of
+  failing the command with `ENOENT`.
 - `diff` with a path outside the repository fails (`CLI_USAGE`, exit 1).
   Git found nothing at `../x.ts`, the empty base read as a new file, and every
   export was reported as added, `breaking`.
