@@ -32,6 +32,8 @@ import {
 	traceBlastRadius,
 } from "./blast-radius.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
+import type { Resolution } from "./verdict.js";
+import { resolutionOf } from "./verdict.js";
 
 /** test file -> every workspace file in its static import closure (incl. itself). */
 export interface TestTrace {
@@ -57,6 +59,8 @@ export interface TestImpact {
 	unreached: string[];
 	/** Blast-radius confidence further lowered by closure blind spots. */
 	confidence: number;
+	/** `confidence` bucketed; see `resolutionOf`. */
+	resolution: Resolution;
 	notes: string[];
 }
 
@@ -209,6 +213,7 @@ export function computeTestImpact(
 		selectAll,
 		unreached,
 		confidence,
+		resolution: resolutionOf(confidence),
 		notes: noteList,
 	};
 }

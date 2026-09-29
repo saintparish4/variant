@@ -179,14 +179,16 @@ describe("assembleBlastRadius", () => {
 					classification: "unanalyzed",
 					impactedSymbols: [],
 					propagates: false,
-					notes: ["package.json: not a TypeScript source; change not analyzed"],
+					notes: [],
 				},
 			],
 			graph,
 		);
 		expect(radius.affectedFiles).toEqual(["package.json"]);
-		expect(radius.notes).toHaveLength(1);
-		expect(radius.confidence).toBeLessThan(1);
+		expect(radius.notes).toEqual([
+			"1 changed file is not TypeScript and was not analyzed (package.json)",
+		]);
+		expect(radius.confidence).toBe(0.9);
 	});
 
 	it("notes unresolved imports on affected files", () => {
@@ -200,11 +202,29 @@ describe("assembleBlastRadius", () => {
 			[breaking("src/a.ts", ["x"])],
 			graph,
 		);
-		expect(
-			radius.notes.some((n) =>
-				n.includes("src/a.ts: unresolved imports (./missing.js)"),
-			),
-		).toBe(true);
+		expect(radius.notes).toEqual([
+			"1 affected file has unresolved imports: src/a.ts (./missing.js)",
+		]);
+	});
+
+	it("counts unresolved imports across affected files as one note", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/a.ts": [namedImport("./a.css", [])],
+				"src/b.ts": [namedImport("./a.js", ["x"]), namedImport("./b.svg", [])],
+				"src/c.ts": [namedImport("./b.js", ["y"]), namedImport("./c.json", [])],
+				"src/d.ts": [namedImport("./c.js", ["z"]), namedImport("./d.png", [])],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/a.ts", ["x"])],
+			graph,
+		);
+		expect(radius.notes).toEqual([
+			"4 affected files have unresolved imports: src/a.ts (./a.css), src/b.ts (./b.svg), src/c.ts (./c.json), … 1 more",
+		]);
+		expect(radius.confidence).toBe(0.9);
 	});
 
 	it("notes files whose computed specifiers could name anything", () => {

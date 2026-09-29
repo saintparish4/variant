@@ -44,6 +44,7 @@ function report(overrides: {
 		selectAll: false,
 		unreached: [],
 		confidence: 1,
+		resolution: "high",
 		notes: [],
 		...overrides.tests,
 	};
@@ -170,9 +171,12 @@ describe("renderImpact", () => {
 	it("always states that the result is report-only", () => {
 		const capture = captureOutput();
 
-		renderImpact(report({ tests: { confidence: 0.82 } }), capture.printer);
+		renderImpact(
+			report({ tests: { confidence: 0.82, resolution: "medium" } }),
+			capture.printer,
+		);
 
-		expect(capture.stdout()).toContain("Confidence: 82%");
+		expect(capture.stdout()).toContain("Confidence: medium (82%)");
 		expect(capture.stdout()).toContain("report-only");
 	});
 

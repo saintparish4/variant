@@ -46,6 +46,19 @@ export function deriveVerdict(
 	return verdict;
 }
 
+export type Resolution = "high" | "medium" | "low";
+
+/**
+ * The coarse reading of a confidence score. The score counts what the analysis
+ * could not resolve; it is not a probability, and two decimals invite reading
+ * it as one.
+ */
+export function resolutionOf(confidence: number): Resolution {
+	if (confidence >= 0.9) return "high";
+	if (confidence >= 0.7) return "medium";
+	return "low";
+}
+
 const VERDICT_TEXT: Record<BuildVerdict, string> = {
 	"safe-to-skip": "safe to skip build",
 	"build-recommended": "build recommended",

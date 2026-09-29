@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveVerdict, verdictText } from "../verdict.js";
+import { deriveVerdict, resolutionOf, verdictText } from "../verdict.js";
 
 describe("deriveVerdict", () => {
 	it("reports safe-to-skip when nothing changed", () => {
@@ -51,5 +51,18 @@ describe("verdictText", () => {
 		expect(verdictText("safe-to-skip")).toBe("safe to skip build");
 		expect(verdictText("build-recommended")).toBe("build recommended");
 		expect(verdictText("build-required")).toBe("build required");
+	});
+});
+
+describe("resolutionOf", () => {
+	it.each([
+		[1, "high"],
+		[0.9, "high"],
+		[0.8, "medium"],
+		[0.7, "medium"],
+		[0.6, "low"],
+		[0.3, "low"],
+	])("buckets a confidence of %f as %s", (confidence, bucket) => {
+		expect(resolutionOf(confidence)).toBe(bucket);
 	});
 });

@@ -190,7 +190,7 @@ export async function traceBlastRadius(
 				classification: "unanalyzed" as const,
 				impactedSymbols: [],
 				propagates: false,
-				notes: [`${file}: not a TypeScript source; change not analyzed`],
+				notes: [],
 			};
 		}
 		const [before, after] = await Promise.all([
@@ -292,25 +292,37 @@ export function assembleBlastRadius(
 		affected.add(file);
 	}
 
-	for (const file of affected) {
-		const fileUnresolved = importGraph.unresolved.get(file);
-		if (fileUnresolved !== undefined && fileUnresolved.size > 0) {
-			notes.add(
-				`${file}: unresolved imports (${[...fileUnresolved].sort().join(", ")})`,
-			);
-		}
+	// One note per kind, not per file: a repository importing stylesheets would
+	// otherwise pin the score at its floor on every run, and say nothing.
+	const unanalyzed = changed
+		.filter((impact) => impact.classification === "unanalyzed")
+		.map((impact) => impact.filePath);
+	if (unanalyzed.length > 0) {
+		const one = unanalyzed.length === 1;
+		notes.add(
+			`${unanalyzed.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(unanalyzed)})`,
+		);
+	}
+
+	const withUnresolved = [...affected].sort().flatMap((file) => {
+		const specs = importGraph.unresolved.get(file);
+		return specs === undefined || specs.size === 0
+			? []
+			: [`${file} (${[...specs].sort().join(", ")})`];
+	});
+	if (withUnresolved.length > 0) {
+		const one = withUnresolved.length === 1;
+		notes.add(
+			`${withUnresolved.length} affected ${one ? "file has" : "files have"} unresolved imports: ${listPaths(withUnresolved)}`,
+		);
 	}
 
 	// Any changed file could be what such a loader loads, so this applies to
 	// every prediction, not only those that touch the loader.
 	if (importGraph.computed.size > 0) {
 		const loaders = [...importGraph.computed].sort();
-		const listed =
-			loaders.length > MAX_NOTE_FILES
-				? `${loaders.slice(0, MAX_NOTE_FILES).join(", ")}, … ${loaders.length - MAX_NOTE_FILES} more`
-				: loaders.join(", ");
 		notes.add(
-			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listed}); a change reached only that way selects no tests`,
+			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listPaths(loaders)}); a change reached only that way selects no tests`,
 		);
 	}
 
@@ -393,6 +405,12 @@ export function packageExportsFrom(
 		}
 	}
 	return out;
+}
+
+function listPaths(items: readonly string[]): string {
+	return items.length > MAX_NOTE_FILES
+		? `${items.slice(0, MAX_NOTE_FILES).join(", ")}, … ${items.length - MAX_NOTE_FILES} more`
+		: items.join(", ");
 }
 
 /** Longest-prefix owner lookup: `packages/auth/src/x.ts` -> `@org/auth`. */

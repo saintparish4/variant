@@ -97,7 +97,7 @@ export function renderImpact(
 		printer,
 		"",
 		`Verdict:    ${verdictText(report.verdict)}`,
-		`Confidence: ${Math.round(tests.confidence * 100)}%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)`,
+		`Confidence: ${tests.resolution} (${Math.round(tests.confidence * 100)}%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)`,
 	);
 
 	const notes = [...radius.notes, ...tests.notes];

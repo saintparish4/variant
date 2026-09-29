@@ -16,6 +16,17 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **Confidence reads as a bucket first:** `Confidence: medium (82%)`, with
+  `high` at 90% and up, `medium` from 70%, and `low` below; `--json` carries it
+  as `tests.resolution`. The score counts what the analysis could not
+  resolve, and two decimals invited reading it as a probability.
+- **Notes about unresolved imports and unanalyzed files are one note each**,
+  with a count and the first few paths, instead of one note per file. Each note
+  lowers the score, so a repository importing stylesheets sat at the 30% floor
+  on every run and the score said nothing.
+- `impact verify` records the prediction's `confidence` and `selectAll` in
+  `reconciliation.jsonl`, so shared results can be broken down by confidence.
+  Both are still counts and flags, with no paths.
 - **`impact` fails when it finds no test files** (`NO_TEST_FILES`, exit 1)
   instead of predicting "0 of 0 tests" and logging it as a clean run. Only
   TypeScript tests are indexed (`*.test.ts`, `*.spec.ts`, and the `.tsx`,

@@ -251,6 +251,19 @@ describe("computeTestImpact", () => {
 		expect(impact.confidence).toBe(0.9);
 	});
 
+	it("reports a resolution bucket beside the confidence score", () => {
+		const high = computeTestImpact(
+			{ changed: [], affectedFiles: [], confidence: 1 },
+			GRAPH,
+		);
+		const low = computeTestImpact(
+			{ changed: [], affectedFiles: [], confidence: 0.5 },
+			GRAPH,
+		);
+		expect(high.resolution).toBe("high");
+		expect(low.resolution).toBe("low");
+	});
+
 	it("honors a custom isTestFile predicate", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({
