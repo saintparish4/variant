@@ -51,6 +51,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
   where JSX is a syntax error, and classified `.tsx` files from the recovered
   tree.
+- `diff` with a path outside the repository fails (`CLI_USAGE`, exit 1).
+  Git found nothing at `../x.ts`, the empty base read as a new file, and every
+  export was reported as added, `breaking`.
 - A workspace that lists its root as a package (`.` in
   `pnpm-workspace.yaml` or `workspaces`) maps root-level files to it:
   `impact` counts the root package as affected, and `workspace check` checks

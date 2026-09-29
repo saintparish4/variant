@@ -8,15 +8,28 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { CliUsageError } from "../errors.js";
 import { readFileAtRef } from "../vcs/git.js";
 import type { ClassifyResult } from "./differ.js";
 import { classifyChange } from "./differ.js";
 
 export const DEFAULT_DIFF_BASE_REF = "HEAD~1";
 
-/** Workspace-relative, POSIX-separated — the form git pathspecs require. */
+/**
+ * Workspace-relative, POSIX-separated — the form git pathspecs require. A path
+ * outside the workspace is an error: git finds nothing at `../x.ts`, and an
+ * empty base reads as a new file, which classifies every export as added.
+ */
 export function toWorkspaceRelative(cwd: string, filePath: string): string {
-	return path.relative(cwd, path.resolve(cwd, filePath)).replace(/\\/g, "/");
+	const relative = path.relative(cwd, path.resolve(cwd, filePath));
+	if (
+		relative === ".." ||
+		relative.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relative)
+	) {
+		throw new CliUsageError(`${filePath} is outside the repository at ${cwd}`);
+	}
+	return relative.replace(/\\/g, "/");
 }
 
 /**
