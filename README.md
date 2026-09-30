@@ -128,7 +128,8 @@ If you add `impact-shadow.yml` to your CI, it changes nothing about your build.
 It uploads the counts as a `variant-reconciliation` artifact: commit SHAs,
 branch names and numbers, no file paths and no source.
 [Share them in an issue](https://github.com/saintparish4/variant/issues/new?template=3.shadow_results.yml),
-and they go into the measurement that decides whether skipping ever ships.
+and they go into the measurement that decides whether skipping ever ships. The
+[measurement log](./docs/measurement.md) has every number collected so far.
 
 ## Benchmarks
 
@@ -227,6 +228,7 @@ The full list, with how each case is handled, is in
 | [Monorepo setup](./docs/monorepo.md) | Workspace tasks and `--affected` |
 | [Config reference](./docs/config-reference.md) | Every `variant.config.ts` key |
 | [Troubleshooting](./docs/troubleshooting.md) | Common problems and what they mean |
+| [Measurement log](./docs/measurement.md) | Every prediction checked against a full run so far, and the gate skipping has to pass |
 
 ## Contributing
 
