@@ -51,6 +51,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 - **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
   where JSX is a syntax error, and classified `.tsx` files from the recovered
   tree.
+- **`impact-shadow.yml` no longer fails on a branch's first push.** A push
+  that creates a branch has no previous commit (`github.event.before` is all
+  zeros), so `impact --base` stopped with `GIT_REF_ERROR` and the run went red
+  the first time the workflow ran in a new repository. The predict step now
+  skips with a notice when the base is not a fetchable commit, which also
+  covers a force-push whose old head is gone. Copy the example again to pick
+  this up.
 - **The symbol index records the same entry for a file however it was
   built.** Every file of a run was parsed into one shared ts-morph project, so
   an inferred export such as `export const b = a` took its type from whichever
