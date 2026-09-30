@@ -34,6 +34,7 @@
     "test:all": "vitest run --coverage",
     "bench": "node benchmarks/bench.mjs",
     "bench:quick": "node benchmarks/bench.mjs --quick",
+    "accuracy": "node accuracy/replay.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome check .",

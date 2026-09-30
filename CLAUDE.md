@@ -117,6 +117,7 @@ pnpm lint              # biome check . (static analysis, read-only)
 pnpm typecheck         # tsc --noEmit
 pnpm check             # biome check --write (local autofix: format + lint + organize imports)
 pnpm bench             # benchmark suite (--quick via pnpm bench:quick)
+pnpm accuracy          # commit replay: shadow mode over pinned repos' history (accuracy/README.md)
 
 # Run a single test file
 pnpm vitest run src/core/graph/__tests__/dag.test.ts
