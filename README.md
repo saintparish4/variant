@@ -61,6 +61,9 @@ npm install -D @blzsky/variant    # or pnpm add -D / yarn add -D
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.
 
+variant keeps its index and history in `.variant/`, in the directory it runs
+in. Add `.variant/` to `.gitignore`.
+
 ### Upgrade
 
 ```bash
@@ -83,7 +86,7 @@ variant workspace check                    # undeclared dependencies (exits 1)
 | Command | What it does |
 |---|---|
 | `impact` | Predict which test files a change requires, and how much of the import graph resolved. Report-only. |
-| `impact verify <report>` | Reconcile the last prediction against a Vitest or Jest JSON report and report false skips |
+| `impact verify <report...>` | Reconcile the last prediction against one or more Vitest or Jest JSON reports and report false skips |
 | `diff <file>` | Classify one file's change and list the exported symbols that changed |
 | `pr check` | Classify every TypeScript change on the branch and roll them into one build verdict |
 | `pr report` | The `pr check` verdict as JSON, or as markdown for a PR comment |
@@ -117,6 +120,9 @@ Ready-to-copy GitHub Actions workflows are in
   the build on an undeclared dependency.
 - [`impact-shadow.yml`](./examples/github-actions/impact-shadow.yml) logs a
   prediction, runs the full suite anyway, and reconciles the two.
+- [`impact-shadow-workspace.yml`](./examples/github-actions/impact-shadow-workspace.yml)
+  does the same for a pnpm workspace that tests each package on its own. It
+  needs a release newer than 0.2.1.
 
 ### Help measure it
 

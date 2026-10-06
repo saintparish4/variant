@@ -16,6 +16,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **`doctor` no longer fails when there is no `variant.config.ts`.** It
+  prints a warning and exits 0: `impact`, `diff`, `pr` and `workspace check`
+  need no config, and exiting 1 read as a broken setup to someone using only
+  those. A config that exists and does not validate still exits 1.
 - **Confidence reads as a bucket first:** `Confidence: medium (82%)`, with
   `high` at 90% and up, `medium` from 70%, and `low` below; `--json` carries it
   as `tests.resolution`. The score counts what the analysis could not
@@ -40,9 +44,47 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   packages`, or `no workspace packages found`), and `--json` carries it as
   `packagesFound`. Bare imports of a package discovery missed count as
   external, so "none found" in a monorepo explains an empty prediction.
+- **`impact verify` takes several reports** and reads them as one run:
+  `variant impact verify packages/*/report.json`. A workspace that tests each
+  package on its own writes one report per package, and joining them by hand
+  was the only way to reconcile such a run. A test file failing in any report
+  counts as failed.
+- **Reconciliation records say how many test files ran.** `ranTests` is the
+  number of files in the runner's report and `predictedRan` how many of those
+  the prediction selected; `impact verify` prints both. `totalTests` counts
+  every file that looks like a test, including helpers under `__tests__/` and
+  suites the run never executes, so a skip rate computed from it was
+  overstated. Records written before this lack the two fields.
+- **`examples/github-actions/impact-shadow-workspace.yml`**: shadow mode for a
+  pnpm workspace whose packages each run their own tests. It passes one report
+  per package to `impact verify` and records the pushed commit. It relies on
+  this release: 0.2.1 and earlier cannot run it.
+- **`impact --head-sha <sha>`** records the prediction against a commit other
+  than `HEAD`. In a pull request GitHub Actions checks out a merge commit it
+  makes for the run, so the recorded SHA named a commit nobody can look up;
+  pass the pushed commit to `impact` and to `impact verify`.
 
 ### Fixed
 
+- **Nested `node_modules` and `dist` directories are no longer indexed.**
+  Both were ignored at the project root only. Every package of a pnpm
+  workspace has its own `node_modules`, so after an install `impact` indexed
+  the dependencies: their tests counted as the repository's own, and in one
+  workspace with a full install the scan had not finished after seven minutes.
+  `.d.mts` and `.d.cts` are treated as declaration files, as `.d.ts` was. A
+  changed TypeScript file in a directory that is not indexed is `unanalyzed`
+  rather than classified and then reaching nothing: it selects the tests of
+  the files that import it, is listed as `Unreached` otherwise, and has its
+  own note.
+- **Deleting a file that another file still imports selects that file's
+  tests.** The graph is built from the working tree, so a deleted file had no
+  node in it and nothing was walked from it: `impact` reported the deletion as
+  `breaking` and selected no tests, at full confidence. The files whose
+  imports still name the deleted path are now found by that path.
+- **A changed file with non-ASCII characters in its name is found.** Git
+  prints such a path quoted and octal-escaped by default, and the escaped
+  string named no file: the change read as a deleted file. The changed-file
+  list is now read NUL-separated, as git has it.
 - **Running from a subdirectory of the repository no longer misreads every
   change.** Git lists and reads paths from the repository root, and variant
   took them as relative to the directory it ran in. With a project kept in a

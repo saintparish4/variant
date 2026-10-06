@@ -78,14 +78,17 @@ describe("doctor command", () => {
 		expect(process.exitCode).toBe(0);
 	});
 
-	it("flags a missing config and fails the command", async () => {
+	// Only the task runner reads a config. Failing here told someone who had
+	// just run `impact` without one that their setup was broken.
+	it("notes a missing config without failing, since only the task runner needs one", async () => {
 		const dir = createTempWorkspace("doctor");
 		const output = captureGlobalOutput();
 
 		await withCwd(dir, () => registerDoctorAction());
 
 		expect(output.stdout()).toMatch(/No variant\.config/i);
-		expect(process.exitCode).toBe(1);
+		expect(output.stdout()).toMatch(/impact.*work without one/i);
+		expect(process.exitCode).toBe(0);
 	});
 
 	it("flags a config whose dependsOn does not resolve", async () => {

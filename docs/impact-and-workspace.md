@@ -107,11 +107,16 @@ npx vitest run --reporter=json --outputFile=report.json
 variant impact verify report.json
 ```
 
+A workspace that runs each package's tests separately has one report per
+package. Pass them all: `variant impact verify packages/*/report.json` reads
+them as one run.
+
 ```
 Prediction: 2026-09-17T22:38:46.120Z (2db3ee3f2de6d9344a099915a0fa229536216d03)
 Matched by: head SHA
 
 Predicted:  1 of 2 test files
+Ran:        2 test files, 1 of them predicted
 Failed:     1 test file
 
 Caught:      0 (inside the predicted set)
@@ -214,6 +219,7 @@ Both commands trace imports statically from source text — there is no module b
 - **`tsconfig.json` path aliases are resolved, but only from the root `tsconfig.json`.** `compilerOptions.paths` is read through the TypeScript compiler's own config parser, so JSONC, `extends` chains and `baseUrl` behave as `tsc` does, and an alias-only edge (`import { x } from "@/lib/x"`) propagates like any other import. What is *not* read is a per-package `tsconfig.json` in a monorepo that declares its own `paths`: aliases are taken from the workspace root only. An alias that matches a pattern but names no indexed file is reported as `unresolved` rather than silently counted as an external package.
 - **Package `exports` maps are read, but the source they name is inferred.** Resolving a bare import of a sibling workspace package (`import { x } from "@org/utils"`) consults the target's `package.json` `exports`, including conditional exports, fallback arrays and `*` subpath patterns. The catch is that `exports` names *published* entry points, which are usually build output that does not exist in a source checkout: a target of `./dist/entry.js` is therefore also probed as `src/entry`, `lib/entry`, `source/entry` and `entry`. A package whose sources sit somewhere else entirely still falls through to the conventional `src/index.*` guesses, and then to `unresolved`. This layer is additive — it can find edges the guesses miss, never lose ones they find.
 - **Imported assets reach their importers; files read at runtime do not.** A changed stylesheet, JSON file or other non-TypeScript file reaches every TypeScript file whose imports name it — relative, workspace-package and alias specifiers alike — and through them the tests. What stays invisible is a file a test reads at runtime rather than imports: a fixture directory, a snapshot, `fs.readFile("data.json")`. A changed file that reaches no test is listed under `Unreached:`, and a selected test whose closure has unresolved imports adds a note ("N selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed").
+- **`node_modules` and `dist` are never indexed, at any depth.** A source directory that happens to be named `dist` is left out with them. A changed TypeScript file there is `unanalyzed`: it selects the tests of the files that import it, and otherwise appears under `Unreached:`.
 - **Only the directory variant runs in is indexed.** Run it where the project's `package.json` and `tsconfig.json` are, which need not be the repository root. A file changed elsewhere in the repository is shown as `../…` and is `unanalyzed`: it selects the tests of the files that import it by relative path, and otherwise appears under `Unreached:`. A sibling workspace package imported by name is not followed from inside one package, so its changed files land there too; run from the workspace root to follow them.
 - **JavaScript is not indexed.** Only TypeScript sources and tests (`.ts`, `.tsx`, `.mts`, `.cts`) are. A changed `.js` file reaches the TypeScript files that import it, but a `.js` file's own imports are not followed, and `.js` tests are not counted: a repository whose tests are all JavaScript stops with `NO_TEST_FILES` rather than predicting "0 of 0".
 - **Computed specifiers are followed as far as their literal start.** `` import(`./locales/${lang}.js`) `` and `require("./plugins/" + name)` link the loader to every indexed file under `./locales/` or `./plugins/` (and to changed non-TypeScript files there), whole workspace packages when the prefix names one, and `tsconfig` alias targets. A specifier with no literal start, such as `import(name)`, could load anything: it is noted on every run, and a change reached only that way selects no tests.

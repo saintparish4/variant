@@ -36,10 +36,10 @@ export interface ImpactVerifyActionOptions {
 }
 
 export async function registerImpactVerifyAction(
-	reportPath: string,
+	reportPaths: string | readonly string[],
 	opts: ImpactVerifyActionOptions = {},
 ): Promise<void> {
-	const result = await verifyImpact(process.cwd(), reportPath, {
+	const result = await verifyImpact(process.cwd(), reportPaths, {
 		...(opts.headSha !== undefined && { headSha: opts.headSha }),
 	});
 

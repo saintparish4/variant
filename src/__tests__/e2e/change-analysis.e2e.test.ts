@@ -107,6 +107,57 @@ describe("E2E: reconciling a prediction for CI", () => {
 		expect(parsed.falseSkips).toEqual([]);
 	});
 
+	it("impact verify reads several reports as one run", async () => {
+		write(cwd, {
+			"packages/a/report.json": JSON.stringify({
+				testResults: [
+					{ name: path.join(cwd, "src/other.test.ts"), status: "failed" },
+				],
+			}),
+		});
+
+		const result = await variant(
+			cwd,
+			"impact",
+			"verify",
+			"report.json",
+			"packages/a/report.json",
+			"--json",
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({
+			failedTests: ["src/math.test.ts", "src/other.test.ts"],
+			caught: ["src/math.test.ts"],
+			falseSkips: ["src/other.test.ts"],
+		});
+	});
+
+	// In a pull request CI checks out a merge commit GitHub makes for the run.
+	// Recording the pushed commit instead keeps the record something a person
+	// can look up afterwards.
+	it("impact --head-sha records the commit it is given, and verify finds it", async () => {
+		const pushed = "c".repeat(40);
+
+		const predicted = await variant(cwd, "impact", "--head-sha", pushed);
+		expect(predicted.exitCode).toBe(0);
+		const result = await variant(
+			cwd,
+			"impact",
+			"verify",
+			"report.json",
+			"--head-sha",
+			pushed,
+			"--json",
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({
+			matchedBy: "head-sha",
+			caught: ["src/math.test.ts"],
+		});
+	});
+
 	it("-q keeps the JSON a script asked for", async () => {
 		const result = await variant(
 			cwd,

@@ -52,12 +52,13 @@ function isOptionLike(ref: string): boolean {
 	return ref.startsWith("-");
 }
 
+/**
+ * Splits `-z` output. Without `-z` git prints a path holding non-ASCII bytes,
+ * a quote or a backslash in quoted, octal-escaped form, which names no file.
+ */
 function toFileList(stdout: string | null): string[] | null {
 	if (stdout === null) return null;
-	return stdout
-		.split("\n")
-		.map((s) => s.trim())
-		.filter((s) => s.length > 0);
+	return stdout.split("\0").filter((file) => file.length > 0);
 }
 
 /**
@@ -68,7 +69,7 @@ function toFileList(stdout: string | null): string[] | null {
  */
 async function listDiff(cwd: string, range: string): Promise<string[] | null> {
 	const [stdout, prefix] = await Promise.all([
-		git(cwd, ["diff", "--name-only", range, "--"]),
+		git(cwd, ["diff", "--name-only", "-z", range, "--"]),
 		git(cwd, ["rev-parse", "--show-prefix"]),
 	]);
 	const files = toFileList(stdout);

@@ -105,8 +105,9 @@ Three consequences:
 
 ## What gets analyzed
 
-- **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding `.d.ts`,
-  `node_modules/`, `.git/`, `.variant/` and `dist/` at the project root.
+- **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding declaration
+  files (`.d.ts`, `.d.mts`, `.d.cts`), anything under a `node_modules/` or
+  `dist/` directory at any depth, and `.git/` and `.variant/`.
   Imports written with `.js`, `.mjs`, `.cjs` or `.jsx` extensions resolve to the
   TypeScript source.
 - **Tests** (for `impact`): indexed files under a `__tests__/` directory, or
@@ -137,7 +138,7 @@ static analysis cannot see.
 ### `impact`
 
 ```
-variant impact [--base <ref>] [--json]
+variant impact [--base <ref>] [--head-sha <sha>] [--json]
 ```
 
 Predicts which test files a change requires. **Report-only:** nothing is
@@ -147,6 +148,7 @@ prediction to `.variant/history/impact.jsonl`.
 | Option | Default | Description |
 |---|---|---|
 | `--base <ref>` | `HEAD~1` | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
+| `--head-sha <sha>` | `HEAD` | Commit to record the prediction against. In a pull request, GitHub Actions checks out a merge commit it makes for the run; pass the pushed commit here and to `impact verify` so the record names something that can be looked up. |
 | `--json` | off | Print the full report, [shape here](./api.md#impact---json). |
 
 Each changed file is classified:
@@ -156,7 +158,7 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
+| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), in a directory that is not indexed, or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
 
 A file that does not parse is `breaking`, whatever the comparison says.
 
@@ -181,11 +183,13 @@ The output also says how many workspace packages were found. Exits 0, or 1 with
 ### `impact verify`
 
 ```
-variant impact verify <report> [--head-sha <sha>] [--json]
+variant impact verify <report...> [--head-sha <sha>] [--json]
 ```
 
-Reconciles a logged prediction against what actually failed. `<report>` is a
-Vitest `--reporter=json` or Jest `--json` output file. Prints how many failures
+Reconciles a logged prediction against what actually failed. Each `<report>` is
+a Vitest `--reporter=json` or Jest `--json` output file. Several are read as
+one run, for a workspace that tests each package on its own and so writes one
+report per package; a test file failing in any of them counts as failed. Prints how many failures
 the prediction caught and how many it would have skipped (**false skips**), and
 appends the counts to `.variant/history/reconciliation.jsonl`.
 
@@ -196,7 +200,7 @@ appends the counts to `.variant/history/reconciliation.jsonl`.
 
 Exits 0 whatever the reconciliation finds: the test run decides whether the
 build fails. A report path that does not exist, or a file that is not a test
-report, exits 1 with `IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
+report, exits 1 with `IMPACT_REPORT_ERROR`, and nothing is recorded for the run. If no prediction is logged, or none matches
 `--head-sha`, it says so and exits 0.
 
 ### `diff`
@@ -357,8 +361,9 @@ config already exists, it writes nothing.
 variant doctor
 ```
 
-Checks the Node version (≥ 20), that a config exists and validates, and the
-cache size (a warning above 500 MB). Exits 1 if any check fails.
+Checks the Node version (≥ 20), that a config validates, and the cache size (a
+warning above 500 MB). Exits 1 if any check fails. A missing config is a
+warning, not a failure: only `build` and `run` read one.
 
 ```
 [✓] Node v22.4.0 meets requirement ≥20

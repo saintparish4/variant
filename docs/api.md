@@ -245,6 +245,7 @@ Notes are human-readable strings, sorted. The forms they take:
 | Where | Note |
 |---|---|
 | `radius.notes` | `<n> changed file(s) is/are not TypeScript and was/were not analyzed (<file>, …)` |
+| `radius.notes` | `<n> changed TypeScript file(s) is/are in a directory variant does not index and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<n> changed file(s) is/are outside the directory variant ran in and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<dependent>: dynamic import of <file> — names unknowable` |
 | `radius.notes` | `<n> affected file(s) has/have unresolved imports: <file> (<specifier>, …), …` |
@@ -269,6 +270,10 @@ type VerifyResult = {
 	falseSkips: string[];
 	/** falseSkips.length / failedTests.length; 0 when nothing failed. */
 	falseSkipRate: number;
+	/** Test files in the runner's report(s). */
+	ranTests: number;
+	/** How many of those the prediction selected; all of them on a select-all. */
+	predictedRan: number;
 	/** False when the reconciliation could not be appended to the history. */
 	historyLogged: boolean;
 	/** ISO timestamp of the prediction that was reconciled. */
@@ -478,8 +483,17 @@ type ImpactReconciliation = {
 	confidence?: number;
 	/** The prediction's selectAll. Absent from older records. */
 	selectAll?: boolean;
+	/** Test files in the runner's report(s). Absent from older records. */
+	ranTests?: number;
+	/** How many of those the prediction selected. Absent from older records. */
+	predictedRan?: number;
 };
 ```
+
+`totalTests` is every file variant takes for a test, which can be more than a
+run executes: helpers under `__tests__/`, or suites another job runs. The share
+of a run the prediction would have skipped is therefore
+`1 - predictedRan / ranTests`, not `1 - predictedTests / totalTests`.
 
 The false-skip rate across every reconciled run:
 

@@ -227,6 +227,48 @@ describe("assembleBlastRadius", () => {
 		);
 	});
 
+	it("says a changed TypeScript file the index leaves out is unindexed, not that it is not TypeScript", () => {
+		const graph = buildImportGraph(makeSymbolGraph({ "src/app.ts": [] }));
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[
+				{
+					filePath: "dist/built.ts",
+					classification: "unanalyzed",
+					impactedSymbols: [],
+					propagates: false,
+					notes: [],
+				},
+			],
+			graph,
+		);
+		expect(radius.notes).toEqual([
+			"1 changed TypeScript file is in a directory variant does not index and was not analyzed (dist/built.ts)",
+		]);
+	});
+
+	// A graph built from the working tree has no node for a deleted file, so
+	// nothing walks from it; the files still importing it are found by path.
+	it("a deleted file reaches the files whose imports still name it", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/app.ts": [namedImport("./auth.js", ["login"])],
+				"src/page.ts": [namedImport("./app.js", ["boot"])],
+				"src/other.ts": [],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/auth.ts", ["login"])],
+			graph,
+		);
+		expect(radius.affectedFiles).toEqual([
+			"src/app.ts",
+			"src/auth.ts",
+			"src/page.ts",
+		]);
+	});
+
 	it("notes unresolved imports on affected files", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({

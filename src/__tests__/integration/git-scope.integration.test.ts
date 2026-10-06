@@ -177,6 +177,34 @@ describe("listChangedFiles", () => {
 		expect(await listChangedFiles(dir, "HEAD")).toEqual([]);
 	});
 
+	// Git prints a path with non-ASCII bytes quoted and octal-escaped unless
+	// asked not to, and that string names no file.
+	it("returns a non-ASCII path as it is on disk", async () => {
+		const dir = repoWithBaseline();
+		writeFiles(dir, {
+			"packages/utils/src/日本語.ts": "export const greeting = 1;\n",
+			"packages/utils/src/with space.ts": "export const spaced = 1;\n",
+		});
+		commitAll(dir, "odd names");
+		writeFiles(dir, {
+			"packages/utils/src/日本語.ts": "export const greeting = 2;\n",
+			"packages/utils/src/with space.ts": "export const spaced = 2;\n",
+		});
+
+		const changed = await listChangedFiles(dir, "HEAD");
+
+		expect(changed).toEqual([
+			"packages/utils/src/with space.ts",
+			"packages/utils/src/日本語.ts",
+		]);
+		expect(await readFilesAtRef(dir, "HEAD", changed ?? [])).toEqual(
+			new Map([
+				["packages/utils/src/with space.ts", "export const spaced = 1;"],
+				["packages/utils/src/日本語.ts", "export const greeting = 1;"],
+			]),
+		);
+	});
+
 	it("returns null outside a git repository", async () => {
 		const dir = createTempWorkspace("git");
 		expect(await listChangedFiles(dir, "HEAD")).toBeNull();

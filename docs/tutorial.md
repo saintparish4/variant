@@ -158,6 +158,7 @@ Prediction: 2026-09-24T22:31:53.432Z (4c2c3d04fe8774b96de5b961ee56ba59d1599a9a)
 Matched by: most recent — verify this is the right run
 
 Predicted:  2 of 4 test files
+Ran:        4 test files, 2 of them predicted
 Failed:     2 test files
 
 Caught:      2 (inside the predicted set)

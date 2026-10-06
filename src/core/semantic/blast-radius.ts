@@ -80,6 +80,7 @@ export interface BlastRadius {
 }
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
+const DECLARATION_FILE = /\.d\.(?:ts|mts|cts)$/;
 
 /** Files named in one aggregated note before the rest become a count. */
 const MAX_NOTE_FILES = 3;
@@ -101,10 +102,22 @@ function isOutsideWorkspace(file: string): boolean {
 	return file.startsWith("../");
 }
 
+function isTypeScriptSource(file: string): boolean {
+	return TS_FILE.test(file) && !DECLARATION_FILE.test(file);
+}
+
 function isAnalyzable(file: string): boolean {
-	return (
-		TS_FILE.test(file) && !file.endsWith(".d.ts") && !isOutsideWorkspace(file)
-	);
+	return isTypeScriptSource(file) && !isOutsideWorkspace(file);
+}
+
+function unanalyzedImpact(file: string): FileImpact {
+	return {
+		filePath: file,
+		classification: "unanalyzed",
+		impactedSymbols: [],
+		propagates: false,
+		notes: [],
+	};
 }
 
 /**
@@ -179,6 +192,7 @@ export async function traceBlastRadius(
 		});
 	}
 
+	const indexed = importGraph.imports;
 	const files = changedFiles.map(toPosix).sort();
 	const analyzable = files.filter(isAnalyzable);
 
@@ -201,19 +215,15 @@ export async function traceBlastRadius(
 	// Per-file work is independent, so it overlaps; mapLimit preserves input
 	// order, which keeps the report deterministic.
 	const changed = await mapLimit(files, CLASSIFY_CONCURRENCY, async (file) => {
-		if (!isAnalyzable(file)) {
-			return {
-				filePath: file,
-				classification: "unanalyzed" as const,
-				impactedSymbols: [],
-				propagates: false,
-				notes: [],
-			};
-		}
+		if (!isAnalyzable(file)) return unanalyzedImpact(file);
 		const [before, after] = await Promise.all([
 			readBefore(file),
 			readAfter(file),
 		]);
+		// On disk and not in the index: it sits in an ignored directory. With
+		// no node to walk from, its classification would reach nothing, so it
+		// goes the way of any file the index does not cover.
+		if (after !== null && !indexed.has(file)) return unanalyzedImpact(file);
 		return toFileImpact(
 			await classify({
 				filePath: file,
@@ -262,8 +272,14 @@ export function assembleBlastRadius(
 		for (const note of impact.notes) notes.add(note);
 		if (impact.classification === "non-impacting") continue;
 		affected.add(impact.filePath);
-		if (impact.classification === "unanalyzed") {
-			// No surface to gate on, so every importer is a first hop.
+		// A file with no node in the graph is found by the imports that name
+		// it: one the index does not cover, or one that was deleted, which a
+		// graph built from the working tree no longer holds. There is no
+		// surface to gate on, so every importer is a first hop.
+		if (
+			impact.classification === "unanalyzed" ||
+			!importGraph.imports.has(impact.filePath)
+		) {
 			for (const importer of importersOfUnindexed(
 				importGraph,
 				impact.filePath,
@@ -314,11 +330,19 @@ export function assembleBlastRadius(
 		.filter((impact) => impact.classification === "unanalyzed")
 		.map((impact) => impact.filePath);
 	const outside = unanalyzed.filter(isOutsideWorkspace);
-	const notTypeScript = unanalyzed.filter((file) => !isOutsideWorkspace(file));
+	const inside = unanalyzed.filter((file) => !isOutsideWorkspace(file));
+	const unindexed = inside.filter(isTypeScriptSource);
+	const notTypeScript = inside.filter((file) => !isTypeScriptSource(file));
 	if (notTypeScript.length > 0) {
 		const one = notTypeScript.length === 1;
 		notes.add(
 			`${notTypeScript.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(notTypeScript)})`,
+		);
+	}
+	if (unindexed.length > 0) {
+		const one = unindexed.length === 1;
+		notes.add(
+			`${unindexed.length} changed TypeScript ${one ? "file is" : "files are"} in a directory variant does not index and ${one ? "was" : "were"} not analyzed (${listPaths(unindexed)})`,
 		);
 	}
 	if (outside.length > 0) {
