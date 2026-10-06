@@ -107,6 +107,10 @@ npx vitest run --reporter=json --outputFile=report.json
 variant impact verify report.json
 ```
 
+A workspace that runs each package's tests separately has one report per
+package. Pass them all: `variant impact verify packages/*/report.json` reads
+them as one run.
+
 ```
 Prediction: 2026-09-17T22:38:46.120Z (2db3ee3f2de6d9344a099915a0fa229536216d03)
 Matched by: head SHA

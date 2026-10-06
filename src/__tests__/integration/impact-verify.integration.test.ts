@@ -90,6 +90,40 @@ describe("verifyImpact", () => {
 		expect(result?.falseSkipRate).toBe(1);
 	});
 
+	// A workspace runs one test process per package, each writing its own
+	// report, so one run arrives as several files.
+	it("reconciles several reports as one run", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(defaultHistoryDir(dir), prediction({}));
+		const reports = [
+			writeReport(dir, "packages/a/report.json", ["src/math.test.ts"]),
+			writeReport(dir, "packages/b/report.json", ["src/format.test.ts"]),
+			writeReport(dir, "packages/c/report.json", ["src/math.test.ts"]),
+		];
+
+		const result = await verifyImpact(dir, reports);
+
+		expect(result?.failedTests).toEqual([
+			"src/format.test.ts",
+			"src/math.test.ts",
+		]);
+		expect(result?.caught).toEqual(["src/math.test.ts"]);
+		expect(result?.falseSkips).toEqual(["src/format.test.ts"]);
+		const records = await readReconciliations(defaultHistoryDir(dir));
+		expect(records).toMatchObject([{ failedTests: 2, falseSkips: 1 }]);
+	});
+
+	it("rejects a run when any of its reports cannot be read", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(defaultHistoryDir(dir), prediction({}));
+		const report = writeReport(dir, "report.json", []);
+
+		await expect(
+			verifyImpact(dir, [report, "missing.json"]),
+		).rejects.toBeInstanceOf(ImpactReportError);
+		expect(await readReconciliations(defaultHistoryDir(dir))).toEqual([]);
+	});
+
 	it("matches the prediction made at a given commit, not the newest one", async () => {
 		const dir = createTempWorkspace("verify");
 		const historyDir = defaultHistoryDir(dir);

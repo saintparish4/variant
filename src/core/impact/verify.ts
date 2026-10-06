@@ -204,7 +204,7 @@ async function readReport(cwd: string, reportPath: string): Promise<string> {
  */
 export async function verifyImpact(
 	cwd: string,
-	reportPath: string,
+	reportPaths: string | readonly string[],
 	options: VerifyOptions = {},
 ): Promise<VerifyResult | null> {
 	const historyDir = defaultHistoryDir(cwd);
@@ -214,8 +214,15 @@ export async function verifyImpact(
 	const match = selectPrediction(predictions, options.headSha);
 	if (match === null) return null;
 
-	const raw = await readReport(cwd, reportPath);
-	const failedTests = parseFailedTests(cwd, raw);
+	// A workspace that runs each package's suite on its own writes one report
+	// per package for a single run. A file failing in any of them failed.
+	const paths = typeof reportPaths === "string" ? [reportPaths] : reportPaths;
+	const reports = await Promise.all(
+		paths.map((reportPath) => readReport(cwd, reportPath)),
+	);
+	const failedTests = [
+		...new Set(reports.flatMap((raw) => parseFailedTests(cwd, raw))),
+	].sort();
 
 	const { caught, falseSkips, falseSkipRate } = reconcile(
 		match.prediction,

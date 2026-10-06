@@ -83,7 +83,7 @@ variant workspace check                    # undeclared dependencies (exits 1)
 | Command | What it does |
 |---|---|
 | `impact` | Predict which test files a change requires, and how much of the import graph resolved. Report-only. |
-| `impact verify <report>` | Reconcile the last prediction against a Vitest or Jest JSON report and report false skips |
+| `impact verify <report...>` | Reconcile the last prediction against one or more Vitest or Jest JSON reports and report false skips |
 | `diff <file>` | Classify one file's change and list the exported symbols that changed |
 | `pr check` | Classify every TypeScript change on the branch and roll them into one build verdict |
 | `pr report` | The `pr check` verdict as JSON, or as markdown for a PR comment |

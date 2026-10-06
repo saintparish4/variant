@@ -107,6 +107,32 @@ describe("E2E: reconciling a prediction for CI", () => {
 		expect(parsed.falseSkips).toEqual([]);
 	});
 
+	it("impact verify reads several reports as one run", async () => {
+		write(cwd, {
+			"packages/a/report.json": JSON.stringify({
+				testResults: [
+					{ name: path.join(cwd, "src/other.test.ts"), status: "failed" },
+				],
+			}),
+		});
+
+		const result = await variant(
+			cwd,
+			"impact",
+			"verify",
+			"report.json",
+			"packages/a/report.json",
+			"--json",
+		);
+
+		expect(result.exitCode).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({
+			failedTests: ["src/math.test.ts", "src/other.test.ts"],
+			caught: ["src/math.test.ts"],
+			falseSkips: ["src/other.test.ts"],
+		});
+	});
+
 	it("-q keeps the JSON a script asked for", async () => {
 		const result = await variant(
 			cwd,

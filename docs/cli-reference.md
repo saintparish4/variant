@@ -182,11 +182,13 @@ The output also says how many workspace packages were found. Exits 0, or 1 with
 ### `impact verify`
 
 ```
-variant impact verify <report> [--head-sha <sha>] [--json]
+variant impact verify <report...> [--head-sha <sha>] [--json]
 ```
 
-Reconciles a logged prediction against what actually failed. `<report>` is a
-Vitest `--reporter=json` or Jest `--json` output file. Prints how many failures
+Reconciles a logged prediction against what actually failed. Each `<report>` is
+a Vitest `--reporter=json` or Jest `--json` output file. Several are read as
+one run, for a workspace that tests each package on its own and so writes one
+report per package; a test file failing in any of them counts as failed. Prints how many failures
 the prediction caught and how many it would have skipped (**false skips**), and
 appends the counts to `.variant/history/reconciliation.jsonl`.
 
@@ -197,7 +199,7 @@ appends the counts to `.variant/history/reconciliation.jsonl`.
 
 Exits 0 whatever the reconciliation finds: the test run decides whether the
 build fails. A report path that does not exist, or a file that is not a test
-report, exits 1 with `IMPACT_REPORT_ERROR`. If no prediction is logged, or none matches
+report, exits 1 with `IMPACT_REPORT_ERROR`, and nothing is recorded for the run. If no prediction is logged, or none matches
 `--head-sha`, it says so and exits 0.
 
 ### `diff`

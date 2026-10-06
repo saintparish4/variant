@@ -77,13 +77,13 @@ const impactCmd = program
 	});
 
 impactCmd
-	.command("verify <report>")
+	.command("verify <report...>")
 	.description(
-		"Reconcile a logged prediction against a Vitest/Jest JSON report — reports false skips",
+		"Reconcile a logged prediction against one or more Vitest/Jest JSON reports — reports false skips",
 	)
 	.option("--head-sha <sha>", "reconcile the prediction made at this commit")
 	.option("--json", "output the reconciliation as JSON")
-	.action(async (report: string, _opts: unknown, command: Command) => {
+	.action(async (reports: string[], _opts: unknown, command: Command) => {
 		const { registerImpactVerifyAction } = await import("./commands/impact.js");
 		// `impact` defines --json too, and Commander gives a flag both
 		// commands share to the parent, whichever side of `verify` it is on.
@@ -91,7 +91,7 @@ impactCmd
 			headSha?: string;
 			json?: boolean;
 		}>();
-		await registerImpactVerifyAction(report, {
+		await registerImpactVerifyAction(reports, {
 			...(opts.headSha !== undefined && { headSha: opts.headSha }),
 			...(opts.json === true && { json: true }),
 		});

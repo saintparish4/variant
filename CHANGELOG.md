@@ -40,6 +40,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   packages`, or `no workspace packages found`), and `--json` carries it as
   `packagesFound`. Bare imports of a package discovery missed count as
   external, so "none found" in a monorepo explains an empty prediction.
+- **`impact verify` takes several reports** and reads them as one run:
+  `variant impact verify packages/*/report.json`. A workspace that tests each
+  package on its own writes one report per package, and joining them by hand
+  was the only way to reconcile such a run. A test file failing in any report
+  counts as failed.
 
 ### Fixed
 
