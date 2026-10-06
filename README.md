@@ -61,6 +61,9 @@ npm install -D @blzsky/variant    # or pnpm add -D / yarn add -D
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.
 
+variant keeps its index and history in `.variant/`, in the directory it runs
+in. Add `.variant/` to `.gitignore`.
+
 ### Upgrade
 
 ```bash
@@ -117,6 +120,9 @@ Ready-to-copy GitHub Actions workflows are in
   the build on an undeclared dependency.
 - [`impact-shadow.yml`](./examples/github-actions/impact-shadow.yml) logs a
   prediction, runs the full suite anyway, and reconciles the two.
+- [`impact-shadow-workspace.yml`](./examples/github-actions/impact-shadow-workspace.yml)
+  does the same for a pnpm workspace that tests each package on its own. It
+  needs a release newer than 0.2.1.
 
 ### Help measure it
 

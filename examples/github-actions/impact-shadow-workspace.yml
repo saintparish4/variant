@@ -1,0 +1,104 @@
+# Shadow mode for a pnpm workspace whose packages each run their own tests, so
+# a run writes one report per package instead of one at the root. For a single
+# package, or a root-level Vitest, use impact-shadow.yml.
+#
+# Needs a variant release newer than 0.2.1. Up to 0.2.1, `impact` indexes every
+# package's node_modules and may not finish after an install, `impact verify`
+# takes a single report, and `impact --head-sha` does not exist.
+#
+# Copy to .github/workflows/impact-shadow.yml. Assumes pnpm, packages under
+# packages/ and apps/, and a `test` script in each tested package that runs
+# Vitest directly (`vitest run`), so the reporter flags below reach it. If the
+# script wraps another tool, pass the flags the way that tool forwards them.
+
+name: impact shadow mode
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The commit that was pushed. In a pull request HEAD is a merge commit
+      # GitHub makes for the run, which nobody can look up afterwards.
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `impact` reads the base commit's copy of each changed file.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # History saved from `main` is readable by every branch; history saved
+      # from a pull request stays with that pull request (GitHub cache scoping).
+      # So the shared record grows from pushes to main.
+      - name: Restore prediction history
+        uses: actions/cache/restore@v6
+        with:
+          path: .variant/history
+          key: variant-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: variant-history-
+
+      - name: Predict (report-only; nothing is skipped)
+        env:
+          # A pull request is diffed against its target branch, a push against
+          # the commit it replaced.
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        # The first push to a branch has no previous commit (`before` is all
+        # zeros), and a force-push can name one that is no longer fetchable.
+        # There is nothing to diff against, so there is no prediction, and the
+        # reconcile step finds none to check.
+        run: |
+          if git cat-file -e "$BASE_REF^{commit}" 2>/dev/null; then
+            npx --yes @blzsky/variant impact --base "$BASE_REF" --head-sha "$HEAD_SHA"
+          else
+            echo "::notice::No base commit to compare against ($BASE_REF); skipping the prediction."
+          fi
+
+      # --no-bail keeps the other packages running after one fails: a failing
+      # run is the one reconciliation needs every report from. A task runner
+      # that restores results from a cache writes no report for a cache hit,
+      # which is why this calls pnpm directly.
+      - name: Run every package's suite
+        run: pnpm -r --no-bail --if-present run test --reporter=default --reporter=json --outputFile.json=report.json
+
+      # Failing tests are exactly what reconciliation needs, so this runs even
+      # when the suite fails, as long as it produced a report.
+      - name: Reconcile the prediction with the run
+        if: ${{ !cancelled() && hashFiles('packages/*/report.json', 'apps/*/report.json') != '' }}
+        run: |
+          shopt -s nullglob
+          npx --yes @blzsky/variant impact verify packages/*/report.json apps/*/report.json --head-sha "$HEAD_SHA"
+
+      - name: Save prediction history
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v6
+        with:
+          path: .variant/history
+          key: variant-history-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # The cache keeps the history for the next run but cannot be downloaded.
+      # This makes the accumulated counts downloadable from the run page. It is
+      # reconciliation.jsonl only: counts, commit SHAs and base refs, no file
+      # paths, so it is safe to share from a private repository.
+      - name: Upload reconciliation counts
+        if: ${{ !cancelled() && hashFiles('.variant/history/reconciliation.jsonl') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: variant-reconciliation
+          path: .variant/history/reconciliation.jsonl
+          retention-days: 90

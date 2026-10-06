@@ -55,6 +55,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   every file that looks like a test, including helpers under `__tests__/` and
   suites the run never executes, so a skip rate computed from it was
   overstated. Records written before this lack the two fields.
+- **`examples/github-actions/impact-shadow-workspace.yml`**: shadow mode for a
+  pnpm workspace whose packages each run their own tests. It passes one report
+  per package to `impact verify` and records the pushed commit. It relies on
+  this release: 0.2.1 and earlier cannot run it.
 - **`impact --head-sha <sha>`** records the prediction against a commit other
   than `HEAD`. In a pull request GitHub Actions checks out a merge commit it
   makes for the run, so the recorded SHA named a commit nobody can look up;
