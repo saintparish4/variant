@@ -16,6 +16,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **`doctor` no longer fails when there is no `variant.config.ts`.** It
+  prints a warning and exits 0: `impact`, `diff`, `pr` and `workspace check`
+  need no config, and exiting 1 read as a broken setup to someone using only
+  those. A config that exists and does not validate still exits 1.
 - **Confidence reads as a bucket first:** `Confidence: medium (82%)`, with
   `high` at 90% and up, `medium` from 70%, and `low` below; `--json` carries it
   as `tests.resolution`. The score counts what the analysis could not

@@ -89,11 +89,14 @@ export async function checkCacheSize(
 async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 	const configPath = findVariantConfigPath(cwd);
 	if (!configPath) {
+		// Not an error: only the task runner reads a config, and failing here
+		// told someone who had just run `impact` that their setup was broken.
 		return [
 			{
-				level: "error",
+				level: "warn",
 				label: "No variant.config.ts found",
-				detail: "Run `variant init` to create one.",
+				detail:
+					"`impact`, `diff`, `pr` and `workspace check` work without one. `build` and `run` need it: `variant init` creates one.",
 			},
 		];
 	}

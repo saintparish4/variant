@@ -361,8 +361,9 @@ config already exists, it writes nothing.
 variant doctor
 ```
 
-Checks the Node version (≥ 20), that a config exists and validates, and the
-cache size (a warning above 500 MB). Exits 1 if any check fails.
+Checks the Node version (≥ 20), that a config validates, and the cache size (a
+warning above 500 MB). Exits 1 if any check fails. A missing config is a
+warning, not a failure: only `build` and `run` read one.
 
 ```
 [✓] Node v22.4.0 meets requirement ≥20
