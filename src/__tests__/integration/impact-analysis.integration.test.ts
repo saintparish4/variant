@@ -241,6 +241,21 @@ describe("predictImpact", () => {
 		expect(report.result.tests.unreached).toEqual(["../shared/unused.ts"]);
 	});
 
+	it("selects the tests of a file that still imports a deleted one", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, FIXTURE);
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/auth.ts"],
+			readBefore,
+		});
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "src/auth.ts", classification: "breaking" },
+		]);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+	});
+
 	// `dist/` is not indexed, so a file there has no node to walk from. Read
 	// as ordinary code it reached nothing and said nothing.
 	it("does not skip silently for a changed TypeScript file in an ignored directory", async () => {

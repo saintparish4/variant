@@ -53,6 +53,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   rather than classified and then reaching nothing: it selects the tests of
   the files that import it, is listed as `Unreached` otherwise, and has its
   own note.
+- **Deleting a file that another file still imports selects that file's
+  tests.** The graph is built from the working tree, so a deleted file had no
+  node in it and nothing was walked from it: `impact` reported the deletion as
+  `breaking` and selected no tests, at full confidence. The files whose
+  imports still name the deleted path are now found by that path.
 - **Running from a subdirectory of the repository no longer misreads every
   change.** Git lists and reads paths from the repository root, and variant
   took them as relative to the directory it ran in. With a project kept in a

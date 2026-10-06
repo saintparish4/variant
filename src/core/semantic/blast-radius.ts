@@ -272,8 +272,14 @@ export function assembleBlastRadius(
 		for (const note of impact.notes) notes.add(note);
 		if (impact.classification === "non-impacting") continue;
 		affected.add(impact.filePath);
-		if (impact.classification === "unanalyzed") {
-			// No surface to gate on, so every importer is a first hop.
+		// A file with no node in the graph is found by the imports that name
+		// it: one the index does not cover, or one that was deleted, which a
+		// graph built from the working tree no longer holds. There is no
+		// surface to gate on, so every importer is a first hop.
+		if (
+			impact.classification === "unanalyzed" ||
+			!importGraph.imports.has(impact.filePath)
+		) {
 			for (const importer of importersOfUnindexed(
 				importGraph,
 				impact.filePath,
