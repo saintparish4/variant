@@ -51,6 +51,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   every file that looks like a test, including helpers under `__tests__/` and
   suites the run never executes, so a skip rate computed from it was
   overstated. Records written before this lack the two fields.
+- **`impact --head-sha <sha>`** records the prediction against a commit other
+  than `HEAD`. In a pull request GitHub Actions checks out a merge commit it
+  makes for the run, so the recorded SHA named a commit nobody can look up;
+  pass the pushed commit to `impact` and to `impact verify`.
 
 ### Fixed
 

@@ -138,7 +138,7 @@ static analysis cannot see.
 ### `impact`
 
 ```
-variant impact [--base <ref>] [--json]
+variant impact [--base <ref>] [--head-sha <sha>] [--json]
 ```
 
 Predicts which test files a change requires. **Report-only:** nothing is
@@ -148,6 +148,7 @@ prediction to `.variant/history/impact.jsonl`.
 | Option | Default | Description |
 |---|---|---|
 | `--base <ref>` | `HEAD~1` | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
+| `--head-sha <sha>` | `HEAD` | Commit to record the prediction against. In a pull request, GitHub Actions checks out a merge commit it makes for the run; pass the pushed commit here and to `impact verify` so the record names something that can be looked up. |
 | `--json` | off | Print the full report, [shape here](./api.md#impact---json). |
 
 Each changed file is classified:

@@ -67,11 +67,16 @@ const impactCmd = program
 		"Predict which tests a change requires — report-only; the full suite should still run",
 	)
 	.option("--base <ref>", "git ref to compare against", "HEAD~1")
+	.option(
+		"--head-sha <sha>",
+		"record the prediction against this commit instead of HEAD",
+	)
 	.option("--json", "output the report as JSON")
-	.action(async (opts: { base: string; json?: boolean }) => {
+	.action(async (opts: { base: string; headSha?: string; json?: boolean }) => {
 		const { registerImpactAction } = await import("./commands/impact.js");
 		await registerImpactAction({
 			base: opts.base,
+			...(opts.headSha !== undefined && { headSha: opts.headSha }),
 			...(opts.json === true && { json: true }),
 		});
 	});

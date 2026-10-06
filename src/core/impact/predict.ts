@@ -32,7 +32,11 @@ export interface ImpactOptions {
 	changedFiles?: string[];
 	/** DI for tests: content of a file at baseRef. */
 	readBefore?: TraceBlastRadiusOptions["readBefore"];
-	/** DI for tests: the head SHA to record, instead of asking git. */
+	/**
+	 * The commit to record the prediction against, instead of asking git for
+	 * HEAD. In a pull request CI checks out a merge commit made for the run;
+	 * the pushed commit is the one a person can look up afterwards.
+	 */
 	headSha?: string | null;
 }
 
