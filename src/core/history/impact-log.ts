@@ -59,6 +59,14 @@ export interface ImpactReconciliation {
 	 */
 	confidence?: number;
 	selectAll?: boolean;
+	/**
+	 * Test files the runner reported, and how many of those were predicted:
+	 * the denominator and numerator for the share a prediction would skip.
+	 * `totalTests` also counts files the run never ran. Absent from records
+	 * older than these fields.
+	 */
+	ranTests?: number;
+	predictedRan?: number;
 }
 
 export const MAX_IMPACT_RECORDS = 1000;

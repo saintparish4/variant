@@ -116,6 +116,7 @@ Prediction: 2026-09-17T22:38:46.120Z (2db3ee3f2de6d9344a099915a0fa229536216d03)
 Matched by: head SHA
 
 Predicted:  1 of 2 test files
+Ran:        2 test files, 1 of them predicted
 Failed:     1 test file
 
 Caught:      0 (inside the predicted set)

@@ -45,6 +45,12 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   package on its own writes one report per package, and joining them by hand
   was the only way to reconcile such a run. A test file failing in any report
   counts as failed.
+- **Reconciliation records say how many test files ran.** `ranTests` is the
+  number of files in the runner's report and `predictedRan` how many of those
+  the prediction selected; `impact verify` prints both. `totalTests` counts
+  every file that looks like a test, including helpers under `__tests__/` and
+  suites the run never executes, so a skip rate computed from it was
+  overstated. Records written before this lack the two fields.
 
 ### Fixed
 

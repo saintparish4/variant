@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ImpactReportError } from "../../errors.js";
 import type { ImpactPrediction } from "../../history/impact-log.js";
-import { parseFailedTests, reconcile } from "../verify.js";
+import { parseFailedTests, parseTestRun, reconcile } from "../verify.js";
 
 const CWD = path.resolve("/repo");
 
@@ -116,6 +116,25 @@ describe("parseFailedTests", () => {
 		expect(() => parseFailedTests(CWD, JSON.stringify({ ok: true }))).toThrow(
 			ImpactReportError,
 		);
+	});
+});
+
+describe("parseTestRun", () => {
+	it("lists every file the runner reported, whatever its status", () => {
+		expect(
+			parseTestRun(
+				CWD,
+				report([
+					{ name: path.join(CWD, "a.test.ts"), status: "failed" },
+					{ name: path.join(CWD, "b.test.ts"), status: "passed" },
+					{ name: path.join(CWD, "c.test.ts"), status: "skipped" },
+					{ name: path.join(CWD, "a.test.ts"), status: "passed" },
+				]),
+			),
+		).toEqual({
+			ran: ["a.test.ts", "b.test.ts", "c.test.ts"],
+			failed: ["a.test.ts"],
+		});
 	});
 });
 

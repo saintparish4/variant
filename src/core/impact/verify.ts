@@ -53,6 +53,14 @@ export interface VerifyResult {
 	 * rate until many runs accumulate.
 	 */
 	falseSkipRate: number;
+	/**
+	 * Test files the runner reported, and how many of them the prediction
+	 * selected. The share a prediction would skip is measured against these:
+	 * its own `totalTests` counts every file that looks like a test, including
+	 * helpers and suites this run never ran.
+	 */
+	ranTests: number;
+	predictedRan: number;
 	/** False when the reconciliation could not be persisted. */
 	historyLogged: boolean;
 }
@@ -97,17 +105,23 @@ function toRelativePosix(
 	return relative.replace(/\\/g, "/");
 }
 
+/** The test files a run reported, and the ones among them that failed. */
+export interface TestRun {
+	ran: string[];
+	failed: string[];
+}
+
 /**
- * Failing test files from a Jest/Vitest JSON report. Entries that do not match
- * the expected shape are skipped rather than throwing: a runner adding a field
+ * Test files from a Jest/Vitest JSON report. Entries that do not match the
+ * expected shape are skipped rather than throwing: a runner adding a field
  * must not break reconciliation, and a report with no recognizable failures is
  * a legitimate result (everything passed).
  */
-export function parseFailedTests(
+export function parseTestRun(
 	cwd: string,
 	raw: string,
 	realpath: (target: string) => string = realpathOrSelf,
-): string[] {
+): TestRun {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
@@ -122,14 +136,26 @@ export function parseFailedTests(
 		throw new ImpactReportError("it has no `testResults` array");
 	}
 
-	const failed: string[] = [];
+	const ran = new Set<string>();
+	const failed = new Set<string>();
 	for (const entry of results) {
 		if (typeof entry !== "object" || entry === null) continue;
 		const { name, status } = entry;
-		if (status !== "failed" || typeof name !== "string") continue;
-		failed.push(toRelativePosix(cwd, name, realpath));
+		if (typeof name !== "string") continue;
+		const file = toRelativePosix(cwd, name, realpath);
+		ran.add(file);
+		if (status === "failed") failed.add(file);
 	}
-	return [...new Set(failed)].sort();
+	return { ran: [...ran].sort(), failed: [...failed].sort() };
+}
+
+/** Failing test files from a Jest/Vitest JSON report. */
+export function parseFailedTests(
+	cwd: string,
+	raw: string,
+	realpath: (target: string) => string = realpathOrSelf,
+): string[] {
+	return parseTestRun(cwd, raw, realpath).failed;
 }
 
 /**
@@ -220,9 +246,13 @@ export async function verifyImpact(
 	const reports = await Promise.all(
 		paths.map((reportPath) => readReport(cwd, reportPath)),
 	);
-	const failedTests = [
-		...new Set(reports.flatMap((raw) => parseFailedTests(cwd, raw))),
-	].sort();
+	const runs = reports.map((raw) => parseTestRun(cwd, raw));
+	const failedTests = [...new Set(runs.flatMap((run) => run.failed))].sort();
+	const ran = new Set(runs.flatMap((run) => run.ran));
+	const selected = new Set(match.prediction.affectedTests);
+	const predictedRan = match.prediction.selectAll
+		? ran.size
+		: [...ran].filter((test) => selected.has(test)).length;
 
 	const { caught, falseSkips, falseSkipRate } = reconcile(
 		match.prediction,
@@ -243,6 +273,8 @@ export async function verifyImpact(
 					falseSkips: falseSkips.length,
 					confidence: match.prediction.confidence,
 					selectAll: match.prediction.selectAll,
+					ranTests: ran.size,
+					predictedRan,
 				});
 
 	return {
@@ -252,6 +284,8 @@ export async function verifyImpact(
 		caught,
 		falseSkips,
 		falseSkipRate,
+		ranTests: ran.size,
+		predictedRan,
 		historyLogged,
 	};
 }

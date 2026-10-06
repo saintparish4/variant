@@ -143,6 +143,7 @@ export function renderImpactVerify(
 		`Matched by: ${result.matchedBy === "head-sha" ? "head SHA" : "most recent — verify this is the right run"}`,
 		"",
 		`Predicted:  ${count(prediction.affectedTests.length)} of ${count(prediction.totalTests)} test files${prediction.selectAll ? " (selected all)" : ""}`,
+		`Ran:        ${plural(result.ranTests, "test file")}, ${count(result.predictedRan)} of them predicted`,
 		`Failed:     ${plural(result.failedTests.length, "test file")}`,
 	);
 

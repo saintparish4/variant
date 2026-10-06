@@ -124,6 +124,57 @@ describe("verifyImpact", () => {
 		expect(await readReconciliations(defaultHistoryDir(dir))).toEqual([]);
 	});
 
+	// The prediction counts every file that looks like a test. The runner may
+	// run fewer (helpers under `__tests__/`, suites another job owns), so the
+	// share skipped has to be measured against what it reported running.
+	it("records how many test files ran and how many of those were predicted", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(
+			defaultHistoryDir(dir),
+			prediction({
+				affectedTests: ["src/math.test.ts", "src/__tests__/helper.ts"],
+				totalTests: 5,
+			}),
+		);
+		writeFiles(dir, {
+			"report.json": JSON.stringify({
+				testResults: ["src/math.test.ts", "src/format.test.ts"].map((file) => ({
+					name: path.join(dir, file),
+					status: "passed",
+				})),
+			}),
+		});
+
+		const result = await verifyImpact(dir, "report.json");
+
+		expect(result).toMatchObject({ ranTests: 2, predictedRan: 1 });
+		const records = await readReconciliations(defaultHistoryDir(dir));
+		expect(records).toMatchObject([
+			{ predictedTests: 2, totalTests: 5, ranTests: 2, predictedRan: 1 },
+		]);
+	});
+
+	it("counts every file that ran as predicted when the prediction selected all", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(
+			defaultHistoryDir(dir),
+			prediction({ affectedTests: [], selectAll: true }),
+		);
+		writeFiles(dir, {
+			"report.json": JSON.stringify({
+				testResults: ["src/math.test.ts", "src/format.test.ts"].map((file) => ({
+					name: path.join(dir, file),
+					status: "passed",
+				})),
+			}),
+		});
+
+		expect(await verifyImpact(dir, "report.json")).toMatchObject({
+			ranTests: 2,
+			predictedRan: 2,
+		});
+	});
+
 	it("matches the prediction made at a given commit, not the newest one", async () => {
 		const dir = createTempWorkspace("verify");
 		const historyDir = defaultHistoryDir(dir);
