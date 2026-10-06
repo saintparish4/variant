@@ -207,6 +207,66 @@ describe("listChangedFilesSinceMergeBase", () => {
 	});
 });
 
+// Git prints and reads paths from the repository root wherever it runs, while
+// every caller works relative to its own directory. A project kept in a
+// subdirectory is where the two differ: read as-is, each changed file named
+// nothing on disk, so it classified as deleted and selected no tests.
+describe("a working directory below the repository root", () => {
+	it("lists changed files relative to that directory", async () => {
+		const dir = repoWithBaseline();
+		writeFiles(dir, {
+			"packages/utils/src/index.ts": "export const value = 2;\n",
+			"packages/docs/src/index.ts": "export const doc = 2;\n",
+		});
+
+		expect(
+			await listChangedFiles(path.join(dir, "packages/utils"), "HEAD"),
+		).toEqual(["../docs/src/index.ts", "src/index.ts"]);
+	});
+
+	it("lists a branch's changes relative to that directory", async () => {
+		const dir = repoWithBaseline();
+		git(dir, "branch base-branch");
+		git(dir, "checkout -b feature");
+		writeFiles(dir, {
+			"packages/utils/src/feature.ts": "export const f = 1;\n",
+		});
+		commitAll(dir, "feature work");
+
+		expect(
+			await listChangedFilesSinceMergeBase(
+				path.join(dir, "packages/utils"),
+				"base-branch",
+			),
+		).toEqual(["src/feature.ts"]);
+	});
+
+	it("reads a file at a ref by its path from that directory", async () => {
+		const dir = repoWithBaseline();
+		const cwd = path.join(dir, "packages/utils");
+
+		expect(await readFileAtRef(cwd, "HEAD", "src/index.ts")).toBe(
+			"export const value = 1;",
+		);
+		expect(await readFileAtRef(cwd, "HEAD", "../docs/src/index.ts")).toBe(
+			"export const doc = 1;",
+		);
+	});
+
+	it("reads a batch by paths from that directory", async () => {
+		const dir = repoWithBaseline();
+		const batch = await readFilesAtRef(
+			path.join(dir, "packages/utils"),
+			"HEAD",
+			["src/index.ts", "../docs/src/index.ts", "src/added-later.ts"],
+		);
+
+		expect(batch?.get("src/index.ts")).toBe("export const value = 1;");
+		expect(batch?.get("../docs/src/index.ts")).toBe("export const doc = 1;");
+		expect(batch?.get("src/added-later.ts")).toBeNull();
+	});
+});
+
 // A trailing `--` only protects the paths after it: git still parses a ref
 // that starts with `-` as an option, and `--output=<file>` makes it write one.
 describe("refs that look like options", () => {

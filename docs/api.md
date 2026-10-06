@@ -245,6 +245,7 @@ Notes are human-readable strings, sorted. The forms they take:
 | Where | Note |
 |---|---|
 | `radius.notes` | `<n> changed file(s) is/are not TypeScript and was/were not analyzed (<file>, …)` |
+| `radius.notes` | `<n> changed file(s) is/are outside the directory variant ran in and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<dependent>: dynamic import of <file> — names unknowable` |
 | `radius.notes` | `<n> affected file(s) has/have unresolved imports: <file> (<specifier>, …), …` |
 | `radius.notes` | `<n> file(s) load a module through a fully computed import() or require() specifier (<file>, …); a change reached only that way selects no tests` |

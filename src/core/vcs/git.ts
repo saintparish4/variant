@@ -8,7 +8,16 @@
  * Every function degrades rather than throwing: git may be missing, the repo
  * may be shallow, the ref may not exist. `null` means "no VCS information" —
  * callers skip the optimization instead of failing the build.
+ *
+ * Every path taken or returned here is relative to `cwd`. Git works from the
+ * repository root instead: `diff --name-only` prints root-relative paths and
+ * `<ref>:<path>` reads one unless it starts with `./`. The two agree only when
+ * `cwd` is the root, so a project kept in a subdirectory once had each changed
+ * file name nothing on disk, classify as deleted (a false `breaking`), match
+ * nothing in the import graph, and select no tests.
  */
+
+import path from "node:path";
 
 /**
  * git pathspecs are POSIX-separated internally regardless of host OS. A path
@@ -51,6 +60,31 @@ function toFileList(stdout: string | null): string[] | null {
 		.filter((s) => s.length > 0);
 }
 
+/**
+ * `git diff --name-only` for `range`, as paths relative to `cwd`. A file
+ * changed elsewhere in the repository comes back as `../…` rather than being
+ * dropped, which is what `--relative` would do: a caller cannot widen for a
+ * change it never sees.
+ */
+async function listDiff(cwd: string, range: string): Promise<string[] | null> {
+	const [stdout, prefix] = await Promise.all([
+		git(cwd, ["diff", "--name-only", range, "--"]),
+		git(cwd, ["rev-parse", "--show-prefix"]),
+	]);
+	const files = toFileList(stdout);
+	const cwdFromRoot = prefix?.trim() ?? "";
+	if (files === null || cwdFromRoot === "") return files;
+	// Rooted, so the answer cannot depend on the process's own directory.
+	return files.map((file) =>
+		path.posix.relative(`/${cwdFromRoot}`, `/${file}`),
+	);
+}
+
+/** The `./` is what makes git resolve the path from `cwd`. */
+function blobAt(ref: string, relPath: string): string {
+	return `${ref}:./${toPosix(relPath)}`;
+}
+
 /** Contents of `relPath` as of `ref`, or null when it did not exist there. */
 export async function readFileAtRef(
 	cwd: string,
@@ -58,7 +92,7 @@ export async function readFileAtRef(
 	relPath: string,
 ): Promise<string | null> {
 	if (isOptionLike(ref)) return null;
-	return git(cwd, ["show", `${ref}:${toPosix(relPath)}`]);
+	return git(cwd, ["show", blobAt(ref, relPath)]);
 }
 
 /**
@@ -98,7 +132,7 @@ export async function readFilesAtRef(
 		try {
 			const result = await execa("git", ["cat-file", "--batch"], {
 				cwd,
-				input: `${chunk.map((p) => `${ref}:${toPosix(p)}`).join("\n")}\n`,
+				input: `${chunk.map((p) => blobAt(ref, p)).join("\n")}\n`,
 				encoding: "buffer",
 				// The response framing is byte-exact; execa's default of
 				// trimming the final newline would truncate the last record.
@@ -204,7 +238,7 @@ export async function listChangedFiles(
 	ref: string,
 ): Promise<string[] | null> {
 	if (isOptionLike(ref)) return null;
-	return toFileList(await git(cwd, ["diff", "--name-only", ref, "--"]));
+	return listDiff(cwd, ref);
 }
 
 /**
@@ -217,7 +251,5 @@ export async function listChangedFilesSinceMergeBase(
 	ref: string,
 ): Promise<string[] | null> {
 	if (isOptionLike(ref)) return null;
-	return toFileList(
-		await git(cwd, ["diff", "--name-only", `${ref}...HEAD`, "--"]),
-	);
+	return listDiff(cwd, `${ref}...HEAD`);
 }

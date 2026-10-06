@@ -201,6 +201,32 @@ describe("assembleBlastRadius", () => {
 		expect(radius.confidence).toBe(0.9);
 	});
 
+	it("says a changed file above the working directory is outside it, not that it is not TypeScript", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/app.ts": [namedImport("../../shared/format.js", ["format"])],
+				"src/other.ts": [],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[
+				{
+					filePath: "../shared/format.ts",
+					classification: "unanalyzed",
+					impactedSymbols: [],
+					propagates: false,
+					notes: [],
+				},
+			],
+			graph,
+		);
+		expect(radius.affectedFiles).toEqual(["../shared/format.ts", "src/app.ts"]);
+		expect(radius.notes).toContain(
+			"1 changed file is outside the directory variant ran in and was not analyzed (../shared/format.ts)",
+		);
+	});
+
 	it("notes unresolved imports on affected files", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({

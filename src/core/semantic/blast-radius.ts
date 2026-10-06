@@ -91,8 +91,20 @@ const MAX_NOTE_FILES = 3;
  */
 const CLASSIFY_CONCURRENCY = 16;
 
+/**
+ * Git lists every file a change touches, and the symbol index covers `cwd`
+ * only. A changed file above `cwd` has no node to propagate from, so it is
+ * handled like any other file the index does not cover: it reaches the files
+ * whose imports name it, and is reported when none does.
+ */
+function isOutsideWorkspace(file: string): boolean {
+	return file.startsWith("../");
+}
+
 function isAnalyzable(file: string): boolean {
-	return TS_FILE.test(file) && !file.endsWith(".d.ts");
+	return (
+		TS_FILE.test(file) && !file.endsWith(".d.ts") && !isOutsideWorkspace(file)
+	);
 }
 
 /**
@@ -301,10 +313,18 @@ export function assembleBlastRadius(
 	const unanalyzed = changed
 		.filter((impact) => impact.classification === "unanalyzed")
 		.map((impact) => impact.filePath);
-	if (unanalyzed.length > 0) {
-		const one = unanalyzed.length === 1;
+	const outside = unanalyzed.filter(isOutsideWorkspace);
+	const notTypeScript = unanalyzed.filter((file) => !isOutsideWorkspace(file));
+	if (notTypeScript.length > 0) {
+		const one = notTypeScript.length === 1;
 		notes.add(
-			`${unanalyzed.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(unanalyzed)})`,
+			`${notTypeScript.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(notTypeScript)})`,
+		);
+	}
+	if (outside.length > 0) {
+		const one = outside.length === 1;
+		notes.add(
+			`${outside.length} changed ${one ? "file is" : "files are"} outside the directory variant ran in and ${one ? "was" : "were"} not analyzed (${listPaths(outside)})`,
 		);
 	}
 

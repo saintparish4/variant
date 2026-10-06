@@ -39,6 +39,8 @@ describe("importersOfUnindexed", () => {
 			"src/i18n.ts": [patternImport("./locales/")],
 			"apps/web/src/page.ts": [staticImport("@org/ui/theme.css")],
 			"src/aliased.ts": [staticImport("@/data/seed.json")],
+			"src/shared-user.ts": [staticImport("../../shared/format.js")],
+			"src/shared-i18n.ts": [patternImport("../../shared/locales/")],
 		}),
 		{
 			packageDirs: { "@org/ui": "packages/ui" },
@@ -54,6 +56,10 @@ describe("importersOfUnindexed", () => {
 		["packages/ui/theme.css", ["apps/web/src/page.ts"]],
 		["packages/ui/src/theme.css", ["apps/web/src/page.ts"]],
 		["src/data/seed.json", ["src/aliased.ts"]],
+		// Above the indexed directory, as git lists a file changed elsewhere in
+		// the repository.
+		["../shared/format.ts", ["src/shared-user.ts"]],
+		["../shared/locales/en.json", ["src/shared-i18n.ts"]],
 		["src/unrelated.css", []],
 	])("finds the files whose unresolved imports name %s", (file, expected) => {
 		expect(sorted(importersOfUnindexed(graph, file))).toEqual(expected);

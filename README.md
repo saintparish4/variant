@@ -195,6 +195,9 @@ cannot see at all:
   JSON file that a TypeScript file imports selects that file's tests, but a
   fixture, snapshot or asset a test reads with `fs` is invisible. A changed
   file that reaches no test is listed as `Unreached`.
+- **Only the directory it runs in is indexed.** A file changed elsewhere in
+  the repository selects the tests of the files that import it by relative
+  path, and is listed as `Unreached` otherwise.
 - **JavaScript is not indexed.** A changed `.js` file reaches the TypeScript
   files that import it, but `.js` tests are not counted. A repository with no
   TypeScript tests stops with `NO_TEST_FILES` instead of predicting nothing.
