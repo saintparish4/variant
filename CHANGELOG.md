@@ -87,6 +87,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   that file, so a change there selected none of the app's tests. Every
   `tsconfig.json` is now read, each applying to the files under its directory
   with the nearest one first, including aliases inherited through `extends`.
+- **`workspace check` no longer reports a path-alias import as an undeclared
+  dependency.** It read every bare specifier as a package name, so
+  `import "@/lib/price"` failed the check in any package that uses a
+  `tsconfig.json` alias. An aliased import is now judged by the file it names:
+  nothing to declare inside the importing package, and an
+  `undeclared-workspace-dep` when the alias reaches into a sibling the package
+  does not declare.
 - **A renamed file is listed under both names.** With rename detection git
   reports only the new path, so a file still importing the old one was never
   reached: `impact` selected no tests for it. A rename now reads as a deletion

@@ -17,12 +17,19 @@
  * by name and via a relative path gets both findings. Node builtins (with or
  * without the `node:` prefix) and self-imports are exempt. Violations are
  * grouped per (package, target, kind) with the offending files listed.
+ *
+ * A specifier covered by a tsconfig `paths` alias names a file in the
+ * workspace, not a package. It is judged by the package that file belongs
+ * to: nothing to declare inside the importer's own package, an
+ * `undeclared-workspace-dep` when the alias reaches into a sibling.
  */
 
 import { builtinModules } from "node:module";
 import path from "node:path";
 import type { SymbolGraph } from "../semantic/symbol-graph.js";
-import { resolveRelativeImport } from "./import-graph.js";
+import { resolveAliasImport, resolveRelativeImport } from "./import-graph.js";
+import type { PathAlias } from "./tsconfig-paths.js";
+import { aliasesInScope, matchPathAlias } from "./tsconfig-paths.js";
 
 export type WorkspaceViolationKind =
 	| "undeclared-workspace-dep"
@@ -59,6 +66,8 @@ export function checkWorkspace(input: {
 	packages: WorkspacePackageInfo[];
 	/** Root package.json dependency names — satisfies external imports. */
 	rootDeclared?: ReadonlySet<string>;
+	/** tsconfig `paths` aliases; a specifier one covers is not a package. */
+	pathAliases?: readonly PathAlias[];
 }): WorkspaceCheckResult {
 	const { symbolGraph, packages } = input;
 	const rootDeclared = input.rootDeclared ?? new Set<string>();
@@ -84,6 +93,7 @@ export function checkWorkspace(input: {
 	for (const file of [...files].sort()) {
 		const owner = fileToPackage(file, packages);
 		if (owner === undefined) continue;
+		const aliases = aliasesInScope(file, input.pathAliases ?? []);
 
 		for (const imp of symbolGraph.files[file]?.imports ?? []) {
 			// A computed specifier's prefix is not a package name to check.
@@ -97,6 +107,28 @@ export function checkWorkspace(input: {
 				if (targetOwner !== undefined && targetOwner.name !== owner.name) {
 					addViolation(
 						"cross-package-relative-import",
+						owner.name,
+						targetOwner.name,
+						file,
+					);
+				}
+				continue;
+			}
+
+			// Before the package-name reading, as the compiler applies `paths`
+			// before it looks in node_modules. An alias that names no indexed
+			// file (a stylesheet, a JSON file) is still not a package.
+			if (matchPathAlias(spec, aliases).length > 0) {
+				const target = resolveAliasImport(spec, aliases, files);
+				const targetOwner =
+					target === undefined ? undefined : fileToPackage(target, packages);
+				if (
+					targetOwner !== undefined &&
+					targetOwner.name !== owner.name &&
+					!owner.declared.has(targetOwner.name)
+				) {
+					addViolation(
+						"undeclared-workspace-dep",
 						owner.name,
 						targetOwner.name,
 						file,

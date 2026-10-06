@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ImportEntry, SymbolGraph } from "../../semantic/symbol-graph.js";
+import { toPathAliases } from "../tsconfig-paths.js";
 import type {
 	PackageManifest,
 	WorkspacePackageInfo,
@@ -243,6 +244,90 @@ describe("checkWorkspace", () => {
 			[pkg("@org/web", "apps/web")],
 		);
 		expect(result.violations).toEqual([]);
+	});
+});
+
+// A specifier a tsconfig `paths` alias covers names a file in the workspace.
+// Read as a package name it was reported as an undeclared dependency, and the
+// command failed for every app that imports through `@/`.
+describe("checkWorkspace with tsconfig aliases", () => {
+	const packages = [
+		pkg("@org/web", "apps/web"),
+		pkg("@org/shared", "packages/shared"),
+	];
+	const pathAliases = [
+		...toPathAliases("/r", { "@/*": ["./src/*"] }, "/r/apps/web", "apps/web"),
+		...toPathAliases("/r", { "@shared/*": ["packages/shared/src/*"] }, "/r"),
+	];
+	const check = (
+		files: Record<string, ImportEntry[]>,
+		declared: string[] = [],
+	) =>
+		checkWorkspace({
+			symbolGraph: makeSymbolGraph(files),
+			packages: [
+				pkg("@org/web", "apps/web", declared),
+				packages[1] as WorkspacePackageInfo,
+			],
+			pathAliases,
+		});
+
+	it("does not report an aliased import of the package's own file", () => {
+		const result = check({
+			"apps/web/src/page.ts": [bare("@/lib/price")],
+			"apps/web/src/lib/price.ts": [],
+		});
+		expect(result.violations).toEqual([]);
+	});
+
+	it("does not report an alias that names no indexed file", () => {
+		const result = check({
+			"apps/web/src/page.ts": [bare("@/styles/theme.css")],
+		});
+		expect(result.violations).toEqual([]);
+	});
+
+	it("reports an alias into a sibling package the importer does not declare", () => {
+		const result = check({
+			"apps/web/src/page.ts": [bare("@shared/price")],
+			"packages/shared/src/price.ts": [],
+		});
+		expect(result.violations).toEqual([
+			{
+				kind: "undeclared-workspace-dep",
+				package: "@org/web",
+				target: "@org/shared",
+				files: ["apps/web/src/page.ts"],
+			},
+		]);
+	});
+
+	it("accepts an alias into a sibling package the importer declares", () => {
+		const result = check(
+			{
+				"apps/web/src/page.ts": [bare("@shared/price")],
+				"packages/shared/src/price.ts": [],
+			},
+			["@org/shared"],
+		);
+		expect(result.violations).toEqual([]);
+	});
+
+	it("still reports a package's alias used from outside that package", () => {
+		const result = checkWorkspace({
+			symbolGraph: makeSymbolGraph({
+				"packages/shared/src/a.ts": [bare("@/lib/price")],
+			}),
+			packages,
+			pathAliases,
+		});
+		expect(result.violations).toMatchObject([
+			{
+				kind: "undeclared-external-dep",
+				package: "@org/shared",
+				target: "@/lib",
+			},
+		]);
 	});
 });
 

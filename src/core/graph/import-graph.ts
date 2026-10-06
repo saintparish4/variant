@@ -488,7 +488,12 @@ function resolvePackageImport(
 	return firstExisting(candidates, files);
 }
 
-function resolveAliasImport(
+/**
+ * Resolve a specifier through tsconfig `paths` to an indexed file. Exported
+ * for workspace-check, which has to tell an aliased import of a workspace
+ * file from an import of a package.
+ */
+export function resolveAliasImport(
 	spec: string,
 	aliases: readonly PathAlias[],
 	files: ReadonlySet<string>,

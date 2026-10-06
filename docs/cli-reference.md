@@ -292,7 +292,9 @@ A CI gate: compares what each workspace package imports with what its
 | `undeclared-external-dep` | Imports a third-party package declared neither by the package nor at the workspace root |
 | `cross-package-relative-import` | Reaches into a sibling through a relative path, bypassing its entry point. Reported even when the dependency is declared. |
 
-Node built-ins and a package's imports of itself are exempt.
+Node built-ins and a package's imports of itself are exempt. So is an import
+through a `tsconfig.json` path alias that stays inside the package; an alias
+into a sibling the package does not declare is an `undeclared-workspace-dep`.
 
 | Option | Default | Description |
 |---|---|---|
