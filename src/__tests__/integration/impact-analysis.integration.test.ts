@@ -18,6 +18,7 @@ import {
 	cleanupTempWorkspaces,
 	createGitWorkspace,
 	createTempWorkspace,
+	git,
 	restoreGlobalPrinter,
 	withCwd,
 	writeFiles,
@@ -253,6 +254,22 @@ describe("predictImpact", () => {
 		expect(report.result.radius.changed).toMatchObject([
 			{ filePath: "src/auth.ts", classification: "breaking" },
 		]);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+	});
+
+	it("selects the tests of a file that still imports a renamed one by its old name", async () => {
+		const dir = createGitWorkspace("impact", {
+			...FIXTURE,
+			"src/auth.ts": AUTH_BEFORE,
+		});
+		git(dir, "mv", "src/auth.ts", "src/session.ts");
+		git(dir, "commit", "-q", "-m", "rename auth, importer left behind");
+
+		const report = await predictImpact(dir, { base: "HEAD~1" });
+
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/auth.ts", "src/session.ts"]);
 		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
 	});
 

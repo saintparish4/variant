@@ -81,6 +81,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **A renamed file is listed under both names.** With rename detection git
+  reports only the new path, so a file still importing the old one was never
+  reached: `impact` selected no tests for it. A rename now reads as a deletion
+  and an addition, and `pr report` shows both rows.
 - **A changed file with non-ASCII characters in its name is found.** Git
   prints such a path quoted and octal-escaped by default, and the escaped
   string named no file: the change read as a deleted file. The changed-file

@@ -66,10 +66,14 @@ function toFileList(stdout: string | null): string[] | null {
  * changed elsewhere in the repository comes back as `../…` rather than being
  * dropped, which is what `--relative` would do: a caller cannot widen for a
  * change it never sees.
+ *
+ * `--no-renames` for the same reason. With rename detection git names only
+ * the new path, and the old one is what the files still importing it are
+ * found by.
  */
 async function listDiff(cwd: string, range: string): Promise<string[] | null> {
 	const [stdout, prefix] = await Promise.all([
-		git(cwd, ["diff", "--name-only", "-z", range, "--"]),
+		git(cwd, ["diff", "--name-only", "-z", "--no-renames", range, "--"]),
 		git(cwd, ["rev-parse", "--show-prefix"]),
 	]);
 	const files = toFileList(stdout);
