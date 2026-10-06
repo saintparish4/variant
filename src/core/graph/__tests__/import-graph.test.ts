@@ -66,6 +66,57 @@ describe("importersOfUnindexed", () => {
 	});
 });
 
+describe("aliases declared in a package's own tsconfig", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"apps/web/src/page.ts": [staticImport("@/lib/price")],
+			"apps/web/src/lib/price.ts": [],
+			"apps/docs/src/page.ts": [staticImport("@/lib/price")],
+			"apps/docs/src/lib/price.ts": [],
+			"apps/docs/src/missing.ts": [staticImport("@/lib/gone")],
+			"tools/build.ts": [staticImport("@/lib/price")],
+		}),
+		{
+			pathAliases: [
+				...toPathAliases(
+					"/r",
+					{ "@/*": ["./src/*"] },
+					"/r/apps/web",
+					"apps/web",
+				),
+				...toPathAliases(
+					"/r",
+					{ "@/*": ["./src/*"] },
+					"/r/apps/docs",
+					"apps/docs",
+				),
+			],
+		},
+	);
+
+	it("resolves the same alias to each package's own file", () => {
+		expect(sorted(graph.imports.get("apps/web/src/page.ts"))).toEqual([
+			"apps/web/src/lib/price.ts",
+		]);
+		expect(sorted(graph.imports.get("apps/docs/src/page.ts"))).toEqual([
+			"apps/docs/src/lib/price.ts",
+		]);
+	});
+
+	it("records an alias that names no file against its own package", () => {
+		expect(
+			sorted(importersOfUnindexed(graph, "apps/docs/src/lib/gone.json")),
+		).toEqual(["apps/docs/src/missing.ts"]);
+	});
+
+	it("does not apply a package's alias to a file outside it", () => {
+		expect(sorted(graph.imports.get("tools/build.ts"))).toEqual([]);
+		expect(sorted(graph.externals.get("tools/build.ts"))).toEqual([
+			"@/lib/price",
+		]);
+	});
+});
+
 describe("computed specifiers", () => {
 	it("reach every indexed file under a relative static prefix", () => {
 		const graph = buildImportGraph(

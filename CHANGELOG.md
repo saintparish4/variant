@@ -81,6 +81,12 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **Path aliases in a package's own `tsconfig.json` are followed.** Only the
+  `tsconfig.json` in the directory variant ran in was read. From a workspace
+  root, an app importing `@/lib/price` through its own `paths` had no edge to
+  that file, so a change there selected none of the app's tests. Every
+  `tsconfig.json` is now read, each applying to the files under its directory
+  with the nearest one first, including aliases inherited through `extends`.
 - **A renamed file is listed under both names.** With rename detection git
   reports only the new path, so a file still importing the old one was never
   reached: `impact` selected no tests for it. A rename now reads as a deletion

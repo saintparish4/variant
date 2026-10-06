@@ -15,7 +15,6 @@
  * quietly disagrees with the compiler it is modelling.
  */
 
-import { access } from "node:fs/promises";
 import path from "node:path";
 
 /** One `paths` entry, pre-split around its single wildcard. */
@@ -31,6 +30,12 @@ export interface PathAlias {
 	 * Order is significant: TypeScript takes the first that resolves.
 	 */
 	targets: readonly string[];
+	/**
+	 * Directory of the tsconfig that declared the alias, workspace-relative
+	 * POSIX: the alias applies to files under it. Absent for the workspace's
+	 * own tsconfig, which applies to every file.
+	 */
+	scope?: string;
 }
 
 const MAX_WILDCARDS = 1;
@@ -46,6 +51,7 @@ export function toPathAliases(
 	cwd: string,
 	paths: Record<string, readonly string[]> | undefined,
 	baseUrl: string | undefined,
+	scope?: string,
 ): PathAlias[] {
 	if (paths === undefined) return [];
 
@@ -73,7 +79,13 @@ export function toPathAliases(
 		}
 
 		if (targets.length > 0) {
-			aliases.push({ prefix, suffix, wildcard, targets });
+			aliases.push({
+				prefix,
+				suffix,
+				wildcard,
+				targets,
+				...(scope !== undefined && { scope }),
+			});
 		}
 	}
 
@@ -116,44 +128,98 @@ export function matchPathAlias(
 }
 
 /**
- * Read the workspace tsconfig's `paths`. Returns [] when there is no tsconfig,
- * no `paths`, or the file cannot be parsed — a resolver that throws on a
- * malformed config would fail the whole command over an optional optimization.
+ * The aliases in force for `file`: those of the nearest tsconfig first, then
+ * each enclosing one out to the workspace's own. The same pattern (`@/*`)
+ * usually names a different directory in every package that declares it, so
+ * the nearest has to win. An outer alias stays as a fallback: applying one
+ * the compiler would not costs a spurious edge, and leaving out one it would
+ * costs a missed dependent.
  */
-export async function readPathAliases(
-	cwd: string,
-	tsconfigName = "tsconfig.json",
-): Promise<PathAlias[]> {
-	const configPath = path.join(cwd, tsconfigName);
+export function aliasesInScope(
+	file: string,
+	aliases: readonly PathAlias[],
+): PathAlias[] {
+	// The sort is stable, so each tsconfig's own most-specific-first order holds.
+	return aliases
+		.filter(
+			(alias) =>
+				alias.scope === undefined || file.startsWith(`${alias.scope}/`),
+		)
+		.sort((a, b) => (b.scope?.length ?? -1) - (a.scope?.length ?? -1));
+}
 
-	// Cheap existence check first. ts-morph is ~50MB, and a repository with no
-	// tsconfig has no aliases to find — paying the load to learn that is the
-	// most common case in a single-package project.
-	try {
-		await access(configPath);
-	} catch {
-		return [];
-	}
+const TSCONFIG_IGNORE = [
+	"**/node_modules/**",
+	"**/dist/**",
+	".git/**",
+	".variant/**",
+];
 
+/**
+ * Read `paths` from every `tsconfig.json` in the workspace, each scoped to its
+ * own directory. Only the one in `cwd` used to be read: from a workspace root
+ * an app's own `@/*` named nothing, so the edge was missing and a change
+ * behind the alias selected no tests.
+ *
+ * Found by walking rather than through the package graph, so a package that
+ * discovery missed still has its aliases read. A config that cannot be parsed
+ * contributes nothing; a resolver that throws on a malformed config would fail
+ * the whole command over an optional optimization.
+ */
+export async function readPathAliases(cwd: string): Promise<PathAlias[]> {
+	const fg = (await import("fast-glob")).default;
+	const configs = (
+		await fg("**/tsconfig.json", {
+			cwd,
+			onlyFiles: true,
+			ignore: TSCONFIG_IGNORE,
+		})
+	)
+		.map((file) => file.replace(/\\/g, "/"))
+		.sort();
+
+	// ts-morph is ~50MB, and a repository with no tsconfig has no aliases to
+	// find: paying the load to learn that is the common case in a small project.
+	if (configs.length === 0) return [];
 	const { ts } = await import("ts-morph");
 
-	const read = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
-	if (read.error !== undefined || read.config === undefined) return [];
+	const aliases: PathAlias[] = [];
+	for (const config of configs) {
+		const configPath = path.join(cwd, config);
+		const configDir = path.dirname(configPath);
+		const read = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
+		if (read.error !== undefined || read.config === undefined) continue;
 
-	// parseJsonConfigFileContent follows `extends` and applies `baseUrl`, which
-	// is the whole reason for going through the compiler here.
-	const parsed = ts.parseJsonConfigFileContent(
-		read.config,
-		{
-			...ts.sys,
-			// Enumerating every file in the workspace is pure waste: only
-			// `compilerOptions` is wanted, and a large repo makes this the most
-			// expensive call in the command.
-			readDirectory: () => [],
-			useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
-		},
-		cwd,
-	);
+		// parseJsonConfigFileContent follows `extends` and applies `baseUrl`,
+		// which is the whole reason for going through the compiler here.
+		const { options } = ts.parseJsonConfigFileContent(
+			read.config,
+			{
+				...ts.sys,
+				// Enumerating every file in the workspace is pure waste: only
+				// `compilerOptions` is wanted, and a large repo makes this the
+				// most expensive call in the command.
+				readDirectory: () => [],
+				useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+			},
+			configDir,
+		);
 
-	return toPathAliases(cwd, parsed.options.paths, parsed.options.baseUrl);
+		// Without `baseUrl`, targets are relative to the config that declared
+		// `paths`, which under `extends` is not the one being read.
+		const pathsBase = options["pathsBasePath"];
+		const base =
+			options.baseUrl ??
+			(typeof pathsBase === "string" ? pathsBase : configDir);
+		const scope = path.posix.dirname(config);
+		aliases.push(
+			...toPathAliases(
+				cwd,
+				options.paths,
+				base,
+				scope === "." ? undefined : scope,
+			),
+		);
+	}
+	return aliases;
 }

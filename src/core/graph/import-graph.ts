@@ -28,7 +28,7 @@ import type { ImportEntry, SymbolGraph } from "../semantic/symbol-graph.js";
 import { exportsCandidates } from "./package-exports.js";
 import type { PackageGraph } from "./package-graph.js";
 import type { PathAlias } from "./tsconfig-paths.js";
-import { matchPathAlias } from "./tsconfig-paths.js";
+import { aliasesInScope, matchPathAlias } from "./tsconfig-paths.js";
 
 export interface ImportGraph {
 	/** file -> workspace files it imports (resolved, workspace-relative POSIX). */
@@ -113,7 +113,7 @@ export function buildImportGraph(
 ): ImportGraph {
 	const files = new Set(Object.keys(symbolGraph.files));
 	const packageDirs = options.packageDirs ?? {};
-	const pathAliases = options.pathAliases ?? [];
+	const allAliases = options.pathAliases ?? [];
 	const packageExports = options.packageExports ?? {};
 
 	const imports = new Map<string, Set<string>>();
@@ -162,6 +162,7 @@ export function buildImportGraph(
 	for (const file of sortedFiles) {
 		const index = symbolGraph.files[file];
 		if (index === undefined) continue;
+		const pathAliases = aliasesInScope(file, allAliases);
 		for (const imp of index.imports) {
 			const spec = imp.module;
 			if (imp.kind === "pattern") {

@@ -122,8 +122,9 @@ Three consequences:
   `package.json` `workspaces`, else the directories `packages/*`, `apps/*` and
   `services/*`. A directory counts only if its `package.json` has a `name`.
   None of this needs a `variant.config.ts`.
-- **Path aliases:** `compilerOptions.paths` from the root `tsconfig.json`,
-  including `extends` chains. Per-package tsconfig files are not read.
+- **Path aliases:** `compilerOptions.paths` from every `tsconfig.json`,
+  including `extends` chains. Each applies to the files under its directory,
+  nearest first. Config files with another name are not read.
 - **Package `exports` maps** of workspace packages, including conditions and
   `*` patterns. A target in `dist/` is also looked for under `src/`, `lib/` and
   `source/`.
