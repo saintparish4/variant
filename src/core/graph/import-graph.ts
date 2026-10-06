@@ -186,8 +186,11 @@ export function buildImportGraph(
 					addEdge(file, resolved, imp);
 					continue;
 				}
-				const base = path.posix.join(path.posix.dirname(file), spec);
-				addUnresolved(file, spec, base.startsWith("../") ? [] : [base]);
+				// A base above the indexed directory stays `../…`, which is how
+				// git lists a file changed elsewhere in the repository.
+				addUnresolved(file, spec, [
+					path.posix.join(path.posix.dirname(file), spec),
+				]);
 				continue;
 			}
 			if (spec.startsWith("node:")) {
@@ -421,7 +424,6 @@ function patternBases(
 
 	if (prefix.startsWith(".")) {
 		const base = path.posix.join(path.posix.dirname(fromFile), prefix);
-		if (base === ".." || base.startsWith("../")) return [];
 		return [base === "." || base === "./" ? "" : base];
 	}
 	if (prefix.startsWith("node:")) return [];

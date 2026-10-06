@@ -5,6 +5,7 @@
  * test.
  */
 
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { registerImpactAction } from "../../cli/commands/impact.js";
 import {
@@ -194,6 +195,50 @@ describe("predictImpact", () => {
 			predictImpact(dir, { changedFiles: ["src/auth.ts"], readBefore }),
 		).rejects.toMatchObject({ code: "NO_TEST_FILES" });
 		expect(await readImpactPredictions(defaultHistoryDir(dir))).toEqual([]);
+	});
+
+	// Git names paths from the repository root. Read as relative to a project
+	// kept in a subdirectory, a changed file looked deleted and matched nothing
+	// in the import graph: `breaking`, and no test selected.
+	it("selects the same tests from a subdirectory as from the repository root", async () => {
+		const dir = createGitWorkspace("impact", {
+			"web/src/auth.ts": AUTH_BEFORE,
+			"web/src/app.ts": FIXTURE["src/app.ts"],
+			"web/src/app.test.ts": FIXTURE["src/app.test.ts"],
+			"web/src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+		writeFiles(dir, {
+			"web/src/auth.ts":
+				"export function login(name: string): string { return name.trim(); }",
+		});
+
+		const report = await predictImpact(path.join(dir, "web"), { base: "HEAD" });
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "src/auth.ts", classification: "internal" },
+		]);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+	});
+
+	it("reaches the importers of a file changed outside the directory it runs in", async () => {
+		const dir = createGitWorkspace("impact", {
+			"shared/format.ts": "export const format = (s: string): string => s;",
+			"shared/unused.ts": "export const unused = 1;",
+			"web/src/app.ts":
+				'import { format } from "../../shared/format.js";\nexport const boot = (): string => format("a");',
+			"web/src/app.test.ts": FIXTURE["src/app.test.ts"],
+			"web/src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+		writeFiles(dir, {
+			"shared/format.ts":
+				"export const format = (s: string): string => s.trim();",
+			"shared/unused.ts": "export const unused = 2;",
+		});
+
+		const report = await predictImpact(path.join(dir, "web"), { base: "HEAD" });
+
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+		expect(report.result.tests.unreached).toEqual(["../shared/unused.ts"]);
 	});
 
 	it("rejects a base ref outside a git repository", async () => {

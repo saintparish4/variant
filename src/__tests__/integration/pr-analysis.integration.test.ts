@@ -16,6 +16,7 @@ import {
 	cleanupTempWorkspaces,
 	createGitWorkspace,
 	createTempWorkspace,
+	git,
 	restoreGlobalPrinter,
 	withCwd,
 	writeFiles,
@@ -82,6 +83,26 @@ describe("runPrCheck", () => {
 		expect(result.tsFilesChanged).toBe(1);
 		expect(result.files[0]?.classification).toBe("breaking");
 		expect(result.verdict).toBe("build-required");
+	});
+
+	// From a subdirectory git still lists the file by its path from the
+	// repository root, which names nothing below that directory: the file read
+	// as deleted and every export as removed.
+	it("classifies a branch's change the same from a subdirectory", async () => {
+		const dir = createGitWorkspace("pr", {
+			"web/src/api.ts": "export function get(): number { return 1; }\n",
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, {
+			"web/src/api.ts": "export function get(): number { return 2; }\n",
+		});
+		git(dir, "commit", "-q", "-am", "change the body");
+
+		const result = await runPrCheck(path.join(dir, "web"), { base: "main" });
+
+		expect(result.files).toMatchObject([
+			{ filePath: "src/api.ts", classification: "internal" },
+		]);
 	});
 
 	it("ignores non-TypeScript files in the changed set", async () => {

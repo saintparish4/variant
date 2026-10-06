@@ -17,8 +17,9 @@ export const DEFAULT_DIFF_BASE_REF = "HEAD~1";
 
 /**
  * Workspace-relative, POSIX-separated — the form git pathspecs require. A path
- * outside the workspace is an error: git finds nothing at `../x.ts`, and an
- * empty base reads as a new file, which classifies every export as added.
+ * outside the workspace is an error: it may be outside the repository too,
+ * where git has no base version to read, and an empty base reads as a new
+ * file, which classifies every export as added.
  */
 export function toWorkspaceRelative(cwd: string, filePath: string): string {
 	const relative = path.relative(cwd, path.resolve(cwd, filePath));

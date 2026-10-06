@@ -156,7 +156,7 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …) | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
+| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
 
 A file that does not parse is `breaking`, whatever the comparison says.
 

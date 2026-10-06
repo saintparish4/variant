@@ -43,6 +43,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **Running from a subdirectory of the repository no longer misreads every
+  change.** Git lists and reads paths from the repository root, and variant
+  took them as relative to the directory it ran in. With a project kept in a
+  subdirectory (`web/package.json`), each changed file named nothing on disk:
+  `impact` called a body edit `breaking` and selected no tests for it, and
+  `diff` and `pr check` reported every export as removed. Paths are now read
+  from the directory variant runs in. A file changed elsewhere in the
+  repository is `unanalyzed`: it selects the tests of the files that import
+  it, is listed as `Unreached` when none does, and has its own note.
 - **A file that does not parse is `breaking`.** A mid-edit file on disk was
   classified from whatever syntax tree the parser recovered, which can be
   wrong in either direction. Either version failing to parse now makes the
