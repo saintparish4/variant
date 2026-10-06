@@ -177,6 +177,19 @@ describe("listChangedFiles", () => {
 		expect(await listChangedFiles(dir, "HEAD")).toEqual([]);
 	});
 
+	// With rename detection git names only the new path, and the old one is
+	// what the files still importing it are found by.
+	it("lists a renamed file under both its old and its new path", async () => {
+		const dir = repoWithBaseline();
+		git(dir, "mv packages/utils/src/index.ts packages/utils/src/main.ts");
+		commitAll(dir, "rename");
+
+		expect(await listChangedFiles(dir, "HEAD~1")).toEqual([
+			"packages/utils/src/index.ts",
+			"packages/utils/src/main.ts",
+		]);
+	});
+
 	// Git prints a path with non-ASCII bytes quoted and octal-escaped unless
 	// asked not to, and that string names no file.
 	it("returns a non-ASCII path as it is on disk", async () => {

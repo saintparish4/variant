@@ -1,6 +1,10 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { matchPathAlias, toPathAliases } from "../tsconfig-paths.js";
+import {
+	aliasesInScope,
+	matchPathAlias,
+	toPathAliases,
+} from "../tsconfig-paths.js";
 
 const CWD = path.resolve("/repo");
 const abs = (...segments: string[]) => path.resolve(CWD, ...segments);
@@ -79,6 +83,49 @@ describe("toPathAliases", () => {
 		);
 
 		expect(aliases.map((a) => a.prefix)).toEqual(["@/lib/", "@/"]);
+	});
+});
+
+// Each package of a workspace can declare its own `paths`, and the same
+// alias (`@/*`) usually means a different directory in each.
+describe("aliasesInScope", () => {
+	const root = toPathAliases(CWD, { "@/*": ["src/*"] }, CWD);
+	const web = toPathAliases(
+		CWD,
+		{ "@/*": ["./src/*"] },
+		abs("apps/web"),
+		"apps/web",
+	);
+	const docs = toPathAliases(
+		CWD,
+		{ "@/*": ["./src/*"] },
+		abs("apps/docs"),
+		"apps/docs",
+	);
+	const all = [...root, ...docs, ...web];
+
+	it("offers the nearest tsconfig's alias before the workspace's own", () => {
+		expect(
+			matchPathAlias("@/lib/x", aliasesInScope("apps/web/src/page.ts", all)),
+		).toEqual(["apps/web/src/lib/x", "src/lib/x"]);
+	});
+
+	it("leaves out an alias declared for another package", () => {
+		expect(
+			matchPathAlias("@/lib/x", aliasesInScope("apps/docs/src/page.ts", all)),
+		).toEqual(["apps/docs/src/lib/x", "src/lib/x"]);
+	});
+
+	it("applies only the workspace's own aliases outside every package", () => {
+		expect(
+			matchPathAlias("@/lib/x", aliasesInScope("src/page.ts", all)),
+		).toEqual(["src/lib/x"]);
+	});
+
+	it("does not take a sibling directory with the same prefix as in scope", () => {
+		expect(
+			matchPathAlias("@/lib/x", aliasesInScope("apps/web-admin/a.ts", all)),
+		).toEqual(["src/lib/x"]);
 	});
 });
 

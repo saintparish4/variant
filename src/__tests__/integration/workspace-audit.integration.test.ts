@@ -67,6 +67,21 @@ describe("auditWorkspace", () => {
 		expect((await auditWorkspace(dir))?.violations).toEqual([]);
 	});
 
+	it("does not report an import through a package's own tsconfig alias", async () => {
+		const dir = createTempWorkspace("wscheck");
+		workspaceImporting(dir, { "@org/auth": "workspace:*" });
+		writeFiles(dir, {
+			"apps/web/tsconfig.json": JSON.stringify({
+				compilerOptions: { paths: { "@/*": ["./src/*"] } },
+			}),
+			"apps/web/src/lib/price.ts": "export const price = 1;",
+			"apps/web/src/cart.ts":
+				'import { price } from "@/lib/price";\nexport const cart = price;',
+		});
+
+		expect((await auditWorkspace(dir))?.violations).toEqual([]);
+	});
+
 	it("returns null outside a workspace", async () => {
 		const dir = createTempWorkspace("wscheck");
 		writeFiles(dir, {

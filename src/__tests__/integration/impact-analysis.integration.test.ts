@@ -18,6 +18,7 @@ import {
 	cleanupTempWorkspaces,
 	createGitWorkspace,
 	createTempWorkspace,
+	git,
 	restoreGlobalPrinter,
 	withCwd,
 	writeFiles,
@@ -241,6 +242,67 @@ describe("predictImpact", () => {
 		expect(report.result.tests.unreached).toEqual(["../shared/unused.ts"]);
 	});
 
+	// Only the tsconfig in the directory variant ran in was read. From a
+	// workspace root, an app's own `@/*` named nothing: no edge, no test.
+	it("follows an alias declared in a package's own tsconfig", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"apps/web/tsconfig.json": JSON.stringify({
+				compilerOptions: { paths: { "@/*": ["./src/*"] } },
+			}),
+			"apps/web/src/lib/price.ts":
+				"export const price = (n: number): number => n * 3;",
+			"apps/web/src/page.ts":
+				'import { price } from "@/lib/price";\nexport const page = (): number => price(1);',
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page";\nexport const t = page();',
+			"apps/web/src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["apps/web/src/lib/price.ts"],
+			readBefore: async () =>
+				"export const price = (n: number): number => n * 2;",
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"apps/web/src/page.test.ts",
+		]);
+	});
+
+	// The usual monorepo layout: aliases live in a shared base config that
+	// each package extends, and their targets are relative to that base.
+	it("follows an alias a package inherits from a base tsconfig", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"tsconfig.base.json": JSON.stringify({
+				compilerOptions: {
+					paths: { "@shared/*": ["./packages/shared/src/*"] },
+				},
+			}),
+			"apps/web/tsconfig.json": JSON.stringify({
+				extends: "../../tsconfig.base.json",
+			}),
+			"packages/shared/src/price.ts":
+				"export const price = (n: number): number => n * 3;",
+			"apps/web/src/page.ts":
+				'import { price } from "@shared/price";\nexport const page = (): number => price(1);',
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page";\nexport const t = page();',
+			"apps/web/src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["packages/shared/src/price.ts"],
+			readBefore: async () =>
+				"export const price = (n: number): number => n * 2;",
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"apps/web/src/page.test.ts",
+		]);
+	});
+
 	it("selects the tests of a file that still imports a deleted one", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, FIXTURE);
@@ -253,6 +315,22 @@ describe("predictImpact", () => {
 		expect(report.result.radius.changed).toMatchObject([
 			{ filePath: "src/auth.ts", classification: "breaking" },
 		]);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+	});
+
+	it("selects the tests of a file that still imports a renamed one by its old name", async () => {
+		const dir = createGitWorkspace("impact", {
+			...FIXTURE,
+			"src/auth.ts": AUTH_BEFORE,
+		});
+		git(dir, "mv", "src/auth.ts", "src/session.ts");
+		git(dir, "commit", "-q", "-m", "rename auth, importer left behind");
+
+		const report = await predictImpact(dir, { base: "HEAD~1" });
+
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/auth.ts", "src/session.ts"]);
 		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
 	});
 

@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { updateSymbolGraph } from "../semantic/symbol-graph.js";
 import { loadPackageGraph } from "./package-graph.js";
+import { readPathAliases } from "./tsconfig-paths.js";
 import type {
 	PackageManifest,
 	WorkspaceCheckResult,
@@ -89,11 +90,9 @@ export async function auditWorkspace(
 		declared: declaredNames(pkg.manifest),
 	}));
 
-	const { graph: symbolGraph } = await updateSymbolGraph(cwd);
+	const [{ graph: symbolGraph }, rootDeclared, pathAliases] = await Promise.all(
+		[updateSymbolGraph(cwd), readRootDeclared(cwd), readPathAliases(cwd)],
+	);
 
-	return checkWorkspace({
-		symbolGraph,
-		packages,
-		rootDeclared: await readRootDeclared(cwd),
-	});
+	return checkWorkspace({ symbolGraph, packages, rootDeclared, pathAliases });
 }
