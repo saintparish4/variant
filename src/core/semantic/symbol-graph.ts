@@ -90,7 +90,7 @@ export interface BuildSymbolGraphStats {
 export interface BuildSymbolGraphOptions {
 	/** File globs to index. Default: TS/TSX sources, excluding `.d.ts`. */
 	include?: string[];
-	/** Extra ignore globs on top of node_modules/.git/.variant/dist. */
+	/** Extra ignore globs on top of `DEFAULT_IGNORE`. */
 	ignore?: string[];
 	/** Previous graph to update incrementally. */
 	previous?: SymbolGraph | null;
@@ -101,12 +101,22 @@ export interface BuildSymbolGraphOptions {
 }
 
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
+/**
+ * `node_modules` and `dist` are ignored at any depth: every package of a pnpm
+ * workspace has its own `node_modules` (links into the store, which the glob
+ * follows) and its own build output. Matched at the root only, a dependency's
+ * sources and tests were indexed as the repository's, and a full install
+ * never finished scanning. A changed file under one of these still reaches
+ * its importers; see `traceBlastRadius`.
+ */
 const DEFAULT_IGNORE = [
-	"node_modules/**",
+	"**/node_modules/**",
 	".git/**",
 	".variant/**",
-	"dist/**",
+	"**/dist/**",
 	"**/*.d.ts",
+	"**/*.d.mts",
+	"**/*.d.cts",
 ];
 
 export function defaultGraphDir(cwd: string): string {

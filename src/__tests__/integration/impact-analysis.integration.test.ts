@@ -241,6 +241,28 @@ describe("predictImpact", () => {
 		expect(report.result.tests.unreached).toEqual(["../shared/unused.ts"]);
 	});
 
+	// `dist/` is not indexed, so a file there has no node to walk from. Read
+	// as ordinary code it reached nothing and said nothing.
+	it("does not skip silently for a changed TypeScript file in an ignored directory", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"dist/built.ts": "export const built = (): number => 2;",
+			"dist/orphan.ts": "export const orphan = 2;",
+			"src/app.ts":
+				'import { built } from "../dist/built.js";\nexport const boot = (): number => built();',
+			"src/app.test.ts": FIXTURE["src/app.test.ts"],
+			"src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["dist/built.ts", "dist/orphan.ts"],
+			readBefore: async () => "export const built = (): number => 1;",
+		});
+
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
+		expect(report.result.tests.unreached).toEqual(["dist/orphan.ts"]);
+	});
+
 	it("rejects a base ref outside a git repository", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, { "src/a.ts": "export const a = 1;" });

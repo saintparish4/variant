@@ -255,6 +255,23 @@ describe("buildSymbolGraph", () => {
 		expect(Object.keys(graph.files)).toEqual(["src/a.ts"]);
 	});
 
+	// Every package of a pnpm workspace has its own `node_modules`, and a dual
+	// build emits `.d.mts` and `.d.cts`. Indexed, a dependency's tests counted
+	// as the repository's own and a full install never finished scanning.
+	it("ignores nested node_modules and dist, and every declaration extension", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, {
+			"packages/ui/src/button.ts": "export const b = 1;",
+			"packages/ui/node_modules/dep/index.ts": "export const x = 1;",
+			"packages/ui/node_modules/dep/dep.test.ts": "export const t = 1;",
+			"packages/ui/dist/button.ts": "export const b = 1;",
+			"packages/ui/types/button.d.mts": "export declare const b: number;",
+			"packages/ui/types/button.d.cts": "export declare const b: number;",
+		});
+		const { graph } = await buildSymbolGraph(dir);
+		expect(Object.keys(graph.files)).toEqual(["packages/ui/src/button.ts"]);
+	});
+
 	it("rejects unsafe include patterns", async () => {
 		const dir = makeTmpDir();
 		await expect(

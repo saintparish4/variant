@@ -105,8 +105,9 @@ Three consequences:
 
 ## What gets analyzed
 
-- **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding `.d.ts`,
-  `node_modules/`, `.git/`, `.variant/` and `dist/` at the project root.
+- **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding declaration
+  files (`.d.ts`, `.d.mts`, `.d.cts`), anything under a `node_modules/` or
+  `dist/` directory at any depth, and `.git/` and `.variant/`.
   Imports written with `.js`, `.mjs`, `.cjs` or `.jsx` extensions resolve to the
   TypeScript source.
 - **Tests** (for `impact`): indexed files under a `__tests__/` directory, or
@@ -156,7 +157,7 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
+| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), in a directory that is not indexed, or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
 
 A file that does not parse is `breaking`, whatever the comparison says.
 

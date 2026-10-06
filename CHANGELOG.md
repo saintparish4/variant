@@ -43,6 +43,16 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Fixed
 
+- **Nested `node_modules` and `dist` directories are no longer indexed.**
+  Both were ignored at the project root only. Every package of a pnpm
+  workspace has its own `node_modules`, so after an install `impact` indexed
+  the dependencies: their tests counted as the repository's own, and in one
+  workspace with a full install the scan had not finished after seven minutes.
+  `.d.mts` and `.d.cts` are treated as declaration files, as `.d.ts` was. A
+  changed TypeScript file in a directory that is not indexed is `unanalyzed`
+  rather than classified and then reaching nothing: it selects the tests of
+  the files that import it, is listed as `Unreached` otherwise, and has its
+  own note.
 - **Running from a subdirectory of the repository no longer misreads every
   change.** Git lists and reads paths from the repository root, and variant
   took them as relative to the directory it ran in. With a project kept in a
