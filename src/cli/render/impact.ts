@@ -1,6 +1,7 @@
 import type { ImpactReport } from "../../core/impact/predict.js";
 import type { VerifyResult } from "../../core/impact/verify.js";
 import { verdictText } from "../../core/semantic/verdict.js";
+import { getColors } from "../visuals/color.js";
 import type { Printer } from "../visuals/printer.js";
 import { getPrinter } from "../visuals/printer.js";
 import { classificationLabel, plural } from "./labels.js";
@@ -39,6 +40,7 @@ export function renderImpact(
 		printer,
 		"",
 		`Base ref: ${report.baseRef}`,
+		`Workspace: ${report.packagesFound === 0 ? "no workspace packages found" : plural(report.packagesFound, "package")}`,
 		"",
 		`You changed ${plural(radius.changed.length, "file")}.`,
 	);
@@ -76,9 +78,26 @@ export function renderImpact(
 		"",
 		`Run:   ${plural(tests.affectedTests.length, "test file")}`,
 		`Skip:  ${plural(skipped, "test file")} (of ${count(tests.totalTests)} total)`,
+	);
+
+	if (tests.unreached.length > 0) {
+		const listed = tests.unreached.slice(0, MAX_LISTED_FILES).join(", ");
+		const more =
+			tests.unreached.length > MAX_LISTED_FILES
+				? `, … ${count(tests.unreached.length - MAX_LISTED_FILES)} more`
+				: "";
+		lines(
+			printer,
+			"",
+			`${getColors().yellow("Unreached:")} ${plural(tests.unreached.length, "changed file")} that variant cannot analyze and no test imports (${listed}${more}). No test is selected for them; run the ones that use them yourself.`,
+		);
+	}
+
+	lines(
+		printer,
 		"",
 		`Verdict:    ${verdictText(report.verdict)}`,
-		`Confidence: ${Math.round(tests.confidence * 100)}%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)`,
+		`Confidence: ${tests.resolution} (${Math.round(tests.confidence * 100)}%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)`,
 	);
 
 	const notes = [...radius.notes, ...tests.notes];

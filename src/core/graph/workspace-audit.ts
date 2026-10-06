@@ -10,7 +10,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { updateSymbolGraph } from "../semantic/symbol-graph.js";
 import { loadPackageGraph } from "./package-graph.js";
-import type { WorkspaceCheckResult } from "./workspace-check.js";
+import type {
+	PackageManifest,
+	WorkspaceCheckResult,
+} from "./workspace-check.js";
 import { checkWorkspace } from "./workspace-check.js";
 
 interface DependencyManifest {
@@ -41,6 +44,36 @@ async function readRootDeclared(cwd: string): Promise<Set<string>> {
 	} catch {
 		return new Set();
 	}
+}
+
+/**
+ * Every `package.json` under `cwd` by workspace-relative POSIX dir ("" for the
+ * root), for `workspaceBlindSpots`. Unreadable or unparsable manifests are
+ * left out: this only ever adds notes, so a missing entry cannot hide one.
+ */
+export async function readManifests(
+	cwd: string,
+): Promise<Map<string, PackageManifest>> {
+	const fg = (await import("fast-glob")).default;
+	const found = await fg("**/package.json", {
+		cwd,
+		onlyFiles: true,
+		ignore: ["**/node_modules/**", ".git/**", ".variant/**"],
+	});
+	const entries = await Promise.all(
+		found.map(async (rel) => {
+			try {
+				const manifest = JSON.parse(
+					await readFile(path.join(cwd, rel), "utf8"),
+				) as PackageManifest;
+				const dir = path.posix.dirname(rel.replace(/\\/g, "/"));
+				return [dir === "." ? "" : dir, manifest] as const;
+			} catch {
+				return undefined;
+			}
+		}),
+	);
+	return new Map(entries.filter((entry) => entry !== undefined));
 }
 
 /** Returns null when the directory is not a workspace (nothing to audit). */

@@ -1,0 +1,69 @@
+[
+  {
+    "name": "variant",
+    "repo": "https://github.com/saintparish4/variant.git",
+    "sha": "9e96901dffcb1d15ab5d6f3c30ea2cbe93827cf2",
+    "commits": 8,
+    "install": ["pnpm", "install", "--frozen-lockfile"],
+    "setup": [["pnpm", "build"]],
+    "test": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "--reporter=json",
+      "--outputFile=.vitest-report.json"
+    ]
+  },
+  {
+    "name": "pyra",
+    "repo": "https://github.com/saintparish4/pyra.git",
+    "sha": "fb3a0929b663b749a56e315c9944f5b879e91542",
+    "commits": 10,
+    "install": ["pnpm", "install", "--frozen-lockfile"],
+    "setup": [],
+    "test": [
+      "pnpm",
+      "-r",
+      "--no-bail",
+      "run",
+      "test",
+      "--reporter=json",
+      "--outputFile=.vitest-report.json"
+    ]
+  },
+  {
+    "name": "valibot",
+    "repo": "https://github.com/fabian-hiller/valibot.git",
+    "sha": "d4da61a0ac696f8421f97328f329a560b67143a9",
+    "commits": 10,
+    "install": [
+      "pnpm",
+      "install",
+      "--frozen-lockfile",
+      "--filter",
+      "valibot",
+      "--filter",
+      "@valibot/to-json-schema",
+      "--filter",
+      "@valibot/zod-to-valibot"
+    ],
+    "setup": [],
+    "test": [
+      "pnpm",
+      "-r",
+      "--no-bail",
+      "--filter",
+      "valibot",
+      "--filter",
+      "@valibot/to-json-schema",
+      "--filter",
+      "@valibot/zod-to-valibot",
+      "run",
+      "test",
+      "--run",
+      "--reporter=json",
+      "--outputFile=.vitest-report.json"
+    ]
+  }
+]

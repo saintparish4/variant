@@ -10,7 +10,7 @@
  * this returns is a graph-resolution score, not a promise.
  */
 
-import { GitRefError } from "../errors.js";
+import { GitRefError, NoTestFilesError } from "../errors.js";
 import { loadPackageGraph } from "../graph/package-graph.js";
 import {
 	appendImpactPrediction,
@@ -40,13 +40,19 @@ export interface ImpactReport {
 	baseRef: string;
 	result: TestImpactResult;
 	verdict: BuildVerdict;
+	/**
+	 * Workspace packages discovery found. Printed so that "none" in a monorepo
+	 * is visible: bare imports of an undiscovered package count as external.
+	 */
+	packagesFound: number;
 	/** False when the shadow-mode prediction could not be persisted. */
 	historyLogged: boolean;
 }
 
 /**
- * Throws `GitRefError` when the changed set cannot be listed: an empty
- * prediction there would read as "run nothing".
+ * Throws `GitRefError` when the changed set cannot be listed, and
+ * `NoTestFilesError` when no test file is indexed: an empty prediction in
+ * either case would read as "run nothing".
  */
 export async function predictImpact(
 	cwd: string,
@@ -69,6 +75,8 @@ export async function predictImpact(
 			`Could not list the files changed since "${baseRef}"`,
 		);
 	}
+	// "0 of 0" is not a prediction, and logged it would count as a clean run.
+	if (result.tests.totalTests === 0) throw new NoTestFilesError();
 
 	const verdict = deriveVerdict(
 		result.radius.changed.map((change) => change.classification),
@@ -93,5 +101,11 @@ export async function predictImpact(
 		notes: [...result.radius.notes, ...result.tests.notes],
 	});
 
-	return { baseRef, result, verdict, historyLogged };
+	return {
+		baseRef,
+		result,
+		verdict,
+		packagesFound: packageGraph?.packages.length ?? 0,
+		historyLogged,
+	};
 }

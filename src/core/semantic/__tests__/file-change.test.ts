@@ -5,6 +5,15 @@ import { toWorkspaceRelative } from "../file-change.js";
 describe("toWorkspaceRelative", () => {
 	const cwd = path.resolve("/repo");
 
+	it.each([
+		["a parent-relative path", "../elsewhere/index.ts"],
+		["an absolute path outside it", path.resolve("/elsewhere/index.ts")],
+	])("rejects %s", (_, filePath) => {
+		expect(() => toWorkspaceRelative(cwd, filePath)).toThrow(
+			expect.objectContaining({ code: "CLI_USAGE" }),
+		);
+	});
+
 	it("leaves an already-relative POSIX path alone", () => {
 		expect(toWorkspaceRelative(cwd, "src/index.ts")).toBe("src/index.ts");
 	});

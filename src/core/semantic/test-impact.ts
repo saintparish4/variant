@@ -20,7 +20,10 @@
  */
 
 import type { ImportGraph } from "../graph/import-graph.js";
-import { buildImportGraph } from "../graph/import-graph.js";
+import {
+	buildImportGraph,
+	importersOfUnindexed,
+} from "../graph/import-graph.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
 import type { BlastRadius, TraceBlastRadiusOptions } from "./blast-radius.js";
 import {
@@ -29,6 +32,8 @@ import {
 	traceBlastRadius,
 } from "./blast-radius.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
+import type { Resolution } from "./verdict.js";
+import { resolutionOf } from "./verdict.js";
 
 /** test file -> every workspace file in its static import closure (incl. itself). */
 export interface TestTrace {
@@ -46,8 +51,16 @@ export interface TestImpact {
 	totalTests: number;
 	/** True when narrowing is unsafe (build/test configuration changed). */
 	selectAll: boolean;
+	/**
+	 * Changed files the index does not cover (not TypeScript) that no test
+	 * imports, directly or through an importer. They select nothing, and that
+	 * is a blind spot rather than a finding, so it is reported on its own.
+	 */
+	unreached: string[];
 	/** Blast-radius confidence further lowered by closure blind spots. */
 	confidence: number;
+	/** `confidence` bucketed; see `resolutionOf`. */
+	resolution: Resolution;
 	notes: string[];
 }
 
@@ -73,10 +86,17 @@ export function defaultIsTestFile(file: string): boolean {
  * unconventional name is still missed.
  */
 const TEST_CONFIG_FILE =
-	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite)\.config\.[^/.]+(\.[^/]+)?)$/;
+	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite|babel)\.config\.[^/.]+(\.[^/]+)?|vitest\.(workspace|projects)\.[^/.]+|\.babelrc(\.[^/]+)?)$/;
 
 const TEST_SETUP_FILE =
 	/(^|\/)((vitest|jest)\.setup|setup-?tests|global-?(setup|teardown)|tests?\/setup)\.[cm]?[jt]sx?$/i;
+
+/**
+ * Prose is left out of `unreached`: no test imports a README, and a warning
+ * that fires on every documentation edit is one people learn to skip. This
+ * only quiets the warning; it selects nothing either way.
+ */
+const PROSE_FILE = /\.(?:md|markdown|rst|txt|adoc)$/i;
 
 function invalidatesAllTests(filePath: string): boolean {
 	return TEST_CONFIG_FILE.test(filePath) || TEST_SETUP_FILE.test(filePath);
@@ -147,6 +167,20 @@ export function computeTestImpact(
 		}
 	}
 
+	const unreached: string[] = [];
+	if (!selectAll) {
+		for (const impact of radius.changed) {
+			if (impact.classification !== "unanalyzed") continue;
+			if (PROSE_FILE.test(impact.filePath)) continue;
+			// Closures are transitive, so a test reaching any dependent of an
+			// importer also reaches the importer itself.
+			const reached = [...importersOfUnindexed(graph, impact.filePath)].some(
+				(importer) => (coverage.testsFor.get(importer)?.size ?? 0) > 0,
+			);
+			if (!reached) unreached.push(impact.filePath);
+		}
+	}
+
 	// Static closures cannot see fixtures, snapshots, or non-TS assets; count
 	// the selected tests whose closure has unresolved imports as one signal.
 	let blindSpots = 0;
@@ -177,7 +211,9 @@ export function computeTestImpact(
 		affectedTests: [...affected].sort(),
 		totalTests: allTests.length,
 		selectAll,
+		unreached,
 		confidence,
+		resolution: resolutionOf(confidence),
 		notes: noteList,
 	};
 }

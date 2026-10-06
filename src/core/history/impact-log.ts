@@ -53,6 +53,12 @@ export interface ImpactReconciliation {
 	caught: number;
 	/** Failures outside it — the number that gates test skipping. */
 	falseSkips: number;
+	/**
+	 * The prediction's confidence and select-all flag, so misses can be broken
+	 * down by confidence. Absent from records older than these fields.
+	 */
+	confidence?: number;
+	selectAll?: boolean;
 }
 
 export const MAX_IMPACT_RECORDS = 1000;

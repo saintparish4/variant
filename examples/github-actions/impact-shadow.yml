@@ -47,7 +47,16 @@ jobs:
           # A pull request is diffed against its target branch, a push against
           # the commit it replaced.
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: npx --yes @blzsky/variant impact --base "$BASE_REF"
+        # The first push to a branch has no previous commit (`before` is all
+        # zeros), and a force-push can name one that is no longer fetchable.
+        # There is nothing to diff against, so there is no prediction, and the
+        # reconcile step finds none to check.
+        run: |
+          if git cat-file -e "$BASE_REF^{commit}" 2>/dev/null; then
+            npx --yes @blzsky/variant impact --base "$BASE_REF"
+          else
+            echo "::notice::No base commit to compare against ($BASE_REF); skipping the prediction."
+          fi
 
       - name: Run the full suite
         run: npx vitest run --reporter=default --reporter=json --outputFile.json=report.json

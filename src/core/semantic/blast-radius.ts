@@ -8,6 +8,8 @@
  * The semantic gating is what separates this from "it imported the file, so
  * rerun it":
  * - `non-impacting` changes are not even seeds;
+ * - `unanalyzed` changes (files the index does not cover, such as a
+ *   stylesheet or JSON) reach the files whose unresolved imports name them;
  * - `internal` (body-only) changes affect the file itself but do NOT
  *   propagate to dependents;
  * - `breaking` (signature/type) changes propagate — and the first hop is
@@ -30,13 +32,17 @@ import type { ImportGraph } from "../graph/import-graph.js";
 import {
 	buildImportGraph,
 	computeAffectedFiles,
+	importersOfUnindexed,
 } from "../graph/import-graph.js";
 import type { PackageGraph } from "../graph/package-graph.js";
 import type { PathAlias } from "../graph/tsconfig-paths.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
+import { readManifests } from "../graph/workspace-audit.js";
+import { workspaceBlindSpots } from "../graph/workspace-check.js";
 import { readFileAtRef, readFilesAtRef } from "../vcs/git.js";
 import type { ClassifyResult, SemanticClass } from "./differ.js";
 import { createClassifier } from "./differ.js";
+import { isStarReexportKey } from "./surface.js";
 import { updateSymbolGraph } from "./symbol-graph.js";
 
 /** `unanalyzed` = changed file the semantic differ cannot parse (non-TS). */
@@ -52,6 +58,11 @@ export interface FileImpact {
 	impactedSymbols: string[];
 	/** True when this change propagates through the reverse import graph. */
 	propagates: boolean;
+	/**
+	 * True when no importer can be gated out by the names it takes: a changed
+	 * star re-export, or a file that does not parse.
+	 */
+	ungated?: boolean;
 	notes: string[];
 }
 
@@ -69,6 +80,9 @@ export interface BlastRadius {
 }
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
+
+/** Files named in one aggregated note before the rest become a count. */
+const MAX_NOTE_FILES = 3;
 
 /**
  * Classification is CPU-bound in ts-morph, so this is not about parallel
@@ -181,7 +195,7 @@ export async function traceBlastRadius(
 				classification: "unanalyzed" as const,
 				impactedSymbols: [],
 				propagates: false,
-				notes: [`${file}: not a TypeScript source; change not analyzed`],
+				notes: [],
 			};
 		}
 		const [before, after] = await Promise.all([
@@ -197,8 +211,17 @@ export async function traceBlastRadius(
 		);
 	});
 
+	const workspaceNotes = workspaceBlindSpots({
+		externals: importGraph.externals,
+		packageNames: new Set(
+			(options.packageGraph?.packages ?? []).map((pkg) => pkg.manifest.name),
+		),
+		manifests: await readManifests(cwd),
+	});
+
 	return assembleBlastRadius(baseRef, changed, importGraph, {
 		packageDirs,
+		workspaceNotes,
 		...(options.tasks === undefined ? {} : { tasks: options.tasks }),
 	});
 }
@@ -215,9 +238,11 @@ export function assembleBlastRadius(
 	options: {
 		packageDirs?: Record<string, string>;
 		tasks?: Record<string, TaskConfig>;
+		/** Where the graph may be missing edges; see `workspaceBlindSpots`. */
+		workspaceNotes?: readonly string[];
 	} = {},
 ): BlastRadius {
-	const notes = new Set<string>();
+	const notes = new Set<string>(options.workspaceNotes);
 	const affected = new Set<string>();
 	const firstHop = new Set<string>();
 
@@ -225,7 +250,20 @@ export function assembleBlastRadius(
 		for (const note of impact.notes) notes.add(note);
 		if (impact.classification === "non-impacting") continue;
 		affected.add(impact.filePath);
+		if (impact.classification === "unanalyzed") {
+			// No surface to gate on, so every importer is a first hop.
+			for (const importer of importersOfUnindexed(
+				importGraph,
+				impact.filePath,
+			)) {
+				firstHop.add(importer);
+			}
+			continue;
+		}
 		if (!impact.propagates) continue;
+
+		const ungated =
+			impact.ungated === true || impact.impactedSymbols.some(isStarReexportKey);
 
 		for (const dependent of importGraph.dependents.get(impact.filePath) ?? []) {
 			const edge = importGraph.edges.get(dependent)?.get(impact.filePath);
@@ -241,7 +279,7 @@ export function assembleBlastRadius(
 				firstHop.add(dependent);
 				continue;
 			}
-			if (edge.names.has("*")) {
+			if (ungated || edge.names.has("*")) {
 				firstHop.add(dependent);
 				continue;
 			}
@@ -258,13 +296,38 @@ export function assembleBlastRadius(
 		affected.add(file);
 	}
 
-	for (const file of affected) {
-		const fileUnresolved = importGraph.unresolved.get(file);
-		if (fileUnresolved !== undefined && fileUnresolved.size > 0) {
-			notes.add(
-				`${file}: unresolved imports (${[...fileUnresolved].sort().join(", ")})`,
-			);
-		}
+	// One note per kind, not per file: a repository importing stylesheets would
+	// otherwise pin the score at its floor on every run, and say nothing.
+	const unanalyzed = changed
+		.filter((impact) => impact.classification === "unanalyzed")
+		.map((impact) => impact.filePath);
+	if (unanalyzed.length > 0) {
+		const one = unanalyzed.length === 1;
+		notes.add(
+			`${unanalyzed.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(unanalyzed)})`,
+		);
+	}
+
+	const withUnresolved = [...affected].sort().flatMap((file) => {
+		const specs = importGraph.unresolved.get(file);
+		return specs === undefined || specs.size === 0
+			? []
+			: [`${file} (${[...specs].sort().join(", ")})`];
+	});
+	if (withUnresolved.length > 0) {
+		const one = withUnresolved.length === 1;
+		notes.add(
+			`${withUnresolved.length} affected ${one ? "file has" : "files have"} unresolved imports: ${listPaths(withUnresolved)}`,
+		);
+	}
+
+	// Any changed file could be what such a loader loads, so this applies to
+	// every prediction, not only those that touch the loader.
+	if (importGraph.computed.size > 0) {
+		const loaders = [...importGraph.computed].sort();
+		notes.add(
+			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listPaths(loaders)}); a change reached only that way selects no tests`,
+		);
 	}
 
 	const packageDirs = options.packageDirs ?? {};
@@ -300,19 +363,30 @@ export function assembleBlastRadius(
 	};
 }
 
-/** Convert a differ result into the gate-ready impact shape. */
+/**
+ * Convert a differ result into the gate-ready impact shape. An added export is
+ * normally harmless to existing importers, but an added star re-export can
+ * shadow a name another star provided (two stars exporting one name make it
+ * ambiguous, so neither exports it), so it counts as impacted.
+ */
 export function toFileImpact(result: ClassifyResult): FileImpact {
 	const impactedSymbols = [
+		...result.exportedSymbols.added.filter(isStarReexportKey),
 		...result.exportedSymbols.removed,
 		...result.exportedSymbols.changed
 			.filter((c) => c.kind !== "body")
 			.map((c) => c.name),
 	].sort();
+	// A changed star re-export changes names that cannot be listed, and a file
+	// that does not parse has no trustworthy names at all.
+	const ungated =
+		result.syntaxErrors || impactedSymbols.some(isStarReexportKey);
 	return {
 		filePath: result.filePath,
 		classification: result.classification,
 		impactedSymbols,
 		propagates: result.classification === "breaking",
+		...(ungated && { ungated: true }),
 		notes: result.confidenceNotes.map((n) => `${result.filePath}: ${n}`),
 	};
 }
@@ -342,6 +416,12 @@ export function packageExportsFrom(
 	return out;
 }
 
+function listPaths(items: readonly string[]): string {
+	return items.length > MAX_NOTE_FILES
+		? `${items.slice(0, MAX_NOTE_FILES).join(", ")}, … ${items.length - MAX_NOTE_FILES} more`
+		: items.join(", ");
+}
+
 /** Longest-prefix owner lookup: `packages/auth/src/x.ts` -> `@org/auth`. */
 function fileToPackage(
 	file: string,
@@ -350,7 +430,8 @@ function fileToPackage(
 	let bestName: string | undefined;
 	let bestLength = -1;
 	for (const [name, dir] of Object.entries(packageDirs)) {
-		const prefix = `${dir}/`;
+		// A root package's dir is "" and owns every file no deeper package does.
+		const prefix = dir === "" ? "" : `${dir}/`;
 		if (file.startsWith(prefix) && prefix.length > bestLength) {
 			bestName = name;
 			bestLength = prefix.length;

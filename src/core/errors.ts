@@ -82,6 +82,17 @@ export class ImpactReportError extends VariantError {
 	}
 }
 
+export class NoTestFilesError extends VariantError {
+	constructor() {
+		super(
+			"NO_TEST_FILES",
+			"No test files found, so there is nothing to predict",
+		);
+		this.hint =
+			"variant finds TypeScript tests named `*.test.ts` or `*.spec.ts` (also `.tsx`, `.mts`, `.cts`) or placed under `__tests__/`. JavaScript files are not indexed.";
+	}
+}
+
 export class CliUsageError extends VariantError {
 	constructor(message: string) {
 		super("CLI_USAGE", message);

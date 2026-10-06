@@ -1,6 +1,7 @@
 import {
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 	unlinkSync,
 	writeFileSync,
@@ -104,6 +105,61 @@ describe("buildSymbolGraph", () => {
 		expect(byModule.get("./g.js")?.kind).toBe("dynamic");
 	});
 
+	it("records require() and import-equals as whole-module imports", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, {
+			"src/m.ts": [
+				'import legacy = require("./legacy.js");',
+				'import type Types = require("./types.js");',
+				'const config = require("./config.js");',
+				"export const both: Types.T = [legacy, config];",
+			].join("\n"),
+		});
+
+		const { graph } = await buildSymbolGraph(dir);
+		const imports = graph.files["src/m.ts"]?.imports ?? [];
+		const byModule = new Map(imports.map((i) => [i.module, i]));
+
+		expect(byModule.get("./legacy.js")).toEqual({
+			module: "./legacy.js",
+			kind: "static",
+			typeOnly: false,
+			names: ["*"],
+		});
+		expect(byModule.get("./types.js")?.typeOnly).toBe(true);
+		expect(byModule.get("./config.js")).toEqual({
+			module: "./config.js",
+			kind: "static",
+			typeOnly: false,
+			names: ["*"],
+		});
+	});
+
+	it("records the static prefix of a computed specifier as a pattern", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, {
+			"src/m.ts": [
+				`export const load = (lang: string) => import(\`./locales/\${lang}.js\`);`,
+				'export const plugin = (name: string) => require("./plugins/" + name + ".js");',
+				"export const literal = () => import(`./g.js`);",
+				"export const anything = (p: string) => import(p);",
+			].join("\n"),
+		});
+
+		const { graph } = await buildSymbolGraph(dir);
+		const imports = graph.files["src/m.ts"]?.imports ?? [];
+
+		expect(imports).toEqual(
+			expect.arrayContaining([
+				{ module: "./locales/", kind: "pattern", typeOnly: false, names: [] },
+				{ module: "./plugins/", kind: "pattern", typeOnly: false, names: [] },
+				{ module: "./g.js", kind: "dynamic", typeOnly: false, names: [] },
+				{ module: "", kind: "pattern", typeOnly: false, names: [] },
+			]),
+		);
+		expect(imports).toHaveLength(4);
+	});
+
 	it("notes dynamic imports with non-literal specifiers", async () => {
 		const dir = makeTmpDir();
 		writeFixture(dir, {
@@ -169,6 +225,22 @@ describe("buildSymbolGraph", () => {
 
 		expect(second.stats.removed).toBe(1);
 		expect(second.graph.files["src/app.ts"]).toBeUndefined();
+	});
+
+	it("skips a file deleted between listing and reading", async () => {
+		const dir = makeTmpDir();
+		writeFixture(dir, FIXTURE);
+
+		const { graph } = await buildSymbolGraph(dir, {
+			readFile: async (file) => {
+				if (file.endsWith("app.ts")) {
+					throw Object.assign(new Error("gone"), { code: "ENOENT" });
+				}
+				return readFileSync(file, "utf8");
+			},
+		});
+
+		expect(Object.keys(graph.files)).toEqual(["src/auth.ts"]);
 	});
 
 	it("ignores node_modules, dist, and .d.ts files by default", async () => {

@@ -129,6 +129,8 @@ is an error (`GIT_REF_ERROR`, exit 1).
 type ImpactReport = {
 	baseRef: string;
 	verdict: BuildVerdict;
+	/** Workspace packages discovery found; 0 outside a workspace. */
+	packagesFound: number;
 	/** False when the prediction could not be appended to .variant/history/impact.jsonl. */
 	historyLogged: boolean;
 	radius: BlastRadius;
@@ -156,6 +158,11 @@ type FileImpact = {
 	impactedSymbols: string[];
 	/** True for `breaking`: the change reaches dependents that import impactedSymbols. */
 	propagates: boolean;
+	/**
+	 * Present and true when no dependent is gated out by the names it imports:
+	 * a changed `export *`, or a file that does not parse.
+	 */
+	ungated?: boolean;
 	notes: string[];
 };
 
@@ -165,13 +172,21 @@ type TestImpact = {
 	totalTests: number;
 	/** True when a package manifest, lockfile, tsconfig or test/build config changed. */
 	selectAll: boolean;
+	/**
+	 * Changed files variant cannot analyze (not TypeScript, not prose) that no
+	 * test imports, directly or through the files that import them.
+	 */
+	unreached: string[];
 	/** radius.confidence, lowered 0.1 per test note, floor 0.3. */
 	confidence: number;
+	/** confidence bucketed: "high" at 0.9 and up, "medium" from 0.7, "low" below. */
+	resolution: "high" | "medium" | "low";
 	notes: string[];
 };
 ```
 
-The human output's `Confidence` is `tests.confidence`.
+The human output's `Confidence` is `tests.resolution` followed by
+`tests.confidence` as a percentage.
 
 Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
 
@@ -179,6 +194,7 @@ Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
 {
   "baseRef": "main",
   "verdict": "build-required",
+  "packagesFound": 3,
   "historyLogged": true,
   "radius": {
     "baseRef": "main",
@@ -216,7 +232,9 @@ Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
     ],
     "totalTests": 4,
     "selectAll": false,
+    "unreached": [],
     "confidence": 1,
+    "resolution": "high",
     "notes": []
   }
 }
@@ -226,9 +244,12 @@ Notes are human-readable strings, sorted. The forms they take:
 
 | Where | Note |
 |---|---|
-| `radius.notes` | `<file>: not a TypeScript source; change not analyzed` |
+| `radius.notes` | `<n> changed file(s) is/are not TypeScript and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<dependent>: dynamic import of <file> — names unknowable` |
-| `radius.notes` | `<file>: unresolved imports (<specifier>, …)` |
+| `radius.notes` | `<n> affected file(s) has/have unresolved imports: <file> (<specifier>, …), …` |
+| `radius.notes` | `<n> file(s) load a module through a fully computed import() or require() specifier (<file>, …); a change reached only that way selects no tests` |
+| `radius.notes` | `<n> dependency/dependencies declared with a local protocol is/are not a workspace package variant found (<name>, …); …` |
+| `radius.notes` | `<n> bare import name(s) is/are neither workspace packages nor declared dependencies (<name>, …); …` |
 | `radius.notes` | `<file>: <reason the export surface could not be fully resolved>` |
 | `tests.notes` | `<file>: build/test configuration changed — running all tests` |
 | `tests.notes` | `<n> selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed` |
@@ -328,6 +349,8 @@ type FileClassification = {
 	confidence: number;
 	/** Why confidence was lowered. Empty when it is 1. */
 	confidenceNotes: string[];
+	/** True when either version does not parse; the file is then `breaking`. */
+	syntaxErrors: boolean;
 };
 ```
 
@@ -351,14 +374,16 @@ value type), `type` for a type-space-only change (interfaces, type aliases), and
           "changed": [{ "name": "formatPrice", "kind": "signature" }]
         },
         "confidence": 1,
-        "confidenceNotes": []
+        "confidenceNotes": [],
+        "syntaxErrors": false
       },
       {
         "filePath": "packages/utils/src/slug.ts",
         "classification": "non-impacting",
         "exportedSymbols": { "added": [], "removed": [], "changed": [] },
         "confidence": 1,
-        "confidenceNotes": []
+        "confidenceNotes": [],
+        "syntaxErrors": false
       }
     ],
     "verdict": "build-required"
@@ -448,6 +473,10 @@ type ImpactReconciliation = {
 	caught: number;
 	/** Failures outside it: the number that gates test skipping. */
 	falseSkips: number;
+	/** The prediction's tests.confidence. Absent from older records. */
+	confidence?: number;
+	/** The prediction's selectAll. Absent from older records. */
+	selectAll?: boolean;
 };
 ```
 

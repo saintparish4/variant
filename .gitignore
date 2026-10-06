@@ -18,6 +18,9 @@ coverage/
 # Benchmark results (regenerate with `pnpm bench`; CI publishes artifacts)
 benchmarks/results/
 
+# Commit-replay results (regenerate with `pnpm accuracy`)
+accuracy/results/
+
 # Logs & debug
 *.log
 npm-debug.log*

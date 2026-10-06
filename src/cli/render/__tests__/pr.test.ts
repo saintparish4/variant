@@ -15,6 +15,7 @@ function classified(
 		exportedSymbols: { added: [], removed: [], changed: [], ...symbols },
 		confidence: 1,
 		confidenceNotes: [],
+		syntaxErrors: false,
 	};
 }
 

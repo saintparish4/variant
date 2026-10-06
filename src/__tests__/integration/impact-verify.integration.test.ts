@@ -139,6 +139,9 @@ describe("verifyImpact", () => {
 		expect(records).toHaveLength(2);
 		expect(records[0]?.falseSkips).toBe(1);
 		expect(records[0]?.headSha).toBe("a".repeat(40));
+		// Calibration needs the score each prediction was made with.
+		expect(records[0]?.confidence).toBe(1);
+		expect(records[0]?.selectAll).toBe(false);
 	});
 
 	it("does not write a reconciliation when logging is off", async () => {

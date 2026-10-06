@@ -65,6 +65,7 @@ npx @blzsky/variant impact --base main
 
 ```
 Base ref: main
+Workspace: 3 packages
 
 You changed 1 file.
   non-impacting  packages/utils/src/slug.ts
@@ -75,7 +76,7 @@ Run:   0 test files
 Skip:  4 test files (of 4 total)
 
 Verdict:    safe to skip build
-Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+Confidence: high (100%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
 ```
 
 `non-impacting` means no exported surface and no code changed. There is nothing
@@ -102,6 +103,7 @@ npx @blzsky/variant impact --base main
 
 ```
 Base ref: main
+Workspace: 3 packages
 
 You changed 2 files.
   breaking       packages/utils/src/price.ts  (formatPrice)
@@ -113,7 +115,7 @@ Run:   2 test files
 Skip:  2 test files (of 4 total)
 
 Verdict:    build required
-Confidence: 100%  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+Confidence: high (100%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
 ```
 
 Reading it:

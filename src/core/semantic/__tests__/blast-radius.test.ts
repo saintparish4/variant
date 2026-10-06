@@ -119,7 +119,62 @@ describe("assembleBlastRadius", () => {
 		expect(radius.affectedFiles).not.toContain("src/uses-version.ts");
 	});
 
-	it("unanalyzed files are seeds that never propagate", () => {
+	it("an ungated change reaches every importer", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[{ ...breaking("src/auth.ts", []), ungated: true }],
+			GATING_GRAPH,
+		);
+		expect(radius.affectedFiles).toContain("src/uses-login.ts");
+		expect(radius.affectedFiles).toContain("src/gated-child.ts");
+	});
+
+	it("a changed export-star reaches every importer, whatever names it takes", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/auth.ts", ["* from ./a"])],
+			GATING_GRAPH,
+		);
+		expect(radius.affectedFiles).toEqual([
+			"src/auth.ts",
+			"src/downstream.ts",
+			"src/dynamic.ts",
+			"src/gated-child.ts",
+			"src/star.ts",
+			"src/uses-login.ts",
+			"src/uses-version.ts",
+		]);
+	});
+
+	it("a changed non-TypeScript file reaches the files that import it", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/button.ts": [namedImport("./button.css", [])],
+				"src/page.ts": [namedImport("./button.js", ["Button"])],
+				"src/other.ts": [],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[
+				{
+					filePath: "src/button.css",
+					classification: "unanalyzed",
+					impactedSymbols: [],
+					propagates: false,
+					notes: [],
+				},
+			],
+			graph,
+		);
+		expect(radius.affectedFiles).toEqual([
+			"src/button.css",
+			"src/button.ts",
+			"src/page.ts",
+		]);
+	});
+
+	it("an unanalyzed file nothing imports goes nowhere", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({
 				"src/a.ts": [],
@@ -134,14 +189,16 @@ describe("assembleBlastRadius", () => {
 					classification: "unanalyzed",
 					impactedSymbols: [],
 					propagates: false,
-					notes: ["package.json: not a TypeScript source; change not analyzed"],
+					notes: [],
 				},
 			],
 			graph,
 		);
 		expect(radius.affectedFiles).toEqual(["package.json"]);
-		expect(radius.notes).toHaveLength(1);
-		expect(radius.confidence).toBeLessThan(1);
+		expect(radius.notes).toEqual([
+			"1 changed file is not TypeScript and was not analyzed (package.json)",
+		]);
+		expect(radius.confidence).toBe(0.9);
 	});
 
 	it("notes unresolved imports on affected files", () => {
@@ -155,11 +212,49 @@ describe("assembleBlastRadius", () => {
 			[breaking("src/a.ts", ["x"])],
 			graph,
 		);
-		expect(
-			radius.notes.some((n) =>
-				n.includes("src/a.ts: unresolved imports (./missing.js)"),
-			),
-		).toBe(true);
+		expect(radius.notes).toEqual([
+			"1 affected file has unresolved imports: src/a.ts (./missing.js)",
+		]);
+	});
+
+	it("counts unresolved imports across affected files as one note", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/a.ts": [namedImport("./a.css", [])],
+				"src/b.ts": [namedImport("./a.js", ["x"]), namedImport("./b.svg", [])],
+				"src/c.ts": [namedImport("./b.js", ["y"]), namedImport("./c.json", [])],
+				"src/d.ts": [namedImport("./c.js", ["z"]), namedImport("./d.png", [])],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/a.ts", ["x"])],
+			graph,
+		);
+		expect(radius.notes).toEqual([
+			"4 affected files have unresolved imports: src/a.ts (./a.css), src/b.ts (./b.svg), src/c.ts (./c.json), … 1 more",
+		]);
+		expect(radius.confidence).toBe(0.9);
+	});
+
+	it("notes files whose computed specifiers could name anything", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/a.ts": [],
+				"src/loader.ts": [
+					{ module: "", kind: "pattern", typeOnly: false, names: [] },
+				],
+			}),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/a.ts", ["x"])],
+			graph,
+		);
+		expect(radius.notes).toContain(
+			"1 file(s) load a module through a fully computed import() or require() specifier (src/loader.ts); a change reached only that way selects no tests",
+		);
+		expect(radius.confidence).toBe(0.9);
 	});
 
 	it("maps affected files to packages and tasks", () => {
@@ -192,6 +287,19 @@ describe("assembleBlastRadius", () => {
 			"@org/web:build",
 			"@org/web:test",
 		]);
+	});
+
+	it("maps files outside every package dir to a root package", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({ "scripts/build.ts": [], "packages/a/src/x.ts": [] }),
+		);
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("scripts/build.ts", []), breaking("packages/a/src/x.ts", [])],
+			graph,
+			{ packageDirs: { root: "", "@org/a": "packages/a" } },
+		);
+		expect(radius.affectedPackages).toEqual(["@org/a", "root"]);
 	});
 
 	it("clamps confidence at the floor", () => {
@@ -227,6 +335,7 @@ describe("toFileImpact", () => {
 			},
 			confidence: 0.85,
 			confidenceNotes: ['export * from "./x" hides which names are exported'],
+			syntaxErrors: false,
 		});
 
 		expect(impact.impactedSymbols).toEqual(["gone", "resized", "retyped"]);
@@ -234,6 +343,34 @@ describe("toFileImpact", () => {
 		expect(impact.notes).toEqual([
 			'src/a.ts: export * from "./x" hides which names are exported',
 		]);
+	});
+
+	it("counts an added export-star as impacted, since it can shadow names", () => {
+		const impact = toFileImpact({
+			filePath: "src/index.ts",
+			classification: "breaking",
+			exportedSymbols: {
+				added: ["* from ./b", "fresh"],
+				removed: [],
+				changed: [],
+			},
+			confidence: 0.85,
+			confidenceNotes: [],
+			syntaxErrors: false,
+		});
+		expect(impact.impactedSymbols).toEqual(["* from ./b"]);
+	});
+
+	it("does not gate a file that does not parse", () => {
+		const impact = toFileImpact({
+			filePath: "src/a.ts",
+			classification: "breaking",
+			exportedSymbols: { added: [], removed: [], changed: [] },
+			confidence: 0.85,
+			confidenceNotes: [],
+			syntaxErrors: true,
+		});
+		expect(impact.ungated).toBe(true);
 	});
 
 	it("internal results do not propagate", () => {
@@ -247,6 +384,7 @@ describe("toFileImpact", () => {
 			},
 			confidence: 1,
 			confidenceNotes: [],
+			syntaxErrors: false,
 		});
 		expect(impact.propagates).toBe(false);
 		expect(impact.impactedSymbols).toEqual([]);

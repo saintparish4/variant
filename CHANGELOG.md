@@ -14,6 +14,113 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Changed
+
+- **Confidence reads as a bucket first:** `Confidence: medium (82%)`, with
+  `high` at 90% and up, `medium` from 70%, and `low` below; `--json` carries it
+  as `tests.resolution`. The score counts what the analysis could not
+  resolve, and two decimals invited reading it as a probability.
+- **Notes about unresolved imports and unanalyzed files are one note each**,
+  with a count and the first few paths, instead of one note per file. Each note
+  lowers the score, so a repository importing stylesheets sat at the 30% floor
+  on every run and the score said nothing.
+- `impact verify` records the prediction's `confidence` and `selectAll` in
+  `reconciliation.jsonl`, so shared results can be broken down by confidence.
+  Both are still counts and flags, with no paths.
+- **`impact` fails when it finds no test files** (`NO_TEST_FILES`, exit 1)
+  instead of predicting "0 of 0 tests" and logging it as a clean run. Only
+  TypeScript tests are indexed (`*.test.ts`, `*.spec.ts`, and the `.tsx`,
+  `.mts` and `.cts` forms, or anything under `__tests__/`), so a repository
+  whose tests are `.js`, or named like `*.cy.ts`, used to get an empty
+  prediction that read as "run nothing".
+
+### Added
+
+- `impact` prints how many workspace packages it found (`Workspace: 3
+  packages`, or `no workspace packages found`), and `--json` carries it as
+  `packagesFound`. Bare imports of a package discovery missed count as
+  external, so "none found" in a monorepo explains an empty prediction.
+
+### Fixed
+
+- **A file that does not parse is `breaking`.** A mid-edit file on disk was
+  classified from whatever syntax tree the parser recovered, which can be
+  wrong in either direction. Either version failing to parse now makes the
+  file `breaking`, reaching every importer whatever names it takes, with a
+  note saying which version failed; `diff --json` carries `syntaxErrors`.
+- **`.tsx` changes are parsed as TSX.** The differ parsed every file as `.ts`,
+  where JSX is a syntax error, and classified `.tsx` files from the recovered
+  tree.
+- **`impact-shadow.yml` no longer fails on a branch's first push.** A push
+  that creates a branch has no previous commit (`github.event.before` is all
+  zeros), so `impact --base` stopped with `GIT_REF_ERROR` and the run went red
+  the first time the workflow ran in a new repository. The predict step now
+  skips with a notice when the base is not a fetchable commit, which also
+  covers a force-push whose old head is gone. Copy the example again to pick
+  this up.
+- **The symbol index records the same entry for a file however it was
+  built.** Every file of a run was parsed into one shared ts-morph project, so
+  an inferred export such as `export const b = a` took its type from whichever
+  imports happened to be parsed earlier in that run. An entry reused by content
+  hash could then disagree with a cold build of the same tree. Each file is now
+  indexed alone, as the differ already classifies it. The index format version
+  is bumped, so the first run rebuilds `.variant/graph/symbols.json`.
+- A file deleted while the symbol index is being built is skipped instead of
+  failing the command with `ENOENT`.
+- `diff` with a path outside the repository fails (`CLI_USAGE`, exit 1).
+  Git found nothing at `../x.ts`, the empty base read as a new file, and every
+  export was reported as added, `breaking`.
+- A workspace that lists its root as a package (`.` in
+  `pnpm-workspace.yaml` or `workspaces`) maps root-level files to it:
+  `impact` counts the root package as affected, and `workspace check` checks
+  those files against the root manifest. Both skipped them.
+- `vitest.workspace.*`, `vitest.projects.*`, `babel.config.*` and `.babelrc*`
+  select every test when they change, like the other runner configs. They
+  selected nothing: no test imports them.
+- **A workspace package that discovery missed is noted instead of silently
+  dropping out.** A bare import of a package variant did not discover counted
+  as a third-party dependency, with no edge and no note, so a change to that
+  package reached none of its importers. `impact` now notes a dependency
+  declared with a local protocol (`workspace:`, `link:`, `file:`, `portal:`)
+  that no discovered package provides, and bare imports that are neither
+  workspace packages nor declared by the importing file's nearest
+  `package.json` or the root (a missed package, or an alias from a
+  `tsconfig.json` variant does not read).
+- **`require()` and `import x = require()` are import edges.** The symbol
+  index recorded only `import` declarations, `export … from` and `import()`,
+  so a file loaded with `require("./x")` was in no test's closure and changing
+  it selected nothing, with no note. Literal specifiers now count as imports of
+  every name; a computed `require()` gets the same note as a computed
+  `import()`. The index format version is bumped, so the first run rebuilds
+  `.variant/graph/symbols.json`.
+- **A changed stylesheet, JSON or JavaScript file selects the tests of the
+  files that import it.** The index covers TypeScript only, so a changed
+  `button.css` had no node in the graph: no test's closure could contain it,
+  and the prediction was zero tests, softened only by a lower confidence
+  score. The import graph now remembers which path every unresolved specifier
+  names (relative, workspace-package and alias specifiers alike, and the
+  prefixes of computed ones), and a changed file that is not indexed reaches
+  the files whose imports name it. A changed file that still reaches no test
+  gets its own `Unreached:` line in the output, and `unreached` in the JSON.
+- **A computed `import()` or `require()` reaches what it can load.** A file
+  loaded only through `` import(`./locales/${lang}.js`) `` was in no test's
+  closure, so changing it selected nothing, and the note about the computed
+  specifier sat on the loader, which was not in the blast radius. The literal
+  text the specifier starts with (from a template or a `"./x/" + name`
+  concatenation) now links the loader to every indexed file under that
+  prefix, whole workspace packages when the prefix names one, and
+  `tsconfig` alias targets. A specifier with no literal start is noted on
+  every run, since any change could be what it loads. `` import(`./g.js`) ``
+  with no substitution now counts as a literal import.
+- **A changed `export *` reaches every importer in the blast radius.**
+  Swapping `export * from "./a"` for `export * from "./b"` recorded the
+  impacted name as `* from ./a`, which no importer's names ever match, so every
+  file importing named exports from the barrel dropped out of the affected
+  files, packages and tasks. Adding a star re-export now counts too: two stars
+  exporting the same name make it ambiguous, so it disappears. Test selection
+  was not affected, because it follows every test that imports the changed
+  file.
+
 ## [0.2.1] - 2026-09-28
 
 ### Added

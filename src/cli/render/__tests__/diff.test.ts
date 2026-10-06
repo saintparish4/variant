@@ -10,6 +10,7 @@ function result(overrides: Partial<ClassifyResult> = {}): ClassifyResult {
 		exportedSymbols: { added: [], removed: [], changed: [] },
 		confidence: 1,
 		confidenceNotes: [],
+		syntaxErrors: false,
 		...overrides,
 	};
 }

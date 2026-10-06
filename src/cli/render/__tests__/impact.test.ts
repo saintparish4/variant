@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { captureOutput } from "../../../__tests__/helpers/cli-harness.js";
 import type { ImpactReport } from "../../../core/impact/predict.js";
 import type {
@@ -6,7 +6,12 @@ import type {
 	FileImpact,
 } from "../../../core/semantic/blast-radius.js";
 import type { TestImpact } from "../../../core/semantic/test-impact.js";
+import { writeGlobalColorChoice } from "../../visuals/color.js";
 import { renderImpact, renderImpactJson } from "../impact.js";
+
+beforeEach(() => {
+	writeGlobalColorChoice("never");
+});
 
 function fileImpact(
 	filePath: string,
@@ -25,6 +30,7 @@ function fileImpact(
 function report(overrides: {
 	radius?: Partial<BlastRadius>;
 	tests?: Partial<TestImpact>;
+	packagesFound?: number;
 	historyLogged?: boolean;
 }): ImpactReport {
 	const radius: BlastRadius = {
@@ -41,7 +47,9 @@ function report(overrides: {
 		affectedTests: [],
 		totalTests: 0,
 		selectAll: false,
+		unreached: [],
 		confidence: 1,
+		resolution: "high",
 		notes: [],
 		...overrides.tests,
 	};
@@ -49,6 +57,7 @@ function report(overrides: {
 		baseRef: "HEAD~1",
 		result: { radius, tests },
 		verdict: "build-required",
+		packagesFound: overrides.packagesFound ?? 0,
 		historyLogged: overrides.historyLogged ?? true,
 	};
 }
@@ -64,6 +73,17 @@ describe("renderImpact", () => {
 
 		expect(capture.stdout()).toContain("Base ref: HEAD~1");
 		expect(capture.stdout()).toContain("You changed 1 file.");
+	});
+
+	it.each([
+		[0, "Workspace: no workspace packages found"],
+		[3, "Workspace: 3 packages"],
+	])("states how many workspace packages were found (%i)", (found, line) => {
+		const capture = captureOutput();
+
+		renderImpact(report({ packagesFound: found }), capture.printer);
+
+		expect(capture.stdout()).toContain(line);
 	});
 
 	it("lists each changed file with its classification", () => {
@@ -156,9 +176,12 @@ describe("renderImpact", () => {
 	it("always states that the result is report-only", () => {
 		const capture = captureOutput();
 
-		renderImpact(report({ tests: { confidence: 0.82 } }), capture.printer);
+		renderImpact(
+			report({ tests: { confidence: 0.82, resolution: "medium" } }),
+			capture.printer,
+		);
 
-		expect(capture.stdout()).toContain("Confidence: 82%");
+		expect(capture.stdout()).toContain("Confidence: medium (82%)");
 		expect(capture.stdout()).toContain("report-only");
 	});
 
@@ -176,6 +199,27 @@ describe("renderImpact", () => {
 		expect(capture.stdout()).toContain("Notes:");
 		expect(capture.stdout()).toContain("- radius note");
 		expect(capture.stdout()).toContain("- test note");
+	});
+
+	it("warns about changed files no test can reach", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({ tests: { unreached: ["src/orphan.css"] } }),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Unreached: 1 changed file that variant cannot analyze and no test imports (src/orphan.css).",
+		);
+	});
+
+	it("says nothing about unreached files when every change reaches a test", () => {
+		const capture = captureOutput();
+
+		renderImpact(report({}), capture.printer);
+
+		expect(capture.stdout()).not.toContain("Unreached");
 	});
 
 	it("omits the notes section when there is nothing to note", () => {

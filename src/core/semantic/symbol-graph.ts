@@ -16,12 +16,17 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Project, SourceFile } from "ts-morph";
+import type { Node, Project, SourceFile } from "ts-morph";
 import { GraphError } from "../errors.js";
 import type { SymbolKind, TsMorph } from "./surface.js";
 import { collectExportedSurface } from "./surface.js";
 
-export const SYMBOL_GRAPH_VERSION = 1;
+/**
+ * Bumped whenever extraction changes what an index records. Per-file entries
+ * are reused by content hash, so without a bump an unchanged file keeps the
+ * edges an older extractor produced (and silently misses the new ones).
+ */
+export const SYMBOL_GRAPH_VERSION = 4;
 
 const GRAPH_FILENAME = "symbols.json";
 
@@ -39,9 +44,17 @@ export interface SymbolEntry {
 
 /** One module dependency of a file. */
 export interface ImportEntry {
-	/** Module specifier as written (relative path or package name). */
+	/**
+	 * Module specifier as written (relative path or package name). For a
+	 * `pattern`, the literal text a computed specifier starts with, or "" when
+	 * nothing about it is known.
+	 */
 	module: string;
-	kind: "static" | "reexport" | "dynamic";
+	/**
+	 * `pattern` is an `import()` or `require()` whose specifier is computed:
+	 * the file may load any module whose specifier starts with `module`.
+	 */
+	kind: "static" | "reexport" | "dynamic" | "pattern";
 	typeOnly: boolean;
 	/**
 	 * Names taken from the module: exported names for named imports,
@@ -83,6 +96,8 @@ export interface BuildSymbolGraphOptions {
 	previous?: SymbolGraph | null;
 	/** Concurrency for parallel readFile. Default 32. */
 	parallel?: number;
+	/** DI for tests: read a file by absolute path. */
+	readFile?: (absolutePath: string) => Promise<string>;
 }
 
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
@@ -133,8 +148,10 @@ export async function buildSymbolGraph(
 
 	// Read all candidate files in parallel (same worker-pool shape as
 	// cache/hashing.ts), then parse only the ones whose hash changed.
-	const contents = new Array<string>(files.length);
+	const contents = new Array<string | undefined>(files.length);
 	const limit = Math.max(1, options.parallel ?? 32);
+	const read =
+		options.readFile ?? ((absolutePath) => readFile(absolutePath, "utf8"));
 	let next = 0;
 	const worker = async () => {
 		while (true) {
@@ -142,7 +159,12 @@ export async function buildSymbolGraph(
 			if (i >= files.length) return;
 			const relPath = files[i];
 			if (relPath === undefined) return;
-			contents[i] = await readFile(path.join(cwd, relPath), "utf8");
+			try {
+				contents[i] = await read(path.join(cwd, relPath));
+			} catch (err) {
+				// Deleted after the glob listed it: gone, as if never listed.
+				if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+			}
 		}
 	};
 	await Promise.all(
@@ -174,7 +196,15 @@ export async function buildSymbolGraph(
 		const sourceFile = project.createSourceFile(relPath, content, {
 			overwrite: true,
 		});
-		out[relPath] = indexSourceFile(sourceFile, contentHash, tsm);
+		// Each file is indexed alone. With earlier files left in the Project,
+		// an inferred type such as `export const b = a` resolved through
+		// whichever imports happened to be parsed this run, so an entry reused
+		// by content hash disagreed with a cold build of the same tree.
+		try {
+			out[relPath] = indexSourceFile(sourceFile, contentHash, tsm);
+		} finally {
+			project.removeSourceFile(sourceFile);
+		}
 		stats.parsed++;
 	}
 
@@ -336,24 +366,98 @@ function collectImports(
 		});
 	}
 
-	for (const call of file.getDescendantsOfKind(tsm.SyntaxKind.CallExpression)) {
-		if (call.getExpression().getKind() !== tsm.SyntaxKind.ImportKeyword) {
+	// `import x = require("m")`. Which names the file uses is not tracked, so
+	// the edge takes all of them.
+	for (const decl of file.getDescendantsOfKind(
+		tsm.SyntaxKind.ImportEqualsDeclaration,
+	)) {
+		const reference = decl.getModuleReference();
+		if (!tsm.Node.isExternalModuleReference(reference)) continue;
+		const expression = reference.getExpression();
+		if (expression === undefined || !tsm.Node.isStringLiteral(expression)) {
 			continue;
 		}
+		imports.push({
+			module: expression.getLiteralValue(),
+			kind: "static",
+			typeOnly: decl.isTypeOnly(),
+			names: ["*"],
+		});
+	}
+
+	for (const call of file.getDescendantsOfKind(tsm.SyntaxKind.CallExpression)) {
+		const callee = call.getExpression();
+		const isImport = callee.getKind() === tsm.SyntaxKind.ImportKeyword;
+		// Any call to an identifier named `require` counts. A local function of
+		// that name only adds an edge, which widens the result, never narrows it.
+		const isRequire =
+			tsm.Node.isIdentifier(callee) && callee.getText() === "require";
+		if (!isImport && !isRequire) continue;
+
 		const arg = call.getArguments()[0];
-		if (arg !== undefined && tsm.Node.isStringLiteral(arg)) {
-			imports.push({
-				module: arg.getLiteralValue(),
-				kind: "dynamic",
-				typeOnly: false,
-				names: [],
-			});
-		} else {
-			notes.push("dynamic import() with a non-literal specifier");
+		if (
+			arg !== undefined &&
+			(tsm.Node.isStringLiteral(arg) ||
+				tsm.Node.isNoSubstitutionTemplateLiteral(arg))
+		) {
+			imports.push(
+				isImport
+					? {
+							module: arg.getLiteralValue(),
+							kind: "dynamic",
+							typeOnly: false,
+							names: [],
+						}
+					: {
+							module: arg.getLiteralValue(),
+							kind: "static",
+							typeOnly: false,
+							names: ["*"],
+						},
+			);
+			continue;
+		}
+
+		const prefix = arg === undefined ? "" : staticPrefix(arg, tsm);
+		imports.push({
+			module: prefix,
+			kind: "pattern",
+			typeOnly: false,
+			names: [],
+		});
+		if (prefix === "") {
+			notes.push(
+				`${isImport ? "dynamic import()" : "require()"} with a non-literal specifier`,
+			);
 		}
 	}
 
 	return { imports, notes };
+}
+
+/**
+ * The literal text a computed specifier is known to start with: `./locales/`
+ * for `` `./locales/${lang}` `` or `"./locales/" + lang`, and "" when nothing
+ * is known.
+ */
+function staticPrefix(arg: Node, tsm: TsMorph): string {
+	if (tsm.Node.isTemplateExpression(arg)) {
+		return arg.getHead().getLiteralText();
+	}
+	if (
+		tsm.Node.isBinaryExpression(arg) &&
+		arg.getOperatorToken().getKind() === tsm.SyntaxKind.PlusToken
+	) {
+		const left = arg.getLeft();
+		if (
+			tsm.Node.isStringLiteral(left) ||
+			tsm.Node.isNoSubstitutionTemplateLiteral(left)
+		) {
+			return left.getLiteralValue();
+		}
+		return staticPrefix(left, tsm);
+	}
+	return "";
 }
 
 function sha256(text: string): string {

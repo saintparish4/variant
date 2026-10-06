@@ -128,6 +128,21 @@ describe("computeTestImpact", () => {
 		);
 	});
 
+	it.each([
+		"vitest.workspace.ts",
+		"vitest.projects.mjs",
+		"babel.config.js",
+		"packages/web/babel.config.cjs",
+		".babelrc",
+		".babelrc.json",
+	])("%s triggers select-all", (file) => {
+		const impact = computeTestImpact(
+			{ changed: [unanalyzed(file)], affectedFiles: [file], confidence: 1 },
+			GRAPH,
+		);
+		expect(impact.selectAll).toBe(true);
+	});
+
 	it("vitest config changes also trigger select-all", () => {
 		const impact = computeTestImpact(
 			{
@@ -188,6 +203,51 @@ describe("computeTestImpact", () => {
 		expect(impact.affectedTests).toEqual([]);
 	});
 
+	it("lists changed non-TypeScript files that reach no test", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/button.ts": [namedImport("./button.css", [])],
+				"src/__tests__/button.test.ts": [
+					namedImport("../button.js", ["Button"]),
+				],
+			}),
+		);
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("src/button.css"), unanalyzed("src/orphan.css")],
+				affectedFiles: ["src/button.css", "src/button.ts", "src/orphan.css"],
+				confidence: 1,
+			},
+			graph,
+		);
+		expect(impact.affectedTests).toEqual(["src/__tests__/button.test.ts"]);
+		expect(impact.unreached).toEqual(["src/orphan.css"]);
+	});
+
+	it("does not report prose as unreached", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("CHANGELOG.md"), unanalyzed("docs/guide.md")],
+				affectedFiles: ["CHANGELOG.md", "docs/guide.md"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.unreached).toEqual([]);
+	});
+
+	it("a select-all trigger is never unreached", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("package.json")],
+				affectedFiles: ["package.json"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.unreached).toEqual([]);
+	});
+
 	it("unresolved imports in a selected closure lower confidence with one note", () => {
 		const graph = buildImportGraph(
 			makeSymbolGraph({
@@ -204,6 +264,19 @@ describe("computeTestImpact", () => {
 			"1 selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed",
 		]);
 		expect(impact.confidence).toBe(0.9);
+	});
+
+	it("reports a resolution bucket beside the confidence score", () => {
+		const high = computeTestImpact(
+			{ changed: [], affectedFiles: [], confidence: 1 },
+			GRAPH,
+		);
+		const low = computeTestImpact(
+			{ changed: [], affectedFiles: [], confidence: 0.5 },
+			GRAPH,
+		);
+		expect(high.resolution).toBe("high");
+		expect(low.resolution).toBe("low");
 	});
 
 	it("honors a custom isTestFile predicate", () => {

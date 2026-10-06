@@ -113,6 +113,89 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
+	it("selects the loader's tests when a file behind a computed import() changes", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/i18n.ts": `export const load = (lang: string) => import(\`./locales/\${lang}.js\`);`,
+			"src/locales/en.ts": 'export const hello = "hello";',
+			"src/i18n.test.ts": 'import { load } from "./i18n.js";\nload("en");',
+			"src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/locales/en.ts"],
+			readBefore: async () => 'export const hello = "hi";',
+		});
+
+		expect(report.result.tests.affectedTests).toEqual(["src/i18n.test.ts"]);
+	});
+
+	it("selects the tests of a component whose stylesheet changed", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/button.css": ".button { color: red; }",
+			"src/button.ts":
+				'import "./button.css";\nexport const Button = (): string => "button";',
+			"src/button.test.ts": 'import { Button } from "./button.js";\nButton();',
+			"src/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/button.css"],
+			readBefore: async () => null,
+		});
+
+		expect(report.result.tests.affectedTests).toEqual(["src/button.test.ts"]);
+		expect(report.result.tests.unreached).toEqual([]);
+	});
+
+	it("notes a workspace dependency that package discovery did not find", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"package.json": JSON.stringify({
+				name: "root",
+				private: true,
+				workspaces: ["apps/*"],
+			}),
+			"apps/web/package.json": JSON.stringify({
+				name: "@org/web",
+				dependencies: { "@org/ui": "workspace:*" },
+			}),
+			"apps/web/src/page.ts":
+				'import { Button } from "@org/ui";\nexport const page = Button;',
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page.js";\nexport const t = page;',
+			"libs/ui/package.json": JSON.stringify({ name: "@org/ui" }),
+			"libs/ui/src/index.ts": "export const Button = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["libs/ui/src/index.ts"],
+			readBefore: async () => "export const Button = 0;",
+		});
+
+		expect(report.packagesFound).toBe(1);
+		expect(report.result.radius.notes).toContain(
+			"1 dependency declared with a local protocol is not a workspace package variant found (@org/ui); imports of it count as external, so a change to it reaches no importer",
+		);
+	});
+
+	it("fails instead of predicting over zero test files", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/app.ts": FIXTURE["src/app.ts"],
+			// JavaScript is not indexed, so this is not a test variant can see.
+			"src/app.test.js": 'import { boot } from "./app.js";\nboot();',
+			"src/auth.ts":
+				"export function login(name: string, strict: boolean): string { return name; }",
+		});
+
+		await expect(
+			predictImpact(dir, { changedFiles: ["src/auth.ts"], readBefore }),
+		).rejects.toMatchObject({ code: "NO_TEST_FILES" });
+		expect(await readImpactPredictions(defaultHistoryDir(dir))).toEqual([]);
+	});
+
 	it("rejects a base ref outside a git repository", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, { "src/a.ts": "export const a = 1;" });

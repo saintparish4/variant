@@ -234,6 +234,8 @@ export async function verifyImpact(
 					failedTests: failedTests.length,
 					caught: caught.length,
 					falseSkips: falseSkips.length,
+					confidence: match.prediction.confidence,
+					selectAll: match.prediction.selectAll,
 				});
 
 	return {
