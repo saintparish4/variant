@@ -52,9 +52,10 @@ export interface TestImpact {
 	/** True when narrowing is unsafe (build/test configuration changed). */
 	selectAll: boolean;
 	/**
-	 * Changed files the index does not cover (not TypeScript) that no test
-	 * imports, directly or through an importer. They select nothing, and that
-	 * is a blind spot rather than a finding, so it is reported on its own.
+	 * Changed files that no test reaches, directly or through an importer.
+	 * Nothing is selected for them. The graph cannot tell an untested file
+	 * from one that is used in a way it does not follow, so they are reported
+	 * on their own and the result is never called confident.
 	 */
 	unreached: string[];
 	/**
@@ -105,6 +106,9 @@ const TEST_SETUP_FILE =
  * only quiets the warning; it selects nothing either way.
  */
 const PROSE_FILE = /\.(?:md|markdown|rst|txt|adoc)$/i;
+
+/** The most a prediction can score with a changed file no test reaches: low. */
+const UNREACHED_CONFIDENCE = 0.5;
 
 function invalidatesAllTests(filePath: string): boolean {
 	return TEST_CONFIG_FILE.test(filePath) || TEST_SETUP_FILE.test(filePath);
@@ -175,15 +179,25 @@ export function computeTestImpact(
 		}
 	}
 
+	const tested = (file: string): boolean =>
+		(coverage.testsFor.get(file)?.size ?? 0) > 0;
 	const unreached: string[] = [];
 	if (!selectAll) {
 		for (const impact of radius.changed) {
-			if (impact.classification !== "unanalyzed") continue;
+			if (impact.classification === "non-impacting") continue;
 			if (PROSE_FILE.test(impact.filePath)) continue;
+			if (graph.imports.has(impact.filePath)) {
+				if (!tested(impact.filePath)) unreached.push(impact.filePath);
+				continue;
+			}
+			// No node in the graph. An analyzed file without one was deleted:
+			// its importers are selected through the path they still name,
+			// and one nothing imports is dead code going away.
+			if (impact.classification !== "unanalyzed") continue;
 			// Closures are transitive, so a test reaching any dependent of an
 			// importer also reaches the importer itself.
 			const reached = [...importersOfUnindexed(graph, impact.filePath)].some(
-				(importer) => (coverage.testsFor.get(importer)?.size ?? 0) > 0,
+				tested,
 			);
 			if (!reached) unreached.push(impact.filePath);
 		}
@@ -210,12 +224,17 @@ export function computeTestImpact(
 	}
 
 	const noteList = [...notes].sort();
+	const resolved = Math.max(
+		0.3,
+		Math.round((radius.confidence - noteList.length * 0.1) * 100) / 100,
+	);
+	// A changed file that selected nothing is a part of the change the
+	// prediction says nothing about, however cleanly the rest resolved.
 	const confidence = selectAll
 		? 1
-		: Math.max(
-				0.3,
-				Math.round((radius.confidence - noteList.length * 0.1) * 100) / 100,
-			);
+		: unreached.length > 0
+			? Math.min(resolved, UNREACHED_CONFIDENCE)
+			: resolved;
 
 	return {
 		affectedTests: [...affected].sort(),

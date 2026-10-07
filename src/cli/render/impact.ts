@@ -86,10 +86,23 @@ export function renderImpact(
 			tests.unreached.length > MAX_LISTED_FILES
 				? `, … ${count(tests.unreached.length - MAX_LISTED_FILES)} more`
 				: "";
+		const one = tests.unreached.length === 1;
 		lines(
 			printer,
 			"",
-			`${getColors().yellow("Unreached:")} ${plural(tests.unreached.length, "changed file")} that variant cannot analyze and no test imports (${listed}${more}). No test is selected for them; run the ones that use them yourself.`,
+			`${getColors().yellow("Unreached:")} ${plural(tests.unreached.length, "changed file")} no test reaches (${listed}${more}). No test is selected for ${one ? "it: it is" : "them: they are"} untested, or used in a way variant cannot follow.`,
+		);
+	}
+
+	const nothingAnalyzed =
+		!tests.selectAll &&
+		radius.changed.length > 0 &&
+		radius.changed.every((impact) => impact.classification === "unanalyzed");
+	if (nothingAnalyzed) {
+		lines(
+			printer,
+			"",
+			"Nothing in this change was analyzed: none of the changed files is TypeScript that variant indexes.",
 		);
 	}
 

@@ -245,7 +245,49 @@ describe("renderImpact", () => {
 		);
 
 		expect(capture.stdout()).toContain(
-			"Unreached: 1 changed file that variant cannot analyze and no test imports (src/orphan.css).",
+			"Unreached: 1 changed file no test reaches (src/orphan.css). No test is selected for it: it is untested, or used in a way variant cannot follow.",
+		);
+	});
+
+	it("says so when nothing in the change could be analyzed", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: {
+					changed: [
+						fileImpact("crates/cli/src/main.rs", {
+							classification: "unanalyzed",
+						}),
+					],
+				},
+				tests: { unreached: ["crates/cli/src/main.rs"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Nothing in this change was analyzed: none of the changed files is TypeScript that variant indexes.",
+		);
+	});
+
+	it("does not say so when every test was selected anyway", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: {
+					changed: [
+						fileImpact("package.json", { classification: "unanalyzed" }),
+					],
+				},
+				tests: { selectAll: true },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).not.toContain(
+			"Nothing in this change was analyzed",
 		);
 	});
 

@@ -254,6 +254,79 @@ describe("computeTestImpact", () => {
 		expect(impact.unreached).toEqual(["src/orphan.css"]);
 	});
 
+	// A changed file no test imports selects nothing. variant cannot tell an
+	// untested file from one that is reached in a way it does not follow, so
+	// it says which files those are and does not call the result confident.
+	describe("a changed TypeScript file no test reaches", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/auth.ts": [],
+				"src/lonely.ts": [],
+				"src/__tests__/auth.test.ts": [namedImport("../auth.js", ["login"])],
+			}),
+		);
+		const internal = (filePath: string): FileImpact => ({
+			...unanalyzed(filePath),
+			classification: "internal",
+		});
+
+		it("is listed as unreached and makes the result low confidence", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("src/auth.ts"), internal("src/lonely.ts")],
+					affectedFiles: ["src/auth.ts", "src/lonely.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.affectedTests).toEqual(["src/__tests__/auth.test.ts"]);
+			expect(impact.unreached).toEqual(["src/lonely.ts"]);
+			expect(impact.resolution).toBe("low");
+		});
+
+		it("is not listed when the change to it is comments only", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [
+						{ ...unanalyzed("src/lonely.ts"), classification: "non-impacting" },
+					],
+					affectedFiles: [],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+
+		it("does not list a changed test, which selects itself", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("src/__tests__/auth.test.ts")],
+					affectedFiles: ["src/__tests__/auth.test.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+		});
+
+		it("does not list a deleted file nothing imports, which is dead code going away", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [
+						{ ...unanalyzed("src/gone.ts"), classification: "breaking" },
+					],
+					affectedFiles: ["src/gone.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+	});
+
 	it("does not report prose as unreached", () => {
 		const impact = computeTestImpact(
 			{
