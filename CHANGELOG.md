@@ -107,6 +107,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   that file, so a change there selected none of the app's tests. Every
   `tsconfig.json` is now read, each applying to the files under its directory
   with the nearest one first, including aliases inherited through `extends`.
+- **`workspace check` judges a nested package by its own `package.json`.** A
+  workspace package can hold packages that are not workspace members, such as
+  sample projects under `examples/`. Every dependency those declared for
+  themselves was reported against the outer package's manifest; a file is now
+  also covered by its nearest `package.json` and any between it and the
+  workspace package.
+- **`workspace check` accepts `@types/x` for a type-only import of `x`.**
+  `import type { Node } from "estree"` was reported as undeclared although
+  `@types/estree` was declared. A value import still needs the package itself.
 - **`workspace check` no longer reports a path-alias import as an undeclared
   dependency.** It read every bare specifier as a package name, so
   `import "@/lib/price"` failed the check in any package that uses a

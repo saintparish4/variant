@@ -190,6 +190,8 @@ Exits with code `1` when any violation is found — wire it into CI the same way
 
 Classification is per raw import specifier, so a file that imports a sibling both by name and via a relative path gets both findings. Node builtins (with or without the `node:` prefix) and self-imports are always exempt.
 
+A workspace package can contain packages that are not workspace members themselves, such as sample projects or fixtures with their own `package.json`. A file inside one is also covered by what that `package.json`, and any between it and the workspace package, declare. A type-only import (`import type { Node } from "estree"`) is satisfied by the matching `@types` package.
+
 An import that a `tsconfig.json` `paths` alias covers (`@/lib/price`) names a file in the workspace, not a package, and is judged by where that file lives. Inside the importing package there is nothing to declare. When the alias reaches into a sibling package the importer does not declare, it is an `undeclared-workspace-dep`, the same as importing that sibling by name.
 
 ### Output

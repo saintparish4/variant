@@ -259,6 +259,91 @@ describe("checkWorkspace", () => {
 	});
 });
 
+// One workspace package can hold packages of its own that are not workspace
+// members: sample projects under `examples/`, fixtures. Judged against the
+// outer manifest, every dependency they declare themselves was reported.
+describe("checkWorkspace with packages nested inside a workspace package", () => {
+	const packages = [pkg("examples", "examples")];
+	const manifests = new Map<string, PackageManifest>([
+		["examples", { name: "examples" }],
+		["examples/basic", { name: "basic", devDependencies: { typescript: "5" } }],
+		[
+			"examples/basic/apps/web",
+			{ name: "web", dependencies: { react: "19", "@repo/ui": "workspace:*" } },
+		],
+	]);
+	const check = (imports: ImportEntry[]) =>
+		checkWorkspace({
+			symbolGraph: makeSymbolGraph({
+				"examples/basic/apps/web/src/page.tsx": imports,
+			}),
+			packages,
+			manifests,
+		});
+
+	it("accepts what the nearest package.json declares", () => {
+		expect(check([bare("react"), bare("@repo/ui")]).violations).toEqual([]);
+	});
+
+	it("accepts what a package.json between the file and the workspace package declares", () => {
+		expect(check([bare("typescript")]).violations).toEqual([]);
+	});
+
+	it("accepts the nested package importing itself by name", () => {
+		expect(check([bare("web/utils")]).violations).toEqual([]);
+	});
+
+	it("still reports what none of them declares", () => {
+		expect(check([bare("lodash")]).violations).toMatchObject([
+			{
+				kind: "undeclared-external-dep",
+				package: "examples",
+				target: "lodash",
+			},
+		]);
+	});
+});
+
+// `import type { Node } from "estree"` is satisfied by `@types/estree`: there
+// is no `estree` package to declare.
+describe("checkWorkspace with type-only imports", () => {
+	const typeOnly = (module: string): ImportEntry => ({
+		module,
+		kind: "static",
+		typeOnly: true,
+		names: ["x"],
+	});
+	const check = (imports: ImportEntry[], declared: string[]) =>
+		checkWorkspace({
+			symbolGraph: makeSymbolGraph({ "packages/lint/src/rule.ts": imports }),
+			packages: [pkg("lint", "packages/lint", declared)],
+		});
+
+	it("accepts a type-only import whose @types package is declared", () => {
+		expect(check([typeOnly("estree")], ["@types/estree"]).violations).toEqual(
+			[],
+		);
+	});
+
+	it("maps a scoped package to its @types name", () => {
+		expect(
+			check([typeOnly("@babel/core")], ["@types/babel__core"]).violations,
+		).toEqual([]);
+	});
+
+	it("still reports a value import that only @types covers", () => {
+		expect(check([bare("estree")], ["@types/estree"]).violations).toMatchObject(
+			[{ kind: "undeclared-external-dep", target: "estree" }],
+		);
+	});
+
+	it("still reports a type-only import nothing declares", () => {
+		expect(check([typeOnly("estree")], []).violations).toMatchObject([
+			{ kind: "undeclared-external-dep", target: "estree" },
+		]);
+	});
+});
+
 // A specifier a tsconfig `paths` alias covers names a file in the workspace.
 // Read as a package name it was reported as an undeclared dependency, and the
 // command failed for every app that imports through `@/`.

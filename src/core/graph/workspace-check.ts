@@ -22,6 +22,10 @@
  * workspace, not a package. It is judged by the package that file belongs
  * to: nothing to declare inside the importer's own package, an
  * `undeclared-workspace-dep` when the alias reaches into a sibling.
+ *
+ * A workspace package can hold packages that are not workspace members
+ * (sample projects, fixtures). A file inside one is also covered by what its
+ * own `package.json`, and any between it and the workspace package, declare.
  */
 
 import { builtinModules } from "node:module";
@@ -72,6 +76,12 @@ export function checkWorkspace(input: {
 	rootDeclared?: ReadonlySet<string>;
 	/** tsconfig `paths` aliases; a specifier one covers is not a package. */
 	pathAliases?: readonly PathAlias[];
+	/**
+	 * Every `package.json` by workspace-relative POSIX dir. Judged against
+	 * the workspace package alone, a nested package's own dependencies were
+	 * all reported as undeclared.
+	 */
+	manifests?: ReadonlyMap<string, PackageManifest>;
 }): WorkspaceCheckResult {
 	const { symbolGraph, packages } = input;
 	const rootDeclared = input.rootDeclared ?? new Set<string>();
@@ -98,6 +108,12 @@ export function checkWorkspace(input: {
 		const owner = fileToPackage(file, packages);
 		if (owner === undefined) continue;
 		const aliases = aliasesInScope(file, input.pathAliases ?? []);
+		const nested = nestedManifests(file, owner.dir, input.manifests);
+		const declares = (name: string): boolean =>
+			owner.declared.has(name) ||
+			nested.some((manifest) => name in allDependencies(manifest));
+		const isSelf = (name: string): boolean =>
+			name === owner.name || nested.some((manifest) => manifest.name === name);
 
 		for (const imp of symbolGraph.files[file]?.imports ?? []) {
 			// A computed specifier's prefix is not a package name to check.
@@ -147,17 +163,22 @@ export function checkWorkspace(input: {
 
 			const name = packageNameOf(stripNodePrefix(spec));
 			if (name === undefined || BUILTINS.has(name)) continue;
-			if (spec.startsWith("node:") || name === owner.name) continue;
+			if (spec.startsWith("node:") || isSelf(name)) continue;
 
 			if (byName.has(name)) {
-				if (!owner.declared.has(name)) {
+				if (!declares(name)) {
 					addViolation("undeclared-workspace-dep", owner.name, name, file);
 				}
 				continue;
 			}
-			if (!owner.declared.has(name) && !rootDeclared.has(name)) {
-				addViolation("undeclared-external-dep", owner.name, name, file);
+			if (declares(name) || rootDeclared.has(name)) continue;
+			// A type-only import needs the types, and those can ship apart
+			// from the package: `estree` has no runtime package at all.
+			const types = typesPackageOf(name);
+			if (imp.typeOnly && (declares(types) || rootDeclared.has(types))) {
+				continue;
 			}
+			addViolation("undeclared-external-dep", owner.name, name, file);
 		}
 	}
 
@@ -189,6 +210,32 @@ function fileToPackage(
 		}
 	}
 	return best;
+}
+
+/**
+ * Manifests of packages nested inside the workspace package that owns `file`:
+ * its nearest `package.json` and each one above it, stopping short of the
+ * workspace package's own.
+ */
+function nestedManifests(
+	file: string,
+	ownerDir: string,
+	manifests: ReadonlyMap<string, PackageManifest> | undefined,
+): PackageManifest[] {
+	if (manifests === undefined) return [];
+	const found: PackageManifest[] = [];
+	let dir = path.posix.dirname(file);
+	while (dir !== ownerDir && dir !== "." && dir !== "/" && dir !== "") {
+		const manifest = manifests.get(dir);
+		if (manifest !== undefined) found.push(manifest);
+		dir = path.posix.dirname(dir);
+	}
+	return found;
+}
+
+/** `estree` -> `@types/estree`; `@babel/core` -> `@types/babel__core`. */
+function typesPackageOf(name: string): string {
+	return `@types/${name.startsWith("@") ? name.slice(1).replace("/", "__") : name}`;
 }
 
 /** `@scope/pkg/deep` -> `@scope/pkg`; `pkg/deep` -> `pkg`. */
