@@ -81,6 +81,12 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **A Bun lockfile change selects every test.** `bun.lock` and `bun.lockb`
+  were not among the files that invalidate the whole suite, so a dependency
+  update that touched no `package.json` selected nothing and was only listed as
+  `Unreached`. They are now, along with `npm-shrinkwrap.json` and the two
+  package-manager config files that can change what is installed or how it is
+  laid out, `pnpm-workspace.yaml` and `bunfig.toml`.
 - **Path aliases in a package's own `tsconfig.json` are followed.** Only the
   `tsconfig.json` in the directory variant ran in was read. From a workspace
   root, an app importing `@/lib/price` through its own `paths` had no edge to

@@ -115,6 +115,32 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
+	// A dependency update that touches no package.json changes the lockfile
+	// alone. In a workspace it sits at the root, above the package whose tests
+	// it affects.
+	it.each([
+		["the workspace root", "."],
+		["the package below it", "web"],
+	])("selects every test for a lockfile-only change, run from %s", async (_, from) => {
+		const dir = createGitWorkspace("impact", {
+			"package.json": JSON.stringify({ name: "root", workspaces: ["web"] }),
+			"bun.lock": JSON.stringify({ lockfileVersion: 2 }),
+			"web/package.json": JSON.stringify({ name: "web" }),
+			"web/src/app.ts": 'export const boot = (): string => "a";',
+			"web/src/app.test.ts": FIXTURE["src/app.test.ts"],
+			"web/src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+		writeFiles(dir, {
+			"bun.lock": JSON.stringify({ lockfileVersion: 2, bumped: true }),
+		});
+
+		const report = await predictImpact(path.join(dir, from), { base: "HEAD" });
+
+		expect(report.result.tests.selectAll).toBe(true);
+		expect(report.result.tests.affectedTests).toHaveLength(2);
+		expect(report.verdict).toBe("build-required");
+	});
+
 	it("selects the loader's tests when a file behind a computed import() changes", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

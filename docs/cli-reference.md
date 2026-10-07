@@ -163,7 +163,8 @@ Each changed file is classified:
 
 A file that does not parse is `breaking`, whatever the comparison says.
 
-A change to `package.json`, a lockfile, `tsconfig*.json`, a
+A change to `package.json`, a lockfile (npm, pnpm, Yarn or Bun),
+`pnpm-workspace.yaml`, `bunfig.toml`, `tsconfig*.json`, a
 `vitest`/`jest`/`playwright`/`vite`/`babel` config, `vitest.workspace.*` or
 `vitest.projects.*`, `.babelrc*`, or a conventionally named test setup file
 selects every test.

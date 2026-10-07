@@ -78,15 +78,16 @@ export function defaultIsTestFile(file: string): boolean {
 
 /**
  * Changed files that invalidate every test regardless of imports: dependency
- * manifests, lockfiles, TS config, test-runner config, and the setup files a
- * runner loads before every test. Tests never import a setup file, so its
+ * manifests, lockfiles and the package-manager config that decides what is
+ * installed and how it is laid out, TS config, test-runner config, and the
+ * setup files a runner loads before every test. Tests never import a setup file, so its
  * change would otherwise select nothing. Matched by path alone: a `.ts` config
  * classifies as ordinary code, and gating on `unanalyzed` once let every
  * `vitest.config.ts` edit select zero tests. A setup file with an
  * unconventional name is still missed.
  */
 const TEST_CONFIG_FILE =
-	/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig[^/]*\.json|(vitest|jest|playwright|vite|babel)\.config\.[^/.]+(\.[^/]+)?|vitest\.(workspace|projects)\.[^/.]+|\.babelrc(\.[^/]+)?)$/;
+	/(^|\/)(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?|bunfig\.toml|tsconfig[^/]*\.json|(vitest|jest|playwright|vite|babel)\.config\.[^/.]+(\.[^/]+)?|vitest\.(workspace|projects)\.[^/.]+|\.babelrc(\.[^/]+)?)$/;
 
 const TEST_SETUP_FILE =
 	/(^|\/)((vitest|jest)\.setup|setup-?tests|global-?(setup|teardown)|tests?\/setup)\.[cm]?[jt]sx?$/i;

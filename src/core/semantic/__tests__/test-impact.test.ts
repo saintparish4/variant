@@ -135,6 +135,16 @@ describe("computeTestImpact", () => {
 		"packages/web/babel.config.cjs",
 		".babelrc",
 		".babelrc.json",
+		// What the installed dependencies are, or how they are laid out, with
+		// no edit to a package.json. `../` is a lockfile at the repository root
+		// seen from a package below it.
+		"bun.lock",
+		"bun.lockb",
+		"web/bun.lock",
+		"../bun.lock",
+		"bunfig.toml",
+		"npm-shrinkwrap.json",
+		"pnpm-workspace.yaml",
 	])("%s triggers select-all", (file) => {
 		const impact = computeTestImpact(
 			{ changed: [unanalyzed(file)], affectedFiles: [file], confidence: 1 },
