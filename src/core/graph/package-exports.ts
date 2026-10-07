@@ -46,9 +46,13 @@ const CONDITIONS = [
 const MAX_CONDITION_DEPTH = 8;
 
 /**
- * Flatten a conditional exports value to the target strings worth trying, in
- * preference order. Arrays (fallback lists) contribute every entry.
+ * Flatten a conditional exports or imports value to the target strings worth
+ * trying, in preference order. Arrays (fallback lists) contribute every entry.
  */
+export function conditionTargets(value: unknown): string[] {
+	return targetsOf(value);
+}
+
 function targetsOf(value: unknown, depth = 0): string[] {
 	if (depth > MAX_CONDITION_DEPTH) return [];
 	if (typeof value === "string") return [value];

@@ -325,6 +325,13 @@ describe("checkWorkspace with tsconfig aliases", () => {
 		expect(result.violations).toEqual([]);
 	});
 
+	it("never reports a subpath import, which cannot name a package", () => {
+		const result = check({
+			"apps/web/src/page.ts": [bare("#not-declared")],
+		});
+		expect(result.violations).toEqual([]);
+	});
+
 	it("still reports a package's alias used from outside that package", () => {
 		const result = checkWorkspace({
 			symbolGraph: makeSymbolGraph({

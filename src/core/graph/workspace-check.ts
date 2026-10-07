@@ -141,6 +141,10 @@ export function checkWorkspace(input: {
 				continue;
 			}
 
+			// A subpath import maps to the package's own files and can never
+			// name a dependency, whether or not its entry was read.
+			if (spec.startsWith("#")) continue;
+
 			const name = packageNameOf(stripNodePrefix(spec));
 			if (name === undefined || BUILTINS.has(name)) continue;
 			if (spec.startsWith("node:") || name === owner.name) continue;

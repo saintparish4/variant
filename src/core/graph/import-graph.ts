@@ -235,6 +235,12 @@ export function buildImportGraph(
 				addUnresolved(file, spec, aliasBases);
 				continue;
 			}
+			// `#name` is always a package's own `imports` entry, so one that
+			// matched none is a missed internal edge, never a dependency.
+			if (spec.startsWith("#")) {
+				addUnresolved(file, spec, []);
+				continue;
+			}
 			externals.get(file)?.add(spec);
 		}
 	}

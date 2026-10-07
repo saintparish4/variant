@@ -125,6 +125,8 @@ Three consequences:
 - **Path aliases:** `compilerOptions.paths` from every `tsconfig.json`,
   including `extends` chains. Each applies to the files under its directory,
   nearest first. Config files with another name are not read.
+- **Subpath imports:** `#name` specifiers, through the `imports` field of the
+  nearest `package.json`.
 - **Package `exports` maps** of workspace packages, including conditions and
   `*` patterns. A target in `dist/` is also looked for under `src/`, `lib/` and
   `source/`.

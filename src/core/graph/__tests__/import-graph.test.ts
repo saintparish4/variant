@@ -7,6 +7,7 @@ import {
 	getDependents,
 	importersOfUnindexed,
 } from "../import-graph.js";
+import { toImportAliases } from "../package-imports.js";
 import { toPathAliases } from "../tsconfig-paths.js";
 
 function staticImport(module: string): ImportEntry {
@@ -95,6 +96,39 @@ describe("a bare dot specifier", () => {
 			"..",
 		]);
 		expect(sorted(graph.externals.get("src/orphan/a.test.ts"))).toEqual([]);
+	});
+});
+
+// `#name` specifiers are a package's own `imports` map (Node subpath imports).
+describe("subpath imports declared in package.json", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"apps/factory/agent/lib/factory-image.ts": [],
+			"apps/factory/agent/sandbox.ts": [staticImport("#factory-image")],
+			"apps/factory/agent/other.ts": [staticImport("#not-declared")],
+			"apps/web/src/page.ts": [staticImport("#factory-image")],
+		}),
+		{
+			pathAliases: toImportAliases("apps/factory", {
+				"#factory-image": "./agent/lib/factory-image.ts",
+			}),
+		},
+	);
+
+	it("resolves one to the file its package maps it to", () => {
+		expect(sorted(graph.imports.get("apps/factory/agent/sandbox.ts"))).toEqual([
+			"apps/factory/agent/lib/factory-image.ts",
+		]);
+	});
+
+	it("never counts one as a third-party package, declared or not", () => {
+		for (const file of [
+			"apps/factory/agent/other.ts",
+			"apps/web/src/page.ts",
+		]) {
+			expect(sorted(graph.externals.get(file))).toEqual([]);
+			expect(graph.unresolved.get(file)?.size).toBe(1);
+		}
 	});
 });
 

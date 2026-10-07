@@ -296,6 +296,33 @@ describe("predictImpact", () => {
 		]);
 	});
 
+	it("follows a subpath import declared in the package's own package.json", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"apps/factory/package.json": JSON.stringify({
+				name: "factory",
+				imports: { "#image": "./agent/lib/image.ts" },
+			}),
+			"apps/factory/agent/lib/image.ts":
+				'export const image = (): string => "b";',
+			"apps/factory/agent/sandbox.ts":
+				'import { image } from "#image";\nexport const run = (): string => image();',
+			"apps/factory/agent/sandbox.test.ts":
+				'import { run } from "./sandbox";\nexport const t = run();',
+			"apps/factory/agent/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["apps/factory/agent/lib/image.ts"],
+			readBefore: async () => 'export const image = (): string => "a";',
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"apps/factory/agent/sandbox.test.ts",
+		]);
+		expect(report.result.radius.notes).toEqual([]);
+	});
+
 	// The usual monorepo layout: aliases live in a shared base config that
 	// each package extends, and their targets are relative to that base.
 	it("follows an alias a package inherits from a base tsconfig", async () => {

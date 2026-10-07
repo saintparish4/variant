@@ -81,6 +81,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **`#name` subpath imports are followed.** A specifier declared under
+  `imports` in a `package.json` was read as a third-party package: no edge to
+  the file it maps to, and `workspace check` reported it as an undeclared
+  dependency. It now resolves through the nearest `package.json`, and a `#`
+  specifier is never treated as a dependency, declared or not.
 - **`import x from ".."` and `from "."` are relative imports.** They name the
   index file of the parent directory and of the importing file's own. Both were
   read as package names, so a test written that way had no edge to the code it
