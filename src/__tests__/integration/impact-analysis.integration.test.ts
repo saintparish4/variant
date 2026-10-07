@@ -203,8 +203,12 @@ describe("predictImpact", () => {
 		});
 
 		expect(report.packagesFound).toBe(1);
-		expect(report.result.radius.notes).toContain(
+		expect(report.result.radius.repositoryNotes).toContain(
 			"1 dependency declared with a local protocol is not a workspace package variant found (@org/ui); imports of it count as external, so a change to it reaches no importer",
+		);
+		// This change is inside that package, so here the gap is about the change.
+		expect(report.result.radius.notes).toContain(
+			"1 changed file belongs to @org/ui, a local package variant did not find as a workspace package (libs/ui/src/index.ts); files importing it by name are not reached",
 		);
 	});
 

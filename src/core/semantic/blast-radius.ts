@@ -74,9 +74,19 @@ export interface BlastRadius {
 	affectedPackages: string[];
 	/** Tasks named `<package>:<script>` for affected packages. */
 	affectedTasks: string[];
-	/** 1 when fully resolved; lowered per unprovable construct. Floor 0.3. */
+	/**
+	 * 1 when this change was fully resolved; lowered once per kind of thing in
+	 * it that could not be. Floor 0.3. `repositoryNotes` do not count.
+	 */
 	confidence: number;
+	/** What could not be resolved about this change. */
 	notes: string[];
+	/**
+	 * Standing gaps in the graph, the same whatever changed: a loader whose
+	 * specifier is fully computed, a local dependency discovery did not find.
+	 * One becomes a note when the change touches what it is about.
+	 */
+	repositoryNotes: string[];
 }
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
@@ -233,17 +243,20 @@ export async function traceBlastRadius(
 		);
 	});
 
-	const workspaceNotes = workspaceBlindSpots({
+	const manifests = await readManifests(cwd);
+	const blindSpots = workspaceBlindSpots({
 		externals: importGraph.externals,
 		packageNames: new Set(
 			(options.packageGraph?.packages ?? []).map((pkg) => pkg.manifest.name),
 		),
-		manifests: await readManifests(cwd),
+		manifests,
 	});
 
 	return assembleBlastRadius(baseRef, changed, importGraph, {
 		packageDirs,
-		workspaceNotes,
+		workspaceNotes: blindSpots.notes,
+		undiscoveredPackages: blindSpots.undiscovered,
+		packageRoots: [...manifests.keys()],
 		...(options.tasks === undefined ? {} : { tasks: options.tasks }),
 	});
 }
@@ -260,11 +273,20 @@ export function assembleBlastRadius(
 	options: {
 		packageDirs?: Record<string, string>;
 		tasks?: Record<string, TaskConfig>;
-		/** Where the graph may be missing edges; see `workspaceBlindSpots`. */
+		/** Standing gaps in the graph; see `workspaceBlindSpots`. */
 		workspaceNotes?: readonly string[];
+		/** Local packages the graph could not place, by name to directory. */
+		undiscoveredPackages?: ReadonlyMap<string, string>;
+		/**
+		 * Directories holding a `package.json` ("" for the root), for telling
+		 * which package a file is in. Without them every file counts as one
+		 * package.
+		 */
+		packageRoots?: readonly string[];
 	} = {},
 ): BlastRadius {
-	const notes = new Set<string>(options.workspaceNotes);
+	const notes = new Set<string>();
+	const repositoryNotes = new Set<string>(options.workspaceNotes);
 	const affected = new Set<string>();
 	const firstHop = new Set<string>();
 
@@ -365,13 +387,40 @@ export function assembleBlastRadius(
 		);
 	}
 
-	// Any changed file could be what such a loader loads, so this applies to
-	// every prediction, not only those that touch the loader.
+	const impacting = changed
+		.filter((impact) => impact.classification !== "non-impacting")
+		.map((impact) => impact.filePath);
+
+	// Any file could be what such a loader loads, so the gap stands on every
+	// run. It counts against a change only when the change is in the loader's
+	// own package, which is where what it loads almost always lives.
 	if (importGraph.computed.size > 0) {
 		const loaders = [...importGraph.computed].sort();
-		notes.add(
+		repositoryNotes.add(
 			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listPaths(loaders)}); a change reached only that way selects no tests`,
 		);
+		const touched = new Set(
+			impacting.map((file) => packageRootOf(file, options.packageRoots)),
+		);
+		const near = loaders.filter((loader) =>
+			touched.has(packageRootOf(loader, options.packageRoots)),
+		);
+		if (near.length > 0) {
+			notes.add(
+				`${near.length} file(s) in a package this change touches load a module through a fully computed import() or require() specifier (${listPaths(near)}); a changed file reached only that way selects no tests`,
+			);
+		}
+	}
+
+	for (const [name, dir] of options.undiscoveredPackages ?? []) {
+		const prefix = dir === "" ? "" : `${dir}/`;
+		const inside = impacting.filter((file) => file.startsWith(prefix));
+		if (inside.length > 0) {
+			const one = inside.length === 1;
+			notes.add(
+				`${inside.length} changed ${one ? "file belongs" : "files belong"} to ${name}, a local package variant did not find as a workspace package (${listPaths(inside)}); files importing it by name are not reached`,
+			);
+		}
 	}
 
 	const packageDirs = options.packageDirs ?? {};
@@ -404,7 +453,26 @@ export function assembleBlastRadius(
 		affectedTasks: affectedTasks.sort(),
 		confidence,
 		notes: noteList,
+		repositoryNotes: [...repositoryNotes].sort(),
 	};
+}
+
+/** The nearest directory with a `package.json` at or above `file`. */
+function packageRootOf(
+	file: string,
+	packageRoots: readonly string[] | undefined,
+): string {
+	let best = "";
+	for (const root of packageRoots ?? []) {
+		if (
+			root !== "" &&
+			file.startsWith(`${root}/`) &&
+			root.length > best.length
+		) {
+			best = root;
+		}
+	}
+	return best;
 }
 
 /**

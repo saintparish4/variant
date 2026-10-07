@@ -445,7 +445,7 @@ describe("workspaceBlindSpots", () => {
 	}
 
 	it("names a local-protocol dependency that no discovered package provides", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({ "apps/web/src/page.ts": ["@org/ui"] }),
 			packageNames: new Set(["@org/web"]),
 			manifests: new Map([
@@ -462,7 +462,7 @@ describe("workspaceBlindSpots", () => {
 	});
 
 	it("names bare imports that are neither workspace packages nor declared", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({
 				"apps/web/src/page.ts": [
 					"react",
@@ -487,7 +487,7 @@ describe("workspaceBlindSpots", () => {
 	});
 
 	it("judges a nested package that is not a workspace member by its own manifest", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({
 				"test/fixtures/repo/packages/web/src/index.ts": ["utils"],
 			}),
@@ -510,6 +510,22 @@ describe("workspaceBlindSpots", () => {
 				packageNames: new Set(),
 				manifests: new Map([["", { dependencies: { react: "^19.0.0" } }]]),
 			}),
-		).toEqual([]);
+		).toEqual({ notes: [], undiscovered: new Map() });
+	});
+
+	it("says where an undiscovered local package lives, when a manifest carries its name", () => {
+		const { undiscovered } = workspaceBlindSpots({
+			externals: externals({}),
+			packageNames: new Set(["@org/web"]),
+			manifests: new Map<string, PackageManifest>([
+				["", {}],
+				[
+					"apps/web",
+					{ name: "@org/web", dependencies: { "@org/ui": "workspace:*" } },
+				],
+				["libs/ui", { name: "@org/ui" }],
+			]),
+		});
+		expect(undiscovered).toEqual(new Map([["@org/ui", "libs/ui"]]));
 	});
 });

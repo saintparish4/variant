@@ -106,6 +106,20 @@ export function renderImpact(
 		for (const note of notes) lines(printer, `  - ${note}`);
 	}
 
+	// Standing notes say the same thing on every run, so by default they are
+	// one line: printed in full each time, they bury the notes about the change.
+	const standing = [...radius.repositoryNotes, ...tests.repositoryNotes];
+	if (standing.length > 0 && printer.mode === "verbose") {
+		lines(printer, "", "Repository (the same whatever changed):");
+		for (const note of standing) lines(printer, `  - ${note}`);
+	} else if (standing.length > 0) {
+		lines(
+			printer,
+			"",
+			`Repository: ${plural(standing.length, "standing note")}, the same whatever changed (-v lists them)`,
+		);
+	}
+
 	if (!report.historyLogged) {
 		lines(
 			printer,

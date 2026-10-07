@@ -155,6 +155,21 @@ describe("computeTestImpact", () => {
 		expect(impact.selectAll).toBe(true);
 	});
 
+	// With every test selected nothing is left to the graph, so what the graph
+	// could not resolve no longer matters.
+	it("is fully confident when every test is selected", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("package.json")],
+				affectedFiles: ["package.json"],
+				confidence: 0.3,
+			},
+			GRAPH,
+		);
+		expect(impact.confidence).toBe(1);
+		expect(impact.resolution).toBe("high");
+	});
+
 	it("vitest config changes also trigger select-all", () => {
 		const impact = computeTestImpact(
 			{

@@ -57,11 +57,18 @@ export interface TestImpact {
 	 * is a blind spot rather than a finding, so it is reported on its own.
 	 */
 	unreached: string[];
-	/** Blast-radius confidence further lowered by closure blind spots. */
+	/**
+	 * How much of this change the graph resolved: the blast radius's score,
+	 * lowered by closure blind spots. 1 when every test is selected, since
+	 * nothing is then left to a graph that might be wrong.
+	 */
 	confidence: number;
 	/** `confidence` bucketed; see `resolutionOf`. */
 	resolution: Resolution;
+	/** What could not be resolved about this change. */
 	notes: string[];
+	/** Standing gaps, the same whatever changed. See `BlastRadius`. */
+	repositoryNotes: string[];
 }
 
 export interface TestImpactOptions {
@@ -203,10 +210,12 @@ export function computeTestImpact(
 	}
 
 	const noteList = [...notes].sort();
-	const confidence = Math.max(
-		0.3,
-		Math.round((radius.confidence - noteList.length * 0.1) * 100) / 100,
-	);
+	const confidence = selectAll
+		? 1
+		: Math.max(
+				0.3,
+				Math.round((radius.confidence - noteList.length * 0.1) * 100) / 100,
+			);
 
 	return {
 		affectedTests: [...affected].sort(),
@@ -216,6 +225,7 @@ export function computeTestImpact(
 		confidence,
 		resolution: resolutionOf(confidence),
 		notes: noteList,
+		repositoryNotes: [],
 	};
 }
 

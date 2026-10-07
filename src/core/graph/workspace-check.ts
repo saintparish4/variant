@@ -279,6 +279,17 @@ const MAX_NOTE_NAMES = 3;
  * notes rather than violations: the missed importer is by definition not in
  * the blast radius, so scoping this to affected files would hide the case.
  */
+export interface WorkspaceBlindSpots {
+	/** The same on every run: they describe the repository, not a change. */
+	notes: string[];
+	/**
+	 * Local-protocol dependencies no workspace package provides, by name, to
+	 * the directory whose `package.json` carries that name. A change under one
+	 * of these is the case the note warns about.
+	 */
+	undiscovered: Map<string, string>;
+}
+
 export function workspaceBlindSpots(input: {
 	/** Bare specifiers per file, as `ImportGraph.externals` records them. */
 	externals: ReadonlyMap<string, ReadonlySet<string>>;
@@ -291,7 +302,7 @@ export function workspaceBlindSpots(input: {
 	 * examples) are judged by their own manifests.
 	 */
 	manifests: ReadonlyMap<string, PackageManifest>;
-}): string[] {
+}): WorkspaceBlindSpots {
 	const { packageNames, manifests } = input;
 	const root = manifests.get("") ?? {};
 	const rootDeclared = new Set(Object.keys(allDependencies(root)));
@@ -337,7 +348,14 @@ export function workspaceBlindSpots(input: {
 		);
 	}
 
-	return notes;
+	const undiscovered = new Map<string, string>();
+	for (const [dir, manifest] of manifests) {
+		if (manifest.name !== undefined && missingLocal.has(manifest.name)) {
+			undiscovered.set(manifest.name, dir);
+		}
+	}
+
+	return { notes, undiscovered };
 }
 
 function nearestManifest(

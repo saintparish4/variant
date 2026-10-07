@@ -41,6 +41,7 @@ function report(overrides: {
 		affectedTasks: [],
 		confidence: 1,
 		notes: [],
+		repositoryNotes: [],
 		...overrides.radius,
 	};
 	const tests: TestImpact = {
@@ -51,6 +52,7 @@ function report(overrides: {
 		confidence: 1,
 		resolution: "high",
 		notes: [],
+		repositoryNotes: [],
 		...overrides.tests,
 	};
 	return {
@@ -199,6 +201,39 @@ describe("renderImpact", () => {
 		expect(capture.stdout()).toContain("Notes:");
 		expect(capture.stdout()).toContain("- radius note");
 		expect(capture.stdout()).toContain("- test note");
+	});
+
+	// Printed in full on every run, notes about the repository bury the ones
+	// about the change.
+	it("sums up standing repository notes in one line", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: { repositoryNotes: ["a loader computes its specifier"] },
+				tests: { repositoryNotes: ["some tests are JavaScript"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Repository: 2 standing notes, the same whatever changed (-v lists them)",
+		);
+		expect(capture.stdout()).not.toContain("a loader computes its specifier");
+		expect(capture.stdout()).not.toContain("Notes:");
+	});
+
+	it("lists the standing notes with -v", () => {
+		const capture = captureOutput("verbose");
+
+		renderImpact(
+			report({
+				radius: { repositoryNotes: ["a loader computes its specifier"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain("- a loader computes its specifier");
 	});
 
 	it("warns about changed files no test can reach", () => {

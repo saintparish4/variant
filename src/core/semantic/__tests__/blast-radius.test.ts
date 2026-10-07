@@ -319,9 +319,91 @@ describe("assembleBlastRadius", () => {
 			[breaking("src/a.ts", ["x"])],
 			graph,
 		);
-		expect(radius.notes).toContain(
+		expect(radius.repositoryNotes).toEqual([
 			"1 file(s) load a module through a fully computed import() or require() specifier (src/loader.ts); a change reached only that way selects no tests",
+		]);
+		// With nothing to tell packages apart, the loader and the change share one.
+		expect(radius.notes).toEqual([
+			"1 file(s) in a package this change touches load a module through a fully computed import() or require() specifier (src/loader.ts); a changed file reached only that way selects no tests",
+		]);
+		expect(radius.confidence).toBe(0.9);
+	});
+
+	// The gap stands on every run, but it is a fact about the repository. It
+	// should cost a change only where what the loader loads is likely to live.
+	describe("a fully computed loader in another package", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"packages/a/src/loader.ts": [
+					{ module: "", kind: "pattern", typeOnly: false, names: [] },
+				],
+				"packages/a/src/x.ts": [],
+				"packages/b/src/y.ts": [],
+			}),
 		);
+		const packageRoots = ["", "packages/a", "packages/b"];
+
+		it("does not lower the confidence of a change elsewhere", () => {
+			const radius = assembleBlastRadius(
+				"HEAD~1",
+				[breaking("packages/b/src/y.ts", ["y"])],
+				graph,
+				{ packageRoots },
+			);
+			expect(radius.notes).toEqual([]);
+			expect(radius.confidence).toBe(1);
+			expect(radius.repositoryNotes).toHaveLength(1);
+		});
+
+		it("counts against a change in the loader's own package", () => {
+			const radius = assembleBlastRadius(
+				"HEAD~1",
+				[breaking("packages/a/src/x.ts", ["x"])],
+				graph,
+				{ packageRoots },
+			);
+			expect(radius.notes).toHaveLength(1);
+			expect(radius.confidence).toBe(0.9);
+		});
+
+		it("does not count against a change that is comments only", () => {
+			const radius = assembleBlastRadius(
+				"HEAD~1",
+				[
+					{
+						...breaking("packages/a/src/x.ts", []),
+						classification: "non-impacting",
+					},
+				],
+				graph,
+				{ packageRoots },
+			);
+			expect(radius.notes).toEqual([]);
+		});
+	});
+
+	it("keeps workspace blind spots as standing notes", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("src/a.ts", ["x"])],
+			buildImportGraph(makeSymbolGraph({ "src/a.ts": [] })),
+			{ workspaceNotes: ["a dependency was not found"] },
+		);
+		expect(radius.repositoryNotes).toEqual(["a dependency was not found"]);
+		expect(radius.notes).toEqual([]);
+		expect(radius.confidence).toBe(1);
+	});
+
+	it("notes a change inside a local package the graph could not place", () => {
+		const radius = assembleBlastRadius(
+			"HEAD~1",
+			[breaking("libs/ui/src/index.ts", ["Button"])],
+			buildImportGraph(makeSymbolGraph({ "libs/ui/src/index.ts": [] })),
+			{ undiscoveredPackages: new Map([["@org/ui", "libs/ui"]]) },
+		);
+		expect(radius.notes).toEqual([
+			"1 changed file belongs to @org/ui, a local package variant did not find as a workspace package (libs/ui/src/index.ts); files importing it by name are not reached",
+		]);
 		expect(radius.confidence).toBe(0.9);
 	});
 
