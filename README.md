@@ -204,12 +204,16 @@ cannot see at all:
 - **Only the directory it runs in is indexed.** A file changed elsewhere in
   the repository selects the tests of the files that import it by relative
   path, and is listed as `Unreached` otherwise.
+- **Unreached is not the same as untested.** A changed file no test reaches
+  is listed as `Unreached` and the prediction reads `low`. variant cannot tell
+  an untested file from one a JavaScript test or a runtime lookup uses.
 - **JavaScript is not indexed.** A changed `.js` file reaches the TypeScript
-  files that import it, but `.js` tests are not counted. A repository with no
-  TypeScript tests stops with `NO_TEST_FILES` instead of predicting nothing.
+  files that import it, but `.js` tests are not counted or selected; the output
+  names them. A repository with no TypeScript tests stops with `NO_TEST_FILES`
+  instead of predicting nothing.
 - **Computed imports are followed only as far as their literal start.**
   `` import(`./locales/${lang}.js`) `` reaches everything under `./locales/`;
-  `import(name)` could load anything, and is noted on every run.
+  `import(name)` could load anything, and is a standing note on every run.
 - **Dynamic `import()` is assumed to use everything.** The change propagates
   and a note is printed; the run gets wider, not narrower.
 - **Workspace discovery can miss a package**, and a bare import of a package it

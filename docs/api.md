@@ -146,9 +146,12 @@ type BlastRadius = {
 	affectedPackages: string[];
 	/** Always [] from `impact`. */
 	affectedTasks: string[];
-	/** 1 when every import resolved; 0.1 lower per note, floor 0.3. */
+	/** 1 when this change fully resolved; 0.1 lower per note, floor 0.3. */
 	confidence: number;
+	/** What could not be resolved about this change. */
 	notes: string[];
+	/** Standing gaps in the graph, the same whatever changed. Not scored. */
+	repositoryNotes: string[];
 };
 
 type FileImpact = {
@@ -173,15 +176,25 @@ type TestImpact = {
 	/** True when a package manifest, lockfile, tsconfig or test/build config changed. */
 	selectAll: boolean;
 	/**
-	 * Changed files variant cannot analyze (not TypeScript, not prose) that no
-	 * test imports, directly or through the files that import them.
+	 * Changed files no test reaches, directly or through the files that import
+	 * them: TypeScript or not, prose and deleted files nothing imports aside.
 	 */
 	unreached: string[];
-	/** radius.confidence, lowered 0.1 per test note, floor 0.3. */
+	/** Changed test files that are JavaScript, which variant cannot select. */
+	unselectedTests: string[];
+	/** JavaScript test files in the workspace. None is in totalTests. */
+	javascriptTests: number;
+	/**
+	 * radius.confidence, lowered 0.1 per test note, floor 0.3. 1 when selectAll
+	 * is true; at most 0.5 when unreached or unselectedTests is not empty.
+	 */
 	confidence: number;
 	/** confidence bucketed: "high" at 0.9 and up, "medium" from 0.7, "low" below. */
 	resolution: "high" | "medium" | "low";
+	/** What could not be resolved about this change. */
 	notes: string[];
+	/** Standing gaps, the same whatever changed. Not scored. */
+	repositoryNotes: string[];
 };
 ```
 
@@ -223,7 +236,8 @@ Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
     "affectedPackages": ["@acme/shop", "@acme/utils"],
     "affectedTasks": [],
     "confidence": 1,
-    "notes": []
+    "notes": [],
+    "repositoryNotes": []
   },
   "tests": {
     "affectedTests": [
@@ -233,9 +247,12 @@ Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
     "totalTests": 4,
     "selectAll": false,
     "unreached": [],
+    "unselectedTests": [],
+    "javascriptTests": 0,
     "confidence": 1,
     "resolution": "high",
-    "notes": []
+    "notes": [],
+    "repositoryNotes": []
   }
 }
 ```
@@ -249,12 +266,17 @@ Notes are human-readable strings, sorted. The forms they take:
 | `radius.notes` | `<n> changed file(s) is/are outside the directory variant ran in and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<dependent>: dynamic import of <file> — names unknowable` |
 | `radius.notes` | `<n> affected file(s) has/have unresolved imports: <file> (<specifier>, …), …` |
-| `radius.notes` | `<n> file(s) load a module through a fully computed import() or require() specifier (<file>, …); a change reached only that way selects no tests` |
-| `radius.notes` | `<n> dependency/dependencies declared with a local protocol is/are not a workspace package variant found (<name>, …); …` |
-| `radius.notes` | `<n> bare import name(s) is/are neither workspace packages nor declared dependencies (<name>, …); …` |
+| `radius.notes` | `<n> file(s) in a package this change touches load a module through a fully computed import() or require() specifier (<file>, …); a changed file reached only that way selects no tests` |
+| `radius.notes` | `<n> changed file(s) belong(s) to <name>, a local package variant did not find as a workspace package (<file>, …); files importing it by name are not reached` |
 | `radius.notes` | `<file>: <reason the export surface could not be fully resolved>` |
+| `radius.repositoryNotes` | `<n> file(s) load a module through a fully computed import() or require() specifier (<file>, …); a change reached only that way selects no tests` |
+| `radius.repositoryNotes` | `<n> dependency/dependencies declared with a local protocol is/are not a workspace package variant found (<name>, …); …` |
+| `radius.repositoryNotes` | `<n> bare import name(s) is/are neither workspace packages nor declared dependencies (<name>, …); …` |
 | `tests.notes` | `<file>: build/test configuration changed — running all tests` |
 | `tests.notes` | `<n> selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed` |
+| `tests.notes` | `<n> changed test file(s) is/are JavaScript, which variant does not index, and was/were not selected (<file>, …)` |
+| `tests.notes` | `<n> JavaScript test file(s) in a package this change touches cannot be selected (<file>, …)` |
+| `tests.repositoryNotes` | `<n> JavaScript test file(s) is/are not indexed (<file>, …); variant cannot select it/them, and code only it/they import(s) looks untested` |
 
 ### `impact verify --json`
 

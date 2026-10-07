@@ -51,17 +51,23 @@ Run:   8 test files
 Skip:  47 test files (of 55 total)
 
 Verdict:    build required
-Confidence: medium (82%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+Confidence: high (90%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
 
 Notes:
   - src/lib/legacy.ts: dynamic import of src/auth.ts — names unknowable
+
+Repository: 1 standing note, the same whatever changed (-v lists them)
 ```
 
 `Workspace:` says how many workspace packages were discovered. A bare import of a package discovery missed counts as a third-party dependency, so "no workspace packages found" in a monorepo explains a prediction that is too narrow; see [Monorepo setup](./monorepo.md).
 
-`Confidence:` is a bucket first — `high` at 90% and up, `medium` from 70%, `low` below — then the score. The score starts at 100% and drops 10 points per note, with a floor of 30%: it counts what the analysis could not resolve, not how safe a skip would be.
+`Confidence:` is a bucket first — `high` at 90% and up, `medium` from 70%, `low` below — then the score. The score starts at 100% and drops 10 points per note about the change, with a floor of 30%: it counts what the analysis could not resolve about this change, not how safe a skip would be. Two things override the count. When every test is selected the score is 100%, because nothing is left to a graph that might be wrong. When any changed file reaches no test, or a changed test could not be selected, the score is capped at 50%, which is `low`: part of the change is something the prediction says nothing about.
 
-When a changed file that variant cannot analyze reaches no test, an `Unreached:` line names it. Prose (`.md`, `.txt`, `.rst`, `.adoc`) is left out of that line. No test is selected for such a file, and nothing in the graph says which tests use it, so run those yourself.
+When a changed file reaches no test, an `Unreached:` line names it, whether it is TypeScript or not. Prose (`.md`, `.txt`, `.rst`, `.adoc`) is left out of that line, and so is a deleted file nothing imports. No test is selected for an unreached file. variant cannot tell an untested file from one that is used in a way it does not follow (a JavaScript test, a lookup at runtime), so it reports both the same way; run the tests that use it yourself. A change in which nothing could be analyzed says so on its own line.
+
+`Not selected:` names changed test files that are JavaScript. A changed test always needs running, and variant does not index JavaScript tests.
+
+`Repository:` counts standing notes: gaps in the graph that are the same whatever changed, such as a loader whose import specifier is fully computed, a local dependency that workspace discovery did not find, or JavaScript test files. They do not lower the score, and `-v` lists them. One becomes a note about the change, and lowers the score, when the change touches what it is about: a file in the loader's own package, a file inside the undiscovered package, a file in the package the JavaScript tests belong to.
 
 Verdicts reuse the same vocabulary as `pr check`:
 
@@ -226,7 +232,7 @@ Both commands trace imports statically from source text — there is no module b
 - **`package.json` `imports` are followed to files, not to other packages.** A `#name` specifier resolves through the `imports` field of the nearest `package.json`, with every condition's target tried. An entry that points at a build directory, or at another package, names nothing variant indexes and is reported as `unresolved`.
 - **`node_modules` and `dist` are never indexed, at any depth.** A source directory that happens to be named `dist` is left out with them. A changed TypeScript file there is `unanalyzed`: it selects the tests of the files that import it, and otherwise appears under `Unreached:`.
 - **Only the directory variant runs in is indexed.** Run it where the project's `package.json` and `tsconfig.json` are, which need not be the repository root. A file changed elsewhere in the repository is shown as `../…` and is `unanalyzed`: it selects the tests of the files that import it by relative path, and otherwise appears under `Unreached:`. A sibling workspace package imported by name is not followed from inside one package, so its changed files land there too; run from the workspace root to follow them.
-- **JavaScript is not indexed.** Only TypeScript sources and tests (`.ts`, `.tsx`, `.mts`, `.cts`) are. A changed `.js` file reaches the TypeScript files that import it, but a `.js` file's own imports are not followed, and `.js` tests are not counted: a repository whose tests are all JavaScript stops with `NO_TEST_FILES` rather than predicting "0 of 0".
+- **JavaScript is not indexed.** Only TypeScript sources and tests (`.ts`, `.tsx`, `.mts`, `.cts`) are. A changed `.js` file reaches the TypeScript files that import it, but a `.js` file's own imports are not followed, and `.js` tests are not counted: a repository whose tests are all JavaScript stops with `NO_TEST_FILES` rather than predicting "0 of 0". JavaScript test files named `*.test.*` or `*.spec.*` are counted as a standing note, a changed one is listed under `Not selected:`, and TypeScript that only they import is listed under `Unreached:`. This matters most for a package tested with `*.test.mjs` under Node's own test runner: variant selects none of its tests, and now says so.
 - **Computed specifiers are followed as far as their literal start.** `` import(`./locales/${lang}.js`) `` and `require("./plugins/" + name)` link the loader to every indexed file under `./locales/` or `./plugins/` (and to changed non-TypeScript files there), whole workspace packages when the prefix names one, and `tsconfig` alias targets. A specifier with no literal start, such as `import(name)`, could load anything: it is noted on every run, and a change reached only that way selects no tests.
 - **Dynamic `import()` names are unknowable.** A dynamic import edge is treated as using every export: the change propagates (over-including rather than missing it) and a note is emitted. Literal `require("./x")` and `import x = require("./x")` are ordinary edges that take every name.
 - **Edges that exist only at runtime are invisible.** A dependency injection container resolving a class by token, a plugin registry keyed by string, and `eval` never appear as imports. A test that reaches code only through one of these is not selected when that code changes, and nothing in the output says so. This is the largest blind spot and the main reason `impact` is report-only.

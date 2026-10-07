@@ -175,11 +175,18 @@ The verdict: `build required` if any file is `breaking` or every test was
 selected; `build recommended` if any file is `internal` or `unanalyzed`;
 otherwise `safe to skip build`.
 
-Confidence starts at 100% and drops 10 points per note (unresolved imports, a
-dynamic `import()`, unanalyzed files, a test that may depend on fixtures, a
-workspace package discovery may have missed), with a floor of 30%. It prints as
-a bucket first: `high` at 90% and up, `medium` from 70%, `low` below. It is not
-a probability that skipping is safe.
+Confidence starts at 100% and drops 10 points per note about the change
+(unresolved imports on affected files, a dynamic `import()`, unanalyzed files,
+a test that may depend on fixtures), with a floor of 30%. It is 100% when every
+test is selected, and at most 50% when a changed file reaches no test or a
+changed JavaScript test could not be selected. It prints as a bucket first:
+`high` at 90% and up, `medium` from 70%, `low` below. It is not a probability
+that skipping is safe.
+
+Notes that describe the repository and not the change (a loader with a fully
+computed specifier, a local dependency discovery did not find, JavaScript test
+files) are counted on a `Repository:` line and listed with `-v`. They lower the
+score only when the change touches what they are about.
 
 The output also says how many workspace packages were found. Exits 0, or 1 with
 `GIT_REF_ERROR` or `NO_TEST_FILES`.
