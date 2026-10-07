@@ -94,6 +94,20 @@ export function renderImpact(
 		);
 	}
 
+	if (tests.unselectedTests.length > 0) {
+		const listed = tests.unselectedTests.slice(0, MAX_LISTED_FILES).join(", ");
+		const more =
+			tests.unselectedTests.length > MAX_LISTED_FILES
+				? `, … ${count(tests.unselectedTests.length - MAX_LISTED_FILES)} more`
+				: "";
+		const one = tests.unselectedTests.length === 1;
+		lines(
+			printer,
+			"",
+			`${getColors().yellow("Not selected:")} ${plural(tests.unselectedTests.length, "changed test file")} ${one ? "is" : "are"} JavaScript (${listed}${more}). variant does not index JavaScript tests, so it cannot select them; run them yourself.`,
+		);
+	}
+
 	const nothingAnalyzed =
 		!tests.selectAll &&
 		radius.changed.length > 0 &&

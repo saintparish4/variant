@@ -366,6 +366,23 @@ describe("assembleBlastRadius", () => {
 			expect(radius.confidence).toBe(0.9);
 		});
 
+		it("does not count against a changed file a loader could not load", () => {
+			const radius = assembleBlastRadius(
+				"HEAD~1",
+				[
+					{
+						...breaking("packages/a/native/build.rs", []),
+						classification: "unanalyzed",
+					},
+				],
+				graph,
+				{ packageRoots },
+			);
+			expect(radius.notes).toEqual([
+				"1 changed file is not TypeScript and was not analyzed (packages/a/native/build.rs)",
+			]);
+		});
+
 		it("does not count against a change that is comments only", () => {
 			const radius = assembleBlastRadius(
 				"HEAD~1",

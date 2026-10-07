@@ -38,6 +38,7 @@ import type { PackageGraph } from "../graph/package-graph.js";
 import type { PathAlias } from "../graph/tsconfig-paths.js";
 import { readPathAliases } from "../graph/tsconfig-paths.js";
 import { readManifests } from "../graph/workspace-audit.js";
+import type { PackageManifest } from "../graph/workspace-check.js";
 import { workspaceBlindSpots } from "../graph/workspace-check.js";
 import { readFileAtRef, readFilesAtRef } from "../vcs/git.js";
 import type { ClassifyResult, SemanticClass } from "./differ.js";
@@ -90,6 +91,18 @@ export interface BlastRadius {
 }
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
+/** What a JavaScript or TypeScript module can load with `import` or `require`. */
+const MODULE_FILE = /\.(?:[cm]?[jt]sx?|json)$/;
+
+/**
+ * Whether a changed file could be what an import names. A standing gap about
+ * imports (a computed loader, tests that are not indexed) is about a change
+ * only if the change holds such a file: a Rust source beside a loader is not
+ * something the loader could have loaded.
+ */
+export function isModuleFile(file: string): boolean {
+	return MODULE_FILE.test(file);
+}
 const DECLARATION_FILE = /\.d\.(?:ts|mts|cts)$/;
 
 /** Files named in one aggregated note before the rest become a count. */
@@ -167,6 +180,11 @@ export interface TraceBlastRadiusOptions {
 	readBefore?: (relPath: string) => Promise<string | null>;
 	/** DI for tests: current content of a file (null = deleted). */
 	readAfter?: (relPath: string) => Promise<string | null>;
+	/**
+	 * Every `package.json` by workspace-relative POSIX dir. Read from disk
+	 * when omitted; a caller that already has them passes them on.
+	 */
+	manifests?: ReadonlyMap<string, PackageManifest>;
 }
 
 /**
@@ -243,7 +261,7 @@ export async function traceBlastRadius(
 		);
 	});
 
-	const manifests = await readManifests(cwd);
+	const manifests = options.manifests ?? (await readManifests(cwd));
 	const blindSpots = workspaceBlindSpots({
 		externals: importGraph.externals,
 		packageNames: new Set(
@@ -400,7 +418,9 @@ export function assembleBlastRadius(
 			`${loaders.length} file(s) load a module through a fully computed import() or require() specifier (${listPaths(loaders)}); a change reached only that way selects no tests`,
 		);
 		const touched = new Set(
-			impacting.map((file) => packageRootOf(file, options.packageRoots)),
+			impacting
+				.filter(isModuleFile)
+				.map((file) => packageRootOf(file, options.packageRoots)),
 		);
 		const near = loaders.filter((loader) =>
 			touched.has(packageRootOf(loader, options.packageRoots)),
@@ -458,7 +478,7 @@ export function assembleBlastRadius(
 }
 
 /** The nearest directory with a `package.json` at or above `file`. */
-function packageRootOf(
+export function packageRootOf(
 	file: string,
 	packageRoots: readonly string[] | undefined,
 ): string {
@@ -528,7 +548,7 @@ export function packageExportsFrom(
 	return out;
 }
 
-function listPaths(items: readonly string[]): string {
+export function listPaths(items: readonly string[]): string {
 	return items.length > MAX_NOTE_FILES
 		? `${items.slice(0, MAX_NOTE_FILES).join(", ")}, … ${items.length - MAX_NOTE_FILES} more`
 		: items.join(", ");

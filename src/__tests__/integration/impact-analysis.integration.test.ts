@@ -300,6 +300,40 @@ describe("predictImpact", () => {
 		]);
 	});
 
+	// The shape that selected nothing on a real repository: TypeScript source
+	// whose only tests are `*.test.mjs` run by Node's own test runner.
+	it("says so when a package's tests are JavaScript it cannot select", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"apps/factory/package.json": JSON.stringify({ name: "factory" }),
+			"apps/factory/src/models.ts": 'export const model = (): string => "b";',
+			"apps/factory/tests/models.test.mjs":
+				'import { model } from "../src/models.ts";\nmodel();',
+			"apps/web/package.json": JSON.stringify({ name: "web" }),
+			"apps/web/src/page.ts": "export const page = 1;",
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page";\nexport const t = page;',
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: [
+				"apps/factory/src/models.ts",
+				"apps/factory/tests/models.test.mjs",
+			],
+			readBefore: async () => 'export const model = (): string => "a";',
+		});
+
+		const { tests } = report.result;
+		expect(tests.affectedTests).toEqual([]);
+		expect(tests.javascriptTests).toBe(1);
+		expect(tests.unselectedTests).toEqual([
+			"apps/factory/tests/models.test.mjs",
+		]);
+		expect(tests.unreached).toEqual(["apps/factory/src/models.ts"]);
+		expect(tests.resolution).toBe("low");
+		expect(tests.repositoryNotes).toHaveLength(1);
+	});
+
 	it("follows a subpath import declared in the package's own package.json", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

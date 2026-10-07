@@ -327,6 +327,104 @@ describe("computeTestImpact", () => {
 		});
 	});
 
+	// variant indexes TypeScript only. A package tested with `*.test.mjs` under
+	// Node's own runner has tests it cannot count, select, or follow imports
+	// from, and the code only they import looks untested.
+	describe("JavaScript tests", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"apps/factory/src/models.ts": [],
+				"apps/web/src/page.ts": [],
+				"apps/web/src/page.test.ts": [namedImport("./page.js", ["page"])],
+			}),
+		);
+		const javascriptTests = [
+			"apps/factory/tests/models.test.mjs",
+			"apps/factory/tests/other.test.mjs",
+		];
+		const packageRoots = ["", "apps/factory", "apps/web"];
+		const internal = (filePath: string): FileImpact => ({
+			...unanalyzed(filePath),
+			classification: "internal",
+		});
+
+		it("are counted and noted as a standing gap", () => {
+			const impact = computeTestImpact(
+				{ changed: [], affectedFiles: [], confidence: 1 },
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.javascriptTests).toBe(2);
+			expect(impact.repositoryNotes).toEqual([
+				"2 JavaScript test files are not indexed (apps/factory/tests/models.test.mjs, apps/factory/tests/other.test.mjs); variant cannot select them, and code only they import looks untested",
+			]);
+			expect(impact.notes).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+
+		it("that changed are reported as not selected, apart from unreached files", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [unanalyzed("apps/factory/tests/models.test.mjs")],
+					affectedFiles: ["apps/factory/tests/models.test.mjs"],
+					confidence: 0.9,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.unselectedTests).toEqual([
+				"apps/factory/tests/models.test.mjs",
+			]);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.notes).toContain(
+				"1 changed test file is JavaScript, which variant does not index, and was not selected (apps/factory/tests/models.test.mjs)",
+			);
+			expect(impact.resolution).toBe("low");
+		});
+
+		it("count against a change in the package they belong to", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("apps/factory/src/models.ts")],
+					affectedFiles: ["apps/factory/src/models.ts"],
+					confidence: 1,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toContain(
+				"2 JavaScript test files in a package this change touches cannot be selected (apps/factory/tests/models.test.mjs, apps/factory/tests/other.test.mjs)",
+			);
+		});
+
+		it("do not count against a changed file no test could import", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [unanalyzed("apps/factory/native/build.rs")],
+					affectedFiles: ["apps/factory/native/build.rs"],
+					confidence: 0.9,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toEqual([]);
+		});
+
+		it("do not count against a change in another package", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("apps/web/src/page.ts")],
+					affectedFiles: ["apps/web/src/page.ts"],
+					confidence: 1,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+	});
+
 	it("does not report prose as unreached", () => {
 		const impact = computeTestImpact(
 			{

@@ -49,6 +49,8 @@ function report(overrides: {
 		totalTests: 0,
 		selectAll: false,
 		unreached: [],
+		unselectedTests: [],
+		javascriptTests: 0,
 		confidence: 1,
 		resolution: "high",
 		notes: [],
@@ -246,6 +248,19 @@ describe("renderImpact", () => {
 
 		expect(capture.stdout()).toContain(
 			"Unreached: 1 changed file no test reaches (src/orphan.css). No test is selected for it: it is untested, or used in a way variant cannot follow.",
+		);
+	});
+
+	it("names changed JavaScript tests it could not select", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({ tests: { unselectedTests: ["tests/a.test.mjs"] } }),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Not selected: 1 changed test file is JavaScript (tests/a.test.mjs). variant does not index JavaScript tests, so it cannot select them; run them yourself.",
 		);
 	});
 
