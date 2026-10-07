@@ -84,7 +84,7 @@ Certain changed paths invalidate the whole test suite regardless of import closu
 
 - `package.json`, lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb`), and the package-manager config that changes what is installed or how (`pnpm-workspace.yaml`, `bunfig.toml`)
 - `tsconfig*.json`
-- Test/build runner configs (`vitest.config.*`, `vitest.workspace.*`, `vitest.projects.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`, `babel.config.*`, `.babelrc*`)
+- Test/build runner configs (`vitest.config.*`, `vitest.workspace.*`, `vitest.projects.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`, `babel.config.*`, `.babelrc*`, `next.config.*`)
 - Test setup files with a conventional name (`vitest.setup.*`, `jest.setup.*`, `setupTests.*`, `global-setup.*`, `global-teardown.*`, `test/setup.*`). A runner loads them before every test, but no test imports them.
 
 These match by path, whatever the file's classification: a `vitest.config.ts` edit is `breaking` or `internal` code to the differ, and still selects everything.

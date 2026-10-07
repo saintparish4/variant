@@ -145,6 +145,8 @@ describe("computeTestImpact", () => {
 		"bunfig.toml",
 		"npm-shrinkwrap.json",
 		"pnpm-workspace.yaml",
+		"next.config.mjs",
+		"apps/web/next.config.js",
 	])("%s triggers select-all", (file) => {
 		const impact = computeTestImpact(
 			{ changed: [unanalyzed(file)], affectedFiles: [file], confidence: 1 },
@@ -168,6 +170,9 @@ describe("computeTestImpact", () => {
 	it.each([
 		["a TypeScript runner config", "vitest.config.ts", "breaking"],
 		["a Jest config", "packages/web/jest.config.ts", "internal"],
+		// `next/jest` loads it to configure the transform every test is
+		// compiled with, and no test imports it.
+		["a Next.js config", "web/next.config.ts", "internal"],
 		["a Vitest setup file", "vitest.setup.ts", "internal"],
 		["a Jest setup file", "jest.setup.js", "internal"],
 		["a setupTests file", "src/setupTests.ts", "internal"],
