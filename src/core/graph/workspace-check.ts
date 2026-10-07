@@ -27,7 +27,11 @@
 import { builtinModules } from "node:module";
 import path from "node:path";
 import type { SymbolGraph } from "../semantic/symbol-graph.js";
-import { resolveAliasImport, resolveRelativeImport } from "./import-graph.js";
+import {
+	isRelativeSpecifier,
+	resolveAliasImport,
+	resolveRelativeImport,
+} from "./import-graph.js";
 import type { PathAlias } from "./tsconfig-paths.js";
 import { aliasesInScope, matchPathAlias } from "./tsconfig-paths.js";
 
@@ -100,7 +104,7 @@ export function checkWorkspace(input: {
 			if (imp.kind === "pattern") continue;
 			const spec = imp.module;
 
-			if (spec.startsWith("./") || spec.startsWith("../")) {
+			if (isRelativeSpecifier(spec)) {
 				const target = resolveRelativeImport(file, spec, files);
 				if (target === undefined) continue;
 				const targetOwner = fileToPackage(target, packages);

@@ -181,7 +181,7 @@ export function buildImportGraph(
 				}
 				continue;
 			}
-			if (spec.startsWith("./") || spec.startsWith("../")) {
+			if (isRelativeSpecifier(spec)) {
 				const resolved = resolveRelativeImport(file, spec, files);
 				if (resolved !== undefined) {
 					addEdge(file, resolved, imp);
@@ -406,8 +406,23 @@ export function resolveRelativeImport(
 		path.posix.join(path.posix.dirname(fromFile), spec),
 	);
 	// Escapes the workspace root — cannot be an indexed file.
-	if (base.startsWith("../")) return undefined;
-	return firstExisting(candidatePaths(base), files);
+	if (base === ".." || base.startsWith("../")) return undefined;
+	// `import x from "."` in a root-level file: the workspace's own index.
+	return firstExisting(candidatePaths(base === "." ? "index" : base), files);
+}
+
+/**
+ * `"."` and `".."` are relative too: the index file of the importing file's
+ * directory, and of its parent. Read as package names they had no edge, so a
+ * test written `import { x } from ".."` had no link to the code it tests.
+ */
+export function isRelativeSpecifier(spec: string): boolean {
+	return (
+		spec === "." ||
+		spec === ".." ||
+		spec.startsWith("./") ||
+		spec.startsWith("../")
+	);
 }
 
 /**

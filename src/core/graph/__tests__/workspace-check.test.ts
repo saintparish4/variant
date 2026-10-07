@@ -228,6 +228,18 @@ describe("checkWorkspace", () => {
 		expect(result.violations).toEqual([]);
 	});
 
+	it("reads a bare dot specifier as a relative import, not a package", () => {
+		const result = run(
+			{
+				"packages/auth/src/index.ts": [],
+				"packages/auth/src/index.test.ts": [bare(".")],
+				"packages/auth/src/__tests__/a.test.ts": [bare("..")],
+			},
+			[pkg("@org/auth", "packages/auth")],
+		);
+		expect(result.violations).toEqual([]);
+	});
+
 	it("ignores relative imports inside the same package", () => {
 		const result = run(
 			{

@@ -329,6 +329,33 @@ describe("predictImpact", () => {
 		]);
 	});
 
+	it('selects a test that imports the code it tests as ".." or "."', async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/logger/index.ts":
+				"export const log = (s: string): string => s.trim();",
+			"src/logger/__tests__/log.test.ts":
+				'import { log } from "..";\nexport const t = log("a");',
+			"src/button/index.ts": "export const press = (): number => 2;",
+			"src/button/index.test.ts":
+				'import { press } from ".";\nexport const t = press();',
+			"src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/button/index.ts", "src/logger/index.ts"],
+			readBefore: async (file) =>
+				file === "src/button/index.ts"
+					? "export const press = (): number => 1;"
+					: "export const log = (s: string): string => s;",
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"src/button/index.test.ts",
+			"src/logger/__tests__/log.test.ts",
+		]);
+	});
+
 	it("selects the tests of a file that still imports a deleted one", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, FIXTURE);

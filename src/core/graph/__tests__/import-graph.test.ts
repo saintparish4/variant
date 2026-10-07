@@ -66,6 +66,38 @@ describe("importersOfUnindexed", () => {
 	});
 });
 
+// `import x from ".."` names the parent directory's index file. Read as a
+// package name it had no edge, so the test had no link to the code it tests.
+describe("a bare dot specifier", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"src/logger/index.ts": [],
+			"src/logger/__tests__/log.test.ts": [staticImport("..")],
+			"src/button/index.ts": [],
+			"src/button/index.test.ts": [staticImport(".")],
+			"index.ts": [],
+			"root.test.ts": [staticImport(".")],
+			"src/orphan/a.test.ts": [staticImport("..")],
+		}),
+	);
+
+	it.each([
+		["src/logger/__tests__/log.test.ts", "src/logger/index.ts"],
+		["src/button/index.test.ts", "src/button/index.ts"],
+		["root.test.ts", "index.ts"],
+	])("resolves the import in %s to %s", (file, target) => {
+		expect(sorted(graph.imports.get(file))).toEqual([target]);
+		expect(sorted(graph.externals.get(file))).toEqual([]);
+	});
+
+	it("records one that names no indexed file as unresolved, not as a package", () => {
+		expect(sorted(graph.unresolved.get("src/orphan/a.test.ts"))).toEqual([
+			"..",
+		]);
+		expect(sorted(graph.externals.get("src/orphan/a.test.ts"))).toEqual([]);
+	});
+});
+
 describe("aliases declared in a package's own tsconfig", () => {
 	const graph = buildImportGraph(
 		makeGraph({

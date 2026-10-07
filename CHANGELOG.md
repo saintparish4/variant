@@ -81,6 +81,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **`import x from ".."` and `from "."` are relative imports.** They name the
+  index file of the parent directory and of the importing file's own. Both were
+  read as package names, so a test written that way had no edge to the code it
+  tests and was not selected when that code changed; `workspace check` reported
+  `.` and `..` as undeclared dependencies.
 - **A `next.config.*` change selects every test.** `next/jest` loads it to
   configure the transform every test is compiled with, and no test imports
   it, so an edit was classified as ordinary code and selected nothing, without
