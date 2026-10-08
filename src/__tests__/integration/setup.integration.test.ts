@@ -6,8 +6,9 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { registerInitAction } from "../../cli/commands/init.js";
+import { writeGlobalColorChoice } from "../../cli/visuals/color.js";
 import { applySetup } from "../../core/setup/apply.js";
 import { discoverRepository } from "../../core/setup/discover.js";
 import { planSetup } from "../../core/setup/plan.js";
@@ -19,9 +20,15 @@ import {
 	withCwd,
 } from "../helpers/cli-harness.js";
 
+// Color is on wherever `CI` is set, and the assertions read plain text.
+beforeEach(() => {
+	writeGlobalColorChoice("never");
+});
+
 afterEach(() => {
 	cleanupTempWorkspaces();
 	restoreGlobalPrinter();
+	writeGlobalColorChoice("auto");
 });
 
 const VITEST_CONFIG =
