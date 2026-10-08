@@ -57,6 +57,11 @@ export interface ImpactReport {
 	/** How `baseRef` was chosen, and what it stands for in words. */
 	baseSource: BaseSource;
 	baseLabel: string;
+	/**
+	 * The commit the prediction was recorded against, which is how a caller
+	 * reconciling later finds this one. Null outside a repository.
+	 */
+	headSha: string | null;
 	result: TestImpactResult;
 	verdict: BuildVerdict;
 	/**
@@ -138,6 +143,7 @@ export async function predictImpact(
 		baseRef,
 		baseSource: base.source,
 		baseLabel: base.label,
+		headSha,
 		result,
 		verdict,
 		packagesFound: packageGraph?.packages.length ?? 0,

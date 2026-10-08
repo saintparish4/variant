@@ -14,7 +14,7 @@ import {
 	defaultHistoryDir,
 	readReconciliations,
 } from "../../core/history/impact-log.js";
-import { verifyImpact } from "../../core/impact/verify.js";
+import { verifyImpact, verifyRun } from "../../core/impact/verify.js";
 import {
 	cleanupTempWorkspaces,
 	createTempWorkspace,
@@ -173,6 +173,29 @@ describe("verifyImpact", () => {
 			ranTests: 2,
 			predictedRan: 2,
 		});
+	});
+
+	it("reconciles results held in memory the same way as a report", async () => {
+		const dir = createTempWorkspace("verify");
+		await appendImpactPrediction(defaultHistoryDir(dir), prediction({}));
+
+		const result = await verifyRun(
+			dir,
+			{
+				ran: ["src/format.test.ts", "src/math.test.ts"],
+				failed: ["src/format.test.ts"],
+			},
+			{ headSha: "a".repeat(40) },
+		);
+
+		expect(result).toMatchObject({
+			matchedBy: "head-sha",
+			falseSkips: ["src/format.test.ts"],
+			ranTests: 2,
+			predictedRan: 1,
+		});
+		const records = await readReconciliations(defaultHistoryDir(dir));
+		expect(records).toMatchObject([{ falseSkips: 1, ranTests: 2 }]);
 	});
 
 	it("matches the prediction made at a given commit, not the newest one", async () => {

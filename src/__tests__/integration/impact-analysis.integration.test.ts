@@ -556,7 +556,7 @@ describe("impact with no base named", () => {
 		const dir = branchWithTwoCommits();
 		const pushed = "c".repeat(40);
 
-		await predictImpact(dir, {
+		const report = await predictImpact(dir, {
 			changeBaseDeps: {
 				...changeBaseDeps(dir),
 				env: {
@@ -576,6 +576,8 @@ describe("impact with no base named", () => {
 
 		const records = await readImpactPredictions(defaultHistoryDir(dir));
 		expect(records.at(-1)?.headSha).toBe(pushed);
+		// A caller that reconciles later needs to know which prediction is its own.
+		expect(report.headSha).toBe(pushed);
 	});
 });
 

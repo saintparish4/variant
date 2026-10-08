@@ -66,6 +66,7 @@ function report(overrides: {
 		baseRef: "HEAD~1",
 		baseSource: "flag",
 		baseLabel: "HEAD~1",
+		headSha: null,
 		...overrides.base,
 		result: { radius, tests },
 		verdict: "build-required",

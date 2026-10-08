@@ -132,6 +132,8 @@ type ImpactReport = {
 	baseSource: "flag" | "environment" | "pull-request" | "push" | "default-branch" | "previous-commit";
 	/** What baseRef stands for, in words: "merge base with origin/main". */
 	baseLabel: string;
+	/** The commit the prediction was recorded against; null outside a repository. */
+	headSha: string | null;
 	verdict: BuildVerdict;
 	/** Workspace packages discovery found; 0 outside a workspace. */
 	packagesFound: number;

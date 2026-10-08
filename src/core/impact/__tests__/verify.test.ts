@@ -2,7 +2,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ImpactReportError } from "../../errors.js";
 import type { ImpactPrediction } from "../../history/impact-log.js";
-import { parseFailedTests, parseTestRun, reconcile } from "../verify.js";
+import {
+	parseFailedTests,
+	parseTestRun,
+	reconcile,
+	testRunFrom,
+} from "../verify.js";
 
 const CWD = path.resolve("/repo");
 
@@ -134,6 +139,22 @@ describe("parseTestRun", () => {
 		).toEqual({
 			ran: ["a.test.ts", "b.test.ts", "c.test.ts"],
 			failed: ["a.test.ts"],
+		});
+	});
+});
+
+// A runner plugin has the results in memory, as its own objects.
+describe("testRunFrom", () => {
+	it("builds a run from the runner's own results, with no report file", () => {
+		expect(
+			testRunFrom(CWD, [
+				{ file: path.join(CWD, "src", "b.test.ts"), failed: true },
+				{ file: path.join(CWD, "src", "a.test.ts"), failed: false },
+				{ file: path.join(CWD, "src", "b.test.ts"), failed: false },
+			]),
+		).toEqual({
+			ran: ["src/a.test.ts", "src/b.test.ts"],
+			failed: ["src/b.test.ts"],
 		});
 	});
 });
