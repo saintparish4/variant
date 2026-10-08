@@ -75,7 +75,7 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
 | `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
 | `NO_BASE_COMMIT` | Raised inside `impact` when a detected base does not exist (a branch's first push). `impact` reports it and exits 0; with `--json` it prints `{ "prediction": null, "code": "NO_BASE_COMMIT", "reason": … }` |
-| `NO_TEST_FILES` | `impact` found no TypeScript test file to predict over (`*.test.ts`, `*.spec.ts`, or under `__tests__/`; JavaScript is not indexed) |
+| `NO_TEST_FILES` | `impact` found no test file to predict over (`*.test.*`, `*.spec.*`, or under `__tests__/`, in TypeScript or JavaScript) |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
@@ -132,12 +132,17 @@ Three consequences:
 - **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding declaration
   files (`.d.ts`, `.d.mts`, `.d.cts`), anything under a `node_modules/` or
   `dist/` directory at any depth, and `.git/` and `.variant/`.
-  Imports written with `.js`, `.mjs`, `.cjs` or `.jsx` extensions resolve to the
-  TypeScript source.
+  JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`) is indexed when it is the repository's own: tracked by git, or new and not ignored.
+  Build output, vendored bundles, `*.min.js` and files over 512 KB are left out.
+  Outside a git repository every JavaScript file not under those directories
+  is indexed. An import written with a `.js`, `.mjs`, `.cjs` or `.jsx`
+  extension resolves to the TypeScript source when there is one, and to the
+  JavaScript file otherwise. A changed CommonJS module (`module.exports`,
+  `exports.x`) is `breaking` and reaches every file that requires it: it has
+  no export list to compare.
 - **Tests** (for `impact`): indexed files under a `__tests__/` directory, or
-  named `*.test.*` / `*.spec.*`. A `.test.js` file is not indexed, so it is
-  never counted; with no TypeScript tests at all, `impact` stops with
-  `NO_TEST_FILES`.
+  named `*.test.*` / `*.spec.*`. With no test files at all, `impact` stops
+  with `NO_TEST_FILES`.
 - **Imports:** `import` and `export … from` declarations, `import()`,
   `require()` and `import x = require()`. A computed `import()` or `require()`
   is followed as far as its literal start (`` `./locales/${lang}` `` reaches
@@ -185,7 +190,7 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), in a directory that is not indexed, or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
+| `unanalyzed` | Not TypeScript or JavaScript (`.json`, `.css`, `.d.ts`, …), a source file the index leaves out, or outside the directory variant runs in | Selects the tests of every indexed file whose imports name it; listed as `Unreached` when there are none |
 
 A file that does not parse is `breaking`, whatever the comparison says.
 
@@ -203,13 +208,13 @@ Confidence starts at 100% and drops 10 points per note about the change
 (unresolved imports on affected files, a dynamic `import()`, unanalyzed files,
 a test that may depend on fixtures), with a floor of 30%. It is 100% when every
 test is selected, and at most 50% when a changed file reaches no test or a
-changed JavaScript test could not be selected. It prints as a bucket first:
+changed JavaScript test the index leaves out could not be selected. It prints as a bucket first:
 `high` at 90% and up, `medium` from 70%, `low` below. It is not a probability
 that skipping is safe.
 
 Notes that describe the repository and not the change (a loader with a fully
 computed specifier, a local dependency discovery did not find, JavaScript test
-files) are counted on a `Repository:` line and listed with `-v`. They lower the
+files the index leaves out) are counted on a `Repository:` line and listed with `-v`. They lower the
 score only when the change touches what they are about.
 
 The output also says how many workspace packages were found. Exits 0, or 1 with

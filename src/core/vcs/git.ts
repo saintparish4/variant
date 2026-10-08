@@ -237,6 +237,27 @@ export async function resolveCommit(
 	return sha === undefined || sha === "" ? null : sha;
 }
 
+/**
+ * Files matching `patterns` that belong to the repository: tracked, or new
+ * and not ignored. Relative to `cwd`, and null outside a repository.
+ */
+export async function listRepositoryFiles(
+	cwd: string,
+	patterns: readonly string[],
+): Promise<string[] | null> {
+	return toFileList(
+		await git(cwd, [
+			"ls-files",
+			"-z",
+			"--cached",
+			"--others",
+			"--exclude-standard",
+			"--",
+			...patterns,
+		]),
+	);
+}
+
 /** Files differing between `ref` and the working tree. */
 export async function listChangedFiles(
 	cwd: string,

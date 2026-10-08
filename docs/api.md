@@ -186,9 +186,9 @@ type TestImpact = {
 	 * them: TypeScript or not, prose and deleted files nothing imports aside.
 	 */
 	unreached: string[];
-	/** Changed test files that are JavaScript, which variant cannot select. */
+	/** Changed JavaScript test files the index leaves out, which cannot be selected. */
 	unselectedTests: string[];
-	/** JavaScript test files in the workspace. None is in totalTests. */
+	/** JavaScript test files the index leaves out. None is in totalTests. */
 	javascriptTests: number;
 	/**
 	 * radius.confidence, lowered 0.1 per test note, floor 0.3. 1 when selectAll
@@ -269,8 +269,8 @@ Notes are human-readable strings, sorted. The forms they take:
 
 | Where | Note |
 |---|---|
-| `radius.notes` | `<n> changed file(s) is/are not TypeScript and was/were not analyzed (<file>, …)` |
-| `radius.notes` | `<n> changed TypeScript file(s) is/are in a directory variant does not index and was/were not analyzed (<file>, …)` |
+| `radius.notes` | `<n> changed file(s) is/are not TypeScript or JavaScript and was/were not analyzed (<file>, …)` |
+| `radius.notes` | `<n> changed source file(s) is/are not in variant's index (ignored by git, in a build directory, or too large) and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<n> changed file(s) is/are outside the directory variant ran in and was/were not analyzed (<file>, …)` |
 | `radius.notes` | `<dependent>: dynamic import of <file> — names unknowable` |
 | `radius.notes` | `<n> affected file(s) has/have unresolved imports: <file> (<specifier>, …), …` |

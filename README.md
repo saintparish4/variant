@@ -206,11 +206,11 @@ cannot see at all:
   path, and is listed as `Unreached` otherwise.
 - **Unreached is not the same as untested.** A changed file no test reaches
   is listed as `Unreached` and the prediction reads `low`. variant cannot tell
-  an untested file from one a JavaScript test or a runtime lookup uses.
-- **JavaScript is not indexed.** A changed `.js` file reaches the TypeScript
-  files that import it, but `.js` tests are not counted or selected; the output
-  names them. A repository with no TypeScript tests stops with `NO_TEST_FILES`
-  instead of predicting nothing.
+  an untested file from one a runtime lookup uses.
+- **JavaScript is indexed when git says it is yours.** Tracked or new
+  `.js`, `.jsx`, `.mjs` and `.cjs` files are read like TypeScript; build
+  output and bundles are not. A changed CommonJS module reaches everything
+  that requires it.
 - **Computed imports are followed only as far as their literal start.**
   `` import(`./locales/${lang}.js`) `` reaches everything under `./locales/`;
   `import(name)` could load anything, and is a standing note on every run.

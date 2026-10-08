@@ -217,8 +217,6 @@ describe("predictImpact", () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {
 			"src/app.ts": FIXTURE["src/app.ts"],
-			// JavaScript is not indexed, so this is not a test variant can see.
-			"src/app.test.js": 'import { boot } from "./app.js";\nboot();',
 			"src/auth.ts":
 				"export function login(name: string, strict: boolean): string { return name; }",
 		});
@@ -303,7 +301,7 @@ describe("predictImpact", () => {
 
 	// The shape that selected nothing on a real repository: TypeScript source
 	// whose only tests are `*.test.mjs` run by Node's own test runner.
-	it("says so when a package's tests are JavaScript it cannot select", async () => {
+	it("selects a package's JavaScript tests", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {
 			"apps/factory/package.json": JSON.stringify({ name: "factory" }),
@@ -317,22 +315,88 @@ describe("predictImpact", () => {
 		});
 
 		const report = await predictImpact(dir, {
-			changedFiles: [
-				"apps/factory/src/models.ts",
-				"apps/factory/tests/models.test.mjs",
-			],
+			changedFiles: ["apps/factory/src/models.ts"],
 			readBefore: async () => 'export const model = (): string => "a";',
 		});
 
 		const { tests } = report.result;
-		expect(tests.affectedTests).toEqual([]);
-		expect(tests.javascriptTests).toBe(1);
-		expect(tests.unselectedTests).toEqual([
-			"apps/factory/tests/models.test.mjs",
+		expect(tests.affectedTests).toEqual(["apps/factory/tests/models.test.mjs"]);
+		expect(tests.totalTests).toBe(2);
+		expect(tests.unreached).toEqual([]);
+		expect(tests.javascriptTests).toBe(0);
+		expect(tests.resolution).toBe("high");
+	});
+
+	it("follows imports between JavaScript files, extension or not", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/price.js": "export const total = (a, b) => a + b + 0;\n",
+			"src/cart.mjs":
+				'import { total } from "./price.js";\nexport const cart = () => total(1, 2);\n',
+			"src/cart.test.js": 'import { cart } from "./cart.mjs";\ncart();\n',
+			"src/other.test.js": "export {};\n",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/price.js"],
+			readBefore: async () => "export const total = (a, b) => a + b;\n",
+		});
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "src/price.js", classification: "internal" },
 		]);
-		expect(tests.unreached).toEqual(["apps/factory/src/models.ts"]);
-		expect(tests.resolution).toBe("low");
-		expect(tests.repositoryNotes).toHaveLength(1);
+		expect(report.result.tests.affectedTests).toEqual(["src/cart.test.js"]);
+	});
+
+	// `module.exports` has no export list to compare, so nothing proves an
+	// importer unaffected.
+	it("treats a changed CommonJS module as reaching everything that requires it", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"lib/config.cjs": "module.exports = { retries: 3 };\n",
+			"lib/client.js":
+				'const config = require("./config.cjs");\nexport const retries = config.retries;\n',
+			"lib/client.test.js":
+				'import { retries } from "./client.js";\nretries;\n',
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["lib/config.cjs"],
+			readBefore: async () => "module.exports = { retries: 2 };\n",
+		});
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "lib/config.cjs", classification: "breaking", ungated: true },
+		]);
+		expect(report.result.radius.affectedFiles).toContain("lib/client.js");
+		expect(report.result.tests.affectedTests).toEqual(["lib/client.test.js"]);
+	});
+
+	// Build output and vendored bundles are JavaScript too. Git knows which
+	// JavaScript is the repository's own.
+	it("leaves out JavaScript that git ignores", async () => {
+		const dir = createGitWorkspace("impact", {
+			".gitignore": "build/\n",
+			// Committed build output and bundles are still not source.
+			"packages/a/dist/a.test.js": "export {};\n",
+			"vendor/lib.min.js": "export {};\n",
+			"vendor/lib.test.min.js": "export {};\n",
+			"src/app.ts": "export const app = 1;\n",
+			"src/app.test.ts":
+				'import { app } from "./app";\nexport const t = app;\n',
+		});
+		writeFiles(dir, {
+			"build/app.test.js": "export {};\n",
+			"src/new.test.js": "export {};\n",
+			"src/app.ts": "export const app = 2;\n",
+		});
+
+		const report = await predictImpact(dir, { base: "HEAD" });
+
+		// The new, not yet committed test counts; the ignored build output
+		// does not.
+		expect(report.result.tests.totalTests).toBe(2);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
 	});
 
 	it("follows a subpath import declared in the package's own package.json", async () => {

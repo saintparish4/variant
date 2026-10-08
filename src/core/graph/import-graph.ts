@@ -545,8 +545,9 @@ function matchWorkspacePackage(
 
 /**
  * Candidate indexed files for a resolved, extensionful-or-not base path:
- * exact TS path, JS-extension remaps (`.js` -> `.ts`/`.tsx`, …), then
- * extension probing and `index.*` for extensionless specifiers.
+ * exact TS path, JS-extension remaps (`.js` -> `.ts`/`.tsx`, …) and then the
+ * JavaScript file itself, then extension probing and `index.*` for
+ * extensionless specifiers.
  */
 function candidatePaths(base: string): string[] {
 	const ext = path.posix.extname(base);
@@ -555,13 +556,16 @@ function candidatePaths(base: string): string[] {
 	}
 	const tsExts = JS_TO_TS[ext];
 	if (tsExts !== undefined) {
+		// TypeScript first: `./x.js` is how a TypeScript file names `x.ts`,
+		// and where both exist the compiled one is the shadow.
 		const stem = base.slice(0, -ext.length);
-		return tsExts.map((e) => stem + e);
+		return [...tsExts.map((e) => stem + e), base];
 	}
 	// Extensionless (or an unknown "extension" that is really a dotted name).
+	const extensions = [...TS_EXTENSIONS, ...JS_EXTENSIONS];
 	return [
-		...TS_EXTENSIONS.map((e) => base + e),
-		...TS_EXTENSIONS.map((e) => `${base}/index${e}`),
+		...extensions.map((e) => base + e),
+		...extensions.map((e) => `${base}/index${e}`),
 	];
 }
 

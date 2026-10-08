@@ -196,7 +196,7 @@ describe("assembleBlastRadius", () => {
 		);
 		expect(radius.affectedFiles).toEqual(["package.json"]);
 		expect(radius.notes).toEqual([
-			"1 changed file is not TypeScript and was not analyzed (package.json)",
+			"1 changed file is not TypeScript or JavaScript and was not analyzed (package.json)",
 		]);
 		expect(radius.confidence).toBe(0.9);
 	});
@@ -243,7 +243,7 @@ describe("assembleBlastRadius", () => {
 			graph,
 		);
 		expect(radius.notes).toEqual([
-			"1 changed TypeScript file is in a directory variant does not index and was not analyzed (dist/built.ts)",
+			"1 changed source file is not in variant's index (ignored by git, in a build directory, or too large) and was not analyzed (dist/built.ts)",
 		]);
 	});
 
@@ -379,7 +379,7 @@ describe("assembleBlastRadius", () => {
 				{ packageRoots },
 			);
 			expect(radius.notes).toEqual([
-				"1 changed file is not TypeScript and was not analyzed (packages/a/native/build.rs)",
+				"1 changed file is not TypeScript or JavaScript and was not analyzed (packages/a/native/build.rs)",
 			]);
 		});
 

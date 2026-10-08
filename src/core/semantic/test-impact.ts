@@ -106,7 +106,7 @@ export function isJavaScriptTestFile(file: string): boolean {
 export function defaultIsTestFile(file: string): boolean {
 	return (
 		/(^|\/)__tests__\//.test(file) ||
-		/\.(test|spec)\.(ts|tsx|mts|cts)$/.test(file)
+		/\.(test|spec)\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(file)
 	);
 }
 
@@ -205,10 +205,15 @@ export function computeTestImpact(
 		}
 	}
 
-	const javascriptTests = [...(options.javascriptTests ?? [])].sort();
+	// JavaScript is indexed like TypeScript. What is left here is the
+	// JavaScript the index leaves out: ignored by git, or too large.
+	const unindexed = (file: string): boolean => !graph.imports.has(file);
+	const javascriptTests = [...(options.javascriptTests ?? [])]
+		.filter(unindexed)
+		.sort();
 	const unselectedTests = radius.changed
 		.map((impact) => impact.filePath)
-		.filter(isJavaScriptTestFile);
+		.filter((file) => isJavaScriptTestFile(file) && unindexed(file));
 	if (unselectedTests.length > 0) {
 		const one = unselectedTests.length === 1;
 		notes.add(
@@ -253,7 +258,7 @@ export function computeTestImpact(
 			if (impact.classification === "non-impacting") continue;
 			if (PROSE_FILE.test(impact.filePath)) continue;
 			// Reported on their own, as tests that were not selected.
-			if (isJavaScriptTestFile(impact.filePath)) continue;
+			if (unselectedTests.includes(impact.filePath)) continue;
 			if (graph.imports.has(impact.filePath)) {
 				if (!tested(impact.filePath)) unreached.push(impact.filePath);
 				continue;

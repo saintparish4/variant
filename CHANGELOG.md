@@ -74,6 +74,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **JavaScript is indexed.** `.js`, `.jsx`, `.mjs` and `.cjs` files that are
+  the repository's own (tracked by git, or new and not ignored) are read
+  like TypeScript: their imports are followed, their tests are counted and
+  selected, and a change to one is classified. A package tested with
+  `*.test.mjs` no longer selects nothing. Build output, `*.min.js` and files
+  over 512 KB are left out. A changed CommonJS module is `breaking` and
+  reaches every file that requires it. The index is rebuilt once.
 - **`pr report` is now a verification plan.** For a pull request it gives the
   risk of each changed file by a stated rule (what changed, how far it
   reaches, whether it crosses a package boundary, whether any test reaches
