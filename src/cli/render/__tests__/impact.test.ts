@@ -7,7 +7,11 @@ import type {
 } from "../../../core/semantic/blast-radius.js";
 import type { TestImpact } from "../../../core/semantic/test-impact.js";
 import { writeGlobalColorChoice } from "../../visuals/color.js";
-import { renderImpact, renderImpactJson } from "../impact.js";
+import {
+	renderImpact,
+	renderImpactJson,
+	renderNoBaseCommit,
+} from "../impact.js";
 
 beforeEach(() => {
 	writeGlobalColorChoice("never");
@@ -32,6 +36,7 @@ function report(overrides: {
 	tests?: Partial<TestImpact>;
 	packagesFound?: number;
 	historyLogged?: boolean;
+	base?: Pick<ImpactReport, "baseRef" | "baseSource" | "baseLabel">;
 }): ImpactReport {
 	const radius: BlastRadius = {
 		baseRef: "HEAD~1",
@@ -59,6 +64,9 @@ function report(overrides: {
 	};
 	return {
 		baseRef: "HEAD~1",
+		baseSource: "flag",
+		baseLabel: "HEAD~1",
+		...overrides.base,
 		result: { radius, tests },
 		verdict: "build-required",
 		packagesFound: overrides.packagesFound ?? 0,
@@ -175,6 +183,25 @@ describe("renderImpact", () => {
 
 		expect(capture.stdout()).toContain("Run:   1 test file");
 		expect(capture.stdout()).toContain("Skip:  3 test files (of 4 total)");
+	});
+
+	it("says what a detected base stands for, and shortens a commit id", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				base: {
+					baseRef: "1a2b3c4d5e6f".padEnd(40, "0"),
+					baseSource: "pull-request",
+					baseLabel: "merge base with origin/main",
+				},
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Base ref: 1a2b3c4d5e6f (merge base with origin/main)",
+		);
 	});
 
 	it("always states that the result is report-only", () => {
@@ -351,5 +378,37 @@ describe("renderImpactJson", () => {
 		expect(parsed.baseRef).toBe("HEAD~1");
 		expect(parsed.tests.affectedTests).toEqual(["a.test.ts"]);
 		expect(parsed.result).toBeUndefined();
+	});
+});
+
+describe("renderNoBaseCommit", () => {
+	it("says no prediction was made, in words", () => {
+		const capture = captureOutput();
+
+		renderNoBaseCommit(
+			"This push has no previous commit",
+			false,
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toBe(
+			"impact: This push has no previous commit; no prediction was made.\n",
+		);
+	});
+
+	it("keeps --json output parseable", () => {
+		const capture = captureOutput();
+
+		renderNoBaseCommit(
+			"This push has no previous commit",
+			true,
+			capture.printer,
+		);
+
+		expect(JSON.parse(capture.stdout())).toEqual({
+			prediction: null,
+			code: "NO_BASE_COMMIT",
+			reason: "This push has no previous commit",
+		});
 	});
 });

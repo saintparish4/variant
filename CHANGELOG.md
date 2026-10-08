@@ -16,6 +16,12 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **The default base changed.** `impact` with no `--base` compared against
+  `HEAD~1`, and `pr check`/`pr report` against `main`. Both now detect the base
+  (see Added). On the default branch `impact` still compares against the
+  previous commit; on any other branch it now reports everything the branch
+  changed. A repository whose default branch is not `main` no longer needs
+  `--base` for `pr check`.
 - **Confidence describes the change, not the repository.** Notes that are the
   same on every run (a loader whose specifier is fully computed, a local
   dependency discovery did not find, bare imports nothing declares) each cost
@@ -59,6 +65,16 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **`impact`, `pr check` and `pr report` need no `--base`.** The base is
+  worked out from git and the CI environment: in a GitHub Actions pull request
+  the merge base with the target branch, on a push the commit it replaced,
+  locally the merge base with the default branch, and the previous commit on
+  the default branch itself. `impact` prints which rule applied and carries it
+  in `--json` as `baseSource` and `baseLabel`. `VARIANT_BASE` names a base for
+  a CI system variant cannot read. In a pull request the prediction is recorded
+  against the pushed commit and `impact verify` finds it the same way, so
+  neither needs `--head-sha`. A push with nothing to compare against is
+  reported and exits 0.
 - `impact` prints how many workspace packages it found (`Workspace: 3
   packages`, or `no workspace packages found`), and `--json` carries it as
   `packagesFound`. Bare imports of a package discovery missed count as

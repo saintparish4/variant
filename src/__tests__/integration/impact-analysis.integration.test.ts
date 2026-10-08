@@ -13,6 +13,7 @@ import {
 	readImpactPredictions,
 } from "../../core/history/impact-log.js";
 import { predictImpact } from "../../core/impact/predict.js";
+import { changeBaseDeps } from "../../core/vcs/change-base.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
@@ -494,7 +495,113 @@ describe("predictImpact", () => {
 	});
 });
 
+// With no --base, a branch is measured from where it left the default branch:
+// everything it changed, not only its last commit.
+describe("impact with no base named", () => {
+	const noCi = { env: {} };
+
+	function branchWithTwoCommits(): string {
+		const dir = createGitWorkspace("impact", {
+			...FIXTURE,
+			"src/auth.ts": AUTH_BEFORE,
+			"src/other.ts": "export const other = 1;",
+			"src/other.test.ts":
+				'import { other } from "./other.js";\nexport const t = other;',
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, {
+			"src/auth.ts":
+				"export function login(name: string): string { return name.trim(); }",
+		});
+		git(dir, "commit", "-q", "-am", "first");
+		writeFiles(dir, { "src/other.ts": "export const other = 2;" });
+		git(dir, "commit", "-q", "-am", "second");
+		return dir;
+	}
+
+	it("measures a branch from its merge base with the default branch", async () => {
+		const dir = branchWithTwoCommits();
+
+		const report = await predictImpact(dir, {
+			changeBaseDeps: { ...changeBaseDeps(dir), ...noCi },
+		});
+
+		expect(report.baseSource).toBe("default-branch");
+		expect(report.baseLabel).toBe("merge base with main");
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/auth.ts", "src/other.ts"]);
+		expect(report.result.tests.affectedTests).toEqual([
+			"src/app.test.ts",
+			"src/other.test.ts",
+		]);
+	});
+
+	it("measures the last commit on the default branch itself", async () => {
+		const dir = branchWithTwoCommits();
+		git(dir, "checkout", "-q", "main");
+		git(dir, "merge", "-q", "--ff-only", "feature");
+
+		const report = await predictImpact(dir, {
+			changeBaseDeps: { ...changeBaseDeps(dir), ...noCi },
+		});
+
+		expect(report.baseSource).toBe("previous-commit");
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/other.ts"]);
+	});
+
+	it("records the pushed commit of a pull request, not the one checked out", async () => {
+		const dir = branchWithTwoCommits();
+		const pushed = "c".repeat(40);
+
+		await predictImpact(dir, {
+			changeBaseDeps: {
+				...changeBaseDeps(dir),
+				env: {
+					GITHUB_ACTIONS: "true",
+					GITHUB_EVENT_NAME: "pull_request",
+					GITHUB_BASE_REF: "main",
+					GITHUB_EVENT_PATH: "/event.json",
+				},
+				// A local `main` stands in for the remote-tracking branch.
+				resolveCommit: (ref) =>
+					changeBaseDeps(dir).resolveCommit(ref.replace("origin/", "")),
+				mergeBase: (a, b) =>
+					changeBaseDeps(dir).mergeBase(a, b.replace("origin/", "")),
+				readEvent: async () => ({ pull_request: { head: { sha: pushed } } }),
+			},
+		});
+
+		const records = await readImpactPredictions(defaultHistoryDir(dir));
+		expect(records.at(-1)?.headSha).toBe(pushed);
+	});
+});
+
 describe("impact command", () => {
+	it("reports a push with no previous commit and does not fail", async () => {
+		const dir = createGitWorkspace("impact", {
+			"src/a.ts": "export const a = 1;",
+		});
+		const output = captureGlobalOutput();
+		const saved = { ...process.env };
+		Object.assign(process.env, {
+			GITHUB_ACTIONS: "true",
+			GITHUB_EVENT_NAME: "push",
+			GITHUB_EVENT_PATH: "",
+			VARIANT_BASE: "",
+		});
+		try {
+			await withCwd(dir, () => registerImpactAction({}));
+		} finally {
+			process.env = saved;
+		}
+
+		expect(output.stdout()).toContain("no prediction was made");
+		expect(await readImpactPredictions(defaultHistoryDir(dir))).toEqual([]);
+	});
+
 	it("prints the run/skip block with the report-only disclaimer", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

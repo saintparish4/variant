@@ -128,6 +128,10 @@ is an error (`GIT_REF_ERROR`, exit 1).
 ```ts
 type ImpactReport = {
 	baseRef: string;
+	/** How baseRef was chosen. */
+	baseSource: "flag" | "environment" | "pull-request" | "push" | "default-branch" | "previous-commit";
+	/** What baseRef stands for, in words: "merge base with origin/main". */
+	baseLabel: string;
 	verdict: BuildVerdict;
 	/** Workspace packages discovery found; 0 outside a workspace. */
 	packagesFound: number;
@@ -206,6 +210,8 @@ Example, from step 2 of the [tutorial](./tutorial.md#2-a-breaking-change):
 ```json
 {
   "baseRef": "main",
+  "baseSource": "flag",
+  "baseLabel": "main",
   "verdict": "build-required",
   "packagesFound": 3,
   "historyLogged": true,

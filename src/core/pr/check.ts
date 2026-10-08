@@ -10,6 +10,7 @@ import { classifyFileAgainstRef } from "../semantic/file-change.js";
 import type { BuildVerdict } from "../semantic/verdict.js";
 import { deriveVerdict } from "../semantic/verdict.js";
 import { assertBaseRef } from "../vcs/base-ref.js";
+import { changeBaseDeps, resolvePullRequestBase } from "../vcs/change-base.js";
 import { listChangedFilesSinceMergeBase } from "../vcs/git.js";
 
 export const DEFAULT_PR_BASE_REF = "main";
@@ -46,7 +47,12 @@ export async function runPrCheck(
 	cwd: string,
 	options: PrCheckOptions = {},
 ): Promise<PrCheckResult> {
-	const baseRef = options.base ?? DEFAULT_PR_BASE_REF;
+	// The target branch in a pull request, the default branch locally. An
+	// injected change set has no diff to take, so nothing to detect.
+	const baseRef =
+		options.changedFiles === undefined
+			? await resolvePullRequestBase(options.base, changeBaseDeps(cwd))
+			: (options.base ?? DEFAULT_PR_BASE_REF);
 	const changed =
 		options.changedFiles ?? (await listBranchChanges(cwd, baseRef));
 	const tsFiles = changed.filter((file) => TS_FILE.test(file));

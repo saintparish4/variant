@@ -22,12 +22,24 @@ import { traceTestImpact } from "../semantic/test-impact.js";
 import type { BuildVerdict } from "../semantic/verdict.js";
 import { deriveVerdict } from "../semantic/verdict.js";
 import { assertBaseRef } from "../vcs/base-ref.js";
+import type {
+	BaseSource,
+	ChangeBase,
+	ChangeBaseDeps,
+} from "../vcs/change-base.js";
+import { changeBaseDeps, resolveChangeBase } from "../vcs/change-base.js";
 import { readHeadSha } from "../vcs/git.js";
 
 export const DEFAULT_IMPACT_BASE_REF = "HEAD~1";
 
 export interface ImpactOptions {
+	/**
+	 * Ref to compare against. Worked out from git and the CI environment when
+	 * omitted; see `resolveChangeBase`.
+	 */
 	base?: string;
+	/** DI for tests: what base detection reads. */
+	changeBaseDeps?: ChangeBaseDeps;
 	/** DI for tests: skip git and use these workspace-relative paths. */
 	changedFiles?: string[];
 	/** DI for tests: content of a file at baseRef. */
@@ -42,6 +54,9 @@ export interface ImpactOptions {
 
 export interface ImpactReport {
 	baseRef: string;
+	/** How `baseRef` was chosen, and what it stands for in words. */
+	baseSource: BaseSource;
+	baseLabel: string;
 	result: TestImpactResult;
 	verdict: BuildVerdict;
 	/**
@@ -62,7 +77,19 @@ export async function predictImpact(
 	cwd: string,
 	options: ImpactOptions = {},
 ): Promise<ImpactReport> {
-	const baseRef = options.base ?? DEFAULT_IMPACT_BASE_REF;
+	// An injected change set has no diff to take, so no base to detect.
+	const base: ChangeBase =
+		options.changedFiles === undefined
+			? await resolveChangeBase(
+					options.base,
+					options.changeBaseDeps ?? changeBaseDeps(cwd),
+				)
+			: {
+					ref: options.base ?? DEFAULT_IMPACT_BASE_REF,
+					source: options.base === undefined ? "previous-commit" : "flag",
+					label: options.base ?? "previous commit",
+				};
+	const baseRef = base.ref;
 	if (options.changedFiles === undefined) await assertBaseRef(cwd, baseRef);
 	const packageGraph = await loadPackageGraph(cwd).catch(() => undefined);
 
@@ -88,7 +115,9 @@ export async function predictImpact(
 	);
 
 	const headSha =
-		options.headSha !== undefined ? options.headSha : await readHeadSha(cwd);
+		options.headSha !== undefined
+			? options.headSha
+			: (base.headSha ?? (await readHeadSha(cwd)));
 
 	const historyLogged = await appendImpactPrediction(defaultHistoryDir(cwd), {
 		at: new Date().toISOString(),
@@ -107,6 +136,8 @@ export async function predictImpact(
 
 	return {
 		baseRef,
+		baseSource: base.source,
+		baseLabel: base.label,
 		result,
 		verdict,
 		packagesFound: packageGraph?.packages.length ?? 0,

@@ -74,13 +74,37 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `CACHE_ERROR` | The task cache cannot be read or written. Deleting `.variant/cache/` fixes it. |
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
 | `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
+| `NO_BASE_COMMIT` | Raised inside `impact` when a detected base does not exist (a branch's first push). `impact` reports it and exits 0; with `--json` it prints `{ "prediction": null, "code": "NO_BASE_COMMIT", "reason": … }` |
 | `NO_TEST_FILES` | `impact` found no TypeScript test file to predict over (`*.test.ts`, `*.spec.ts`, or under `__tests__/`; JavaScript is not indexed) |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
 
+`impact`, `pr check` and `pr report` need no `--base`. Left out, the base is
+worked out from git and the CI environment:
+
+| Where | `impact` compares against | `pr check`, `pr report` compare against |
+|---|---|---|
+| A GitHub Actions pull request | the merge base of `HEAD` and `origin/<target branch>` | `origin/<target branch>` |
+| A GitHub Actions push | the commit the push replaced | the default branch |
+| `VARIANT_BASE` is set | that ref | the default branch |
+| Anywhere else, on a branch | the merge base with the default branch | the default branch |
+| Anywhere else, on the default branch | the previous commit | the default branch |
+
+The default branch is what the remote calls its default, or the first of
+`origin/main`, `origin/master`, `main` and `master` that exists. `impact` prints
+which rule applied: `Base ref: 1a2b3c4d5e6f (merge base with origin/main)`.
+
+In a pull request `impact` also records its prediction against the commit that
+was pushed, not the merge commit GitHub checks out for the run, and
+`impact verify` looks the prediction up the same way. Neither needs `--head-sha`.
+
+A push with no previous commit to compare against (a branch's first push, or a
+force-push whose old head is gone) is not an error: `impact` says no prediction
+was made and exits 0.
+
 Commands that take `--base <ref>` accept anything git resolves: a branch, a
-tag, a SHA, `HEAD~3`. They do not compare the same things:
+tag, a SHA, `HEAD~3`. With an explicit ref they do not compare the same things:
 
 | Command | Changed files | "Before" content | "After" content |
 |---|---|---|---|
@@ -150,7 +174,7 @@ prediction to `.variant/history/impact.jsonl`.
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `HEAD~1` | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
+| `--base <ref>` | detected | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
 | `--head-sha <sha>` | `HEAD` | Commit to record the prediction against. In a pull request, GitHub Actions checks out a merge commit it makes for the run; pass the pushed commit here and to `impact verify` so the record names something that can be looked up. |
 | `--json` | off | Print the full report, [shape here](./api.md#impact---json). |
 
@@ -253,7 +277,7 @@ is `internal`, else `safe to skip build`.
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `main` | Branch or ref the pull request targets. See [Refs and diffs](#refs-and-diffs). |
+| `--base <ref>` | detected | Branch or ref the pull request targets. See [Refs and diffs](#refs-and-diffs). |
 
 ```
 Base ref: main
@@ -280,7 +304,7 @@ request comment. [Both formats are documented here](./api.md#pr-report).
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `main` | As for `pr check` |
+| `--base <ref>` | detected | As for `pr check` |
 | `--markdown` | off | Markdown instead of JSON |
 | `--output <file>` | stdout | Write to this path, relative to the current directory |
 

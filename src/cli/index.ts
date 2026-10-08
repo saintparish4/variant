@@ -66,16 +66,19 @@ const impactCmd = program
 	.description(
 		"Predict which tests a change requires — report-only; the full suite should still run",
 	)
-	.option("--base <ref>", "git ref to compare against", "HEAD~1")
+	.option(
+		"--base <ref>",
+		"git ref to compare against (default: detected from git and CI)",
+	)
 	.option(
 		"--head-sha <sha>",
 		"record the prediction against this commit instead of HEAD",
 	)
 	.option("--json", "output the report as JSON")
-	.action(async (opts: { base: string; headSha?: string; json?: boolean }) => {
+	.action(async (opts: { base?: string; headSha?: string; json?: boolean }) => {
 		const { registerImpactAction } = await import("./commands/impact.js");
 		await registerImpactAction({
-			base: opts.base,
+			...(opts.base !== undefined && { base: opts.base }),
 			...(opts.headSha !== undefined && { headSha: opts.headSha }),
 			...(opts.json === true && { json: true }),
 		});
@@ -139,22 +142,34 @@ prCmd
 	.description(
 		"Classify all TypeScript changes in this PR and report a build verdict",
 	)
-	.option("--base <ref>", "base branch or ref for the PR diff", "main")
-	.action(async (opts: { base: string }) => {
+	.option(
+		"--base <ref>",
+		"base branch or ref for the PR diff (default: the target or default branch)",
+	)
+	.action(async (opts: { base?: string }) => {
 		const { registerPrCheckAction } = await import("./commands/pr.js");
-		await registerPrCheckAction({ base: opts.base });
+		await registerPrCheckAction({
+			...(opts.base !== undefined && { base: opts.base }),
+		});
 	});
 
 prCmd
 	.command("report")
 	.description("Render `pr check` as a structured JSON or markdown report")
-	.option("--base <ref>", "base branch or ref for the PR diff", "main")
+	.option(
+		"--base <ref>",
+		"base branch or ref for the PR diff (default: the target or default branch)",
+	)
 	.option("--markdown", "output a markdown summary instead of JSON")
 	.option("--output <file>", "write report to file instead of stdout")
 	.action(
-		async (opts: { base: string; markdown?: boolean; output?: string }) => {
+		async (opts: { base?: string; markdown?: boolean; output?: string }) => {
 			const { registerPrReportAction } = await import("./commands/pr.js");
-			await registerPrReportAction(opts);
+			await registerPrReportAction({
+				...(opts.base !== undefined && { base: opts.base }),
+				...(opts.markdown === true && { markdown: true }),
+				...(opts.output !== undefined && { output: opts.output }),
+			});
 		},
 	);
 

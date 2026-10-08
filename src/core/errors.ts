@@ -74,6 +74,22 @@ export class GitRefError extends VariantError {
 	}
 }
 
+/**
+ * A detected base that does not exist: the first push of a branch has no
+ * previous commit, and a force-push can name one that is gone. Nobody made a
+ * mistake, so a command that found its base this way reports it and succeeds.
+ */
+export class NoBaseCommitError extends VariantError {
+	constructor() {
+		super(
+			"NO_BASE_COMMIT",
+			"This push has no previous commit to compare against",
+		);
+		this.hint =
+			"The first push of a branch, or a force-push whose old head is gone. Pass --base to compare against a commit of your choice.";
+	}
+}
+
 export class ImpactReportError extends VariantError {
 	constructor(message: string) {
 		super("IMPACT_REPORT_ERROR", `Could not read the test report: ${message}`);
