@@ -395,7 +395,7 @@ type FileClassification = {
 type VerificationPlan = {
 	baseRef: string;
 	baseLabel: string;
-	/** Highest risk first. */
+	/** Source files first, then configuration, housekeeping and no-risk files; highest risk first within each. */
 	changes: {
 		filePath: string;
 		classification: "non-impacting" | "internal" | "breaking" | "unanalyzed";
@@ -468,7 +468,12 @@ value type), `type` for a type-space-only change (interfaces, type aliases), and
 | `low` | Its exports only gained names (a new file, or new exports), and a test reaches it |
 | `high` | Its exports changed, and a file in another package imports it |
 | `medium` | Its exports changed; or variant cannot read the file |
+| `medium` | Only its implementation changed, and a file in another package imports it |
 | `low` | Only its implementation changed, and at least one test reaches it |
+
+Rows are ordered with source files first, then configuration, then
+housekeeping, then files with no risk; within each, highest risk first. The
+change a pull request is about should not sit under its lockfile.
 
 An `unrated` file still matters; a test plan has nothing to say about it, so it
 is listed and kept out of "not verified".

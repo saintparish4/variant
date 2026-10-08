@@ -269,6 +269,15 @@ function riskOf(
 	if (change.classification === "unanalyzed") {
 		return { risk: "medium", reason: "not a file variant can read" };
 	}
+	// How far a body change goes is the one thing the graph knows about its
+	// consequence. Across a package boundary is a yes or no, with no
+	// threshold to pick; a count of importers would need one.
+	if (change.crossesInto.length > 0) {
+		return {
+			risk: "medium",
+			reason: "implementation changed, and other packages import it",
+		};
+	}
 	return { risk: "low", reason: "implementation only, and tests reach it" };
 }
 
@@ -321,8 +330,19 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 		}
 		return { ...facts, ...scored };
 	});
+	// Source first, whatever its risk: it is what the pull request is about.
+	// A "medium" lockfile above a "low" behaviour change buried the change.
+	const rank = (change: PlannedChange): number =>
+		change.risk === "none"
+			? 3
+			: change.risk === "unrated"
+				? 2
+				: invalidatesAllTests(change.filePath)
+					? 1
+					: 0;
 	changes.sort(
 		(a, b) =>
+			rank(a) - rank(b) ||
 			RISK_ORDER[a.risk] - RISK_ORDER[b.risk] ||
 			a.filePath.localeCompare(b.filePath),
 	);

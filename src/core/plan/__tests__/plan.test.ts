@@ -89,10 +89,40 @@ function planFor(
 
 describe("the verification plan", () => {
 	it("rates a body-only change that tests reach as low", () => {
-		const plan = planFor([changed("packages/math/src/add.ts", "internal")]);
+		const plan = planFor([changed("packages/web/src/cart.ts", "internal")]);
 
 		expect(plan.changes).toMatchObject([
-			{ filePath: "packages/math/src/add.ts", risk: "low", tests: 2 },
+			{ filePath: "packages/web/src/cart.ts", risk: "low", tests: 1 },
+		]);
+	});
+
+	// pyra: a one-line body change to a permission check, imported by three
+	// other packages, was the only "low" row of its pull request.
+	it("rates a body-only change that other packages import as medium", () => {
+		const plan = planFor([changed("packages/math/src/add.ts", "internal")]);
+
+		expect(plan.changes[0]).toMatchObject({
+			risk: "medium",
+			crossesInto: ["@x/web"],
+			reason: "implementation changed, and other packages import it",
+		});
+	});
+
+	it("lists source changes above configuration, whatever their risk", () => {
+		const plan = planFor([
+			changed("pnpm-lock.yaml", "unanalyzed"),
+			changed(".gitignore", "unanalyzed"),
+			changed("packages/web/src/cart.ts", "internal"),
+			changed("README.md", "unanalyzed"),
+		]);
+
+		expect(
+			plan.changes.map((change) => [change.filePath, change.risk]),
+		).toEqual([
+			["packages/web/src/cart.ts", "low"],
+			["pnpm-lock.yaml", "medium"],
+			[".gitignore", "unrated"],
+			["README.md", "none"],
 		]);
 	});
 
