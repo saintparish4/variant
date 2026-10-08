@@ -65,6 +65,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **A Vitest adapter: `@blzsky/variant/vitest`.** One line in the Vitest
+  config, and a normal test run in CI predicts alongside the tests, compares
+  the failures with the prediction when they end, prints one line and records
+  the result. No variant command is run by anyone. The prediction is made in a
+  separate process and never affects the run: no exit code is set, and a
+  failure in variant is one line of output. A workspace with one test process
+  per package predicts once and shares the result. See
+  [the adapter's page](./docs/vitest-adapter.md).
 - **`impact`, `pr check` and `pr report` need no `--base`.** The base is
   worked out from git and the CI environment: in a GitHub Actions pull request
   the merge base with the target branch, on a push the commit it replaced,

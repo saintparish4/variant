@@ -300,3 +300,9 @@ export async function defaultBranchRef(cwd: string): Promise<string | null> {
 	}
 	return null;
 }
+
+/** The top of the working tree `cwd` is in, or null outside a repository. */
+export async function repositoryRoot(cwd: string): Promise<string | null> {
+	const top = (await git(cwd, ["rev-parse", "--show-toplevel"]))?.trim();
+	return top === undefined || top === "" ? null : top;
+}

@@ -3,6 +3,18 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
 	test: {
 		passWithNoTests: true,
+		// variant reads the pull request or push it is running in from these.
+		// Left set, every test that builds its own repository would be measured
+		// against the commits of the CI run the suite itself is part of.
+		env: {
+			GITHUB_ACTIONS: "",
+			GITHUB_EVENT_NAME: "",
+			GITHUB_EVENT_PATH: "",
+			GITHUB_BASE_REF: "",
+			GITHUB_STEP_SUMMARY: "",
+			VARIANT_BASE: "",
+			VARIANT_SHADOW: "",
+		},
 		// Deliberately not `enabled: true`. Thresholds are global, so a
 		// single-file run would fail four of them while measuring nothing
 		// useful. Coverage is opt-in via `--coverage` (`pnpm test:all`, and

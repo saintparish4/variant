@@ -236,6 +236,7 @@ The full list, with how each case is handled, is in
 | [Getting started](./docs/getting-started.md) | Run it on your own repository, then set up the task runner |
 | [Impact & workspace](./docs/impact-and-workspace.md) | How `impact` and `workspace check` work, and what static analysis cannot see |
 | [PR commands](./docs/pr-commands.md) | `pr check` and `pr report` |
+| [Vitest adapter](./docs/vitest-adapter.md) | One config line in place of the commands: predict and check on every test run |
 | [CLI reference](./docs/cli-reference.md) | Every command, flag, exit code and file |
 | [API reference](./docs/api.md) | `defineConfig`, the config types, and every JSON output |
 | [Monorepo setup](./docs/monorepo.md) | Workspace tasks and `--affected` |
