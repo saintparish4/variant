@@ -170,6 +170,31 @@ describe("buildPrReport", () => {
 		]);
 	});
 
+	// The lockfile of a workspace is at its root. Asked from an app's own
+	// directory, the plan once proposed `npm run build` in a bun repository.
+	it("writes commands for the package manager of the repository, from a subdirectory too", async () => {
+		const dir = createGitWorkspace("pr", {
+			"package.json": JSON.stringify({ name: "root", workspaces: ["web"] }),
+			"bun.lock": "{}\n",
+			"web/package.json": JSON.stringify({
+				name: "web",
+				scripts: { build: "next build" },
+			}),
+			"web/src/a.ts": "export const a = 1;\n",
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, { "web/src/a.ts": "export const a = 2;\n" });
+		git(dir, "commit", "-q", "-am", "change");
+
+		const { plan } = await buildPrReport(path.join(dir, "web"), {
+			base: "main",
+		});
+
+		expect(plan.checks.map((check) => check.command)).toEqual([
+			"bun run build",
+		]);
+	});
+
 	// A report describes a change; only a test run's own prediction is ever
 	// reconciled, so one left behind here would count as a run that never was.
 	it("records no prediction", async () => {

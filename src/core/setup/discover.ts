@@ -8,7 +8,7 @@
  * do with the facts is `plan.ts`.
  */
 
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadPackageGraph } from "../graph/package-graph.js";
 import { defaultBranchRef } from "../vcs/git.js";
@@ -82,35 +82,50 @@ async function readManifest(cwd: string): Promise<RootManifest | null> {
 	}
 }
 
-async function detectPackageManager(
-	cwd: string,
-	manifest: RootManifest | null,
-): Promise<PackageManagerName | null> {
+const MANAGERS = new Set<string>(["npm", "pnpm", "yarn", "bun"]);
+
+async function managerIn(dir: string): Promise<PackageManagerName | null> {
 	// The lockfile is what an install actually used. `packageManager` can say
 	// one thing while CI installs with another.
 	for (const [lockfile, name] of LOCKFILES) {
-		if ((await readText(path.join(cwd, lockfile))) !== null) return name;
+		if ((await readText(path.join(dir, lockfile))) !== null) return name;
 	}
-	const declared = manifest?.packageManager;
-	if (typeof declared === "string") {
-		const name = declared.split("@")[0];
-		if (
-			name === "npm" ||
-			name === "pnpm" ||
-			name === "yarn" ||
-			name === "bun"
-		) {
-			return name;
-		}
+	const declared = (await readManifest(dir))?.packageManager;
+	const name =
+		typeof declared === "string" ? declared.split("@")[0] : undefined;
+	return name !== undefined && MANAGERS.has(name)
+		? (name as PackageManagerName)
+		: null;
+}
+
+/**
+ * Looks upward from `cwd` to the repository root: a workspace keeps its one
+ * lockfile at the top, and a command run from an app's directory is still
+ * that workspace's.
+ */
+async function detectPackageManager(
+	cwd: string,
+): Promise<PackageManagerName | null> {
+	let dir = path.resolve(cwd);
+	for (;;) {
+		const found = await managerIn(dir);
+		if (found !== null) return found;
+		const parent = path.dirname(dir);
+		// `.git` is a directory in a clone and a file in a worktree.
+		const atRoot = await access(path.join(dir, ".git")).then(
+			() => true,
+			() => false,
+		);
+		if (parent === dir || atRoot) return null;
+		dir = parent;
 	}
-	return null;
 }
 
 /** The package manager a repository installs with, or null when nothing says. */
 export async function packageManagerOf(
 	cwd: string,
 ): Promise<PackageManagerName | null> {
-	return detectPackageManager(cwd, await readManifest(cwd));
+	return detectPackageManager(cwd);
 }
 
 /**
@@ -173,7 +188,7 @@ export async function discoverRepository(
 	);
 
 	return {
-		packageManager: await detectPackageManager(cwd, manifest),
+		packageManager: await detectPackageManager(cwd),
 		workspacePackages: packageDirs.filter((dir) => dir !== "").length,
 		taskRunner: files.includes("turbo.json")
 			? "turborepo"
