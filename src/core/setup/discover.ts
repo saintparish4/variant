@@ -143,6 +143,31 @@ export async function packageManagerOf(
 	return detectPackageManager(cwd);
 }
 
+const CONFIG_FLAG = /(?:--config|-c)(?:=|\s+)(\S+)/;
+
+/**
+ * How a package's scripts run Vitest: with its default config (`plain`), and
+ * with which configs named on the command line.
+ */
+function vitestRuns(manifest: RootManifest | null): {
+	plain: boolean;
+	configs: string[];
+} {
+	const configs: string[] = [];
+	let plain = false;
+	for (const script of Object.values(manifest?.scripts ?? {})) {
+		if (typeof script !== "string") continue;
+		// One script can chain several commands; each is its own run.
+		for (const command of script.split(/&&|\|\||;/)) {
+			if (!/\bvitest\b/.test(command)) continue;
+			const config = CONFIG_FLAG.exec(command)?.[1];
+			if (config === undefined) plain = true;
+			else configs.push(config.replace(/^["']|["']$/g, ""));
+		}
+	}
+	return { plain, configs };
+}
+
 /**
  * Where the adapter goes. A root config's reporters cover every project it
  * runs, so it alone is enough. Without one, each workspace package's own
@@ -226,11 +251,22 @@ export async function discoverRepository(
 	const usesVitest = (candidate: RootManifest | null): boolean =>
 		"vitest" in (candidate?.devDependencies ?? {}) ||
 		"vitest" in (candidate?.dependencies ?? {});
-	// Each package that depends on Vitest runs its own; the root's counts
-	// only when no package does.
+	const everyone = [{ dir: "", manifest }, ...members];
+	const runs = new Map(
+		everyone.map((member) => [member.dir, vitestRuns(member.manifest)]),
+	);
+	const scripted = everyone.some((member) => {
+		const run = runs.get(member.dir);
+		return run !== undefined && (run.plain || run.configs.length > 0);
+	});
+	// Where scripts say how Vitest is run, they decide: a package whose only
+	// script names its own config never loads a default one. Where none
+	// does, the dependency is all there is to go on: each package that has
+	// it, or the root when no package does.
 	const users = members.filter((member) => usesVitest(member.manifest));
-	const runners =
-		users.length > 0
+	const runners = scripted
+		? everyone.filter((member) => runs.get(member.dir)?.plain === true)
+		: users.length > 0
 			? users
 			: usesVitest(manifest)
 				? [{ dir: "", manifest }]
@@ -239,6 +275,12 @@ export async function discoverRepository(
 	const unconfigured = hasRootConfig
 		? []
 		: runners.filter((runner) => !vitestDirs.has(runner.dir));
+	const scriptConfigs = everyone.flatMap((member) =>
+		(runs.get(member.dir)?.configs ?? []).map((config) =>
+			path.posix.normalize(path.posix.join(member.dir, config)),
+		),
+	);
+	const allConfigs = [...new Set([...vitestConfigs, ...scriptConfigs])].sort();
 
 	return {
 		packageManager: await detectPackageManager(cwd),
@@ -248,7 +290,7 @@ export async function discoverRepository(
 			: files.includes("nx.json")
 				? "nx"
 				: null,
-		vitestConfigs,
+		vitestConfigs: allConfigs,
 		vitestWithoutConfig: unconfigured
 			.filter((runner) => !viteDirs.has(runner.dir))
 			.map((runner) => runner.dir)

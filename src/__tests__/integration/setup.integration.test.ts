@@ -229,6 +229,45 @@ describe("planSetup and applySetup", () => {
 		expect(again.vitestConfigs).toEqual(["packages/a/vitest.config.ts"]);
 	});
 
+	// pyra's api: Vitest is a dependency, and the only script that runs it
+	// names its own config. A default config there was never loaded, and the
+	// config in use got no adapter.
+	it("puts the adapter in the config a test script names, not in one nothing loads", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "root", private: true }),
+			"pnpm-workspace.yaml": "packages:\n  - 'apps/*'\n",
+			"pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+			"apps/api/package.json": JSON.stringify({
+				name: "@x/api",
+				scripts: {
+					"test:integration":
+						"vitest run --config vitest.integration.config.ts",
+				},
+				devDependencies: { vitest: "^4.0.0" },
+			}),
+			"apps/api/vitest.integration.config.ts": VITEST_CONFIG,
+			"apps/unit/package.json": JSON.stringify({
+				name: "@x/unit",
+				scripts: { test: "vitest run" },
+				devDependencies: { vitest: "^4.0.0" },
+			}),
+		});
+
+		const facts = await discoverRepository(dir);
+		await applySetup(dir, await planSetup(dir, facts), {
+			run: async () => {},
+		});
+
+		expect(facts.vitestConfigs).toEqual([
+			"apps/api/vitest.integration.config.ts",
+		]);
+		expect(facts.vitestWithoutConfig).toEqual(["apps/unit"]);
+		expect(existsSync(path.join(dir, "apps/api/vitest.config.ts"))).toBe(false);
+		expect(read(dir, "apps/api/vitest.integration.config.ts")).toContain(
+			"reporters: variantReporters()",
+		);
+	});
+
 	// A Vitest config beside a Vite config replaces it, plugins and aliases
 	// included: the package's tests would stop resolving their imports.
 	it("creates nothing beside a Vite config, and says what to add to it", async () => {
