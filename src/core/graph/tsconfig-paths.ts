@@ -15,7 +15,9 @@
  * quietly disagrees with the compiler it is modelling.
  */
 
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { toImportAliases } from "./package-imports.js";
 
 /** One `paths` entry, pre-split around its single wildcard. */
 export interface PathAlias {
@@ -148,7 +150,7 @@ export function aliasesInScope(
 		.sort((a, b) => (b.scope?.length ?? -1) - (a.scope?.length ?? -1));
 }
 
-const TSCONFIG_IGNORE = [
+const CONFIG_IGNORE = [
 	"**/node_modules/**",
 	"**/dist/**",
 	".git/**",
@@ -156,10 +158,12 @@ const TSCONFIG_IGNORE = [
 ];
 
 /**
- * Read `paths` from every `tsconfig.json` in the workspace, each scoped to its
- * own directory. Only the one in `cwd` used to be read: from a workspace root
- * an app's own `@/*` named nothing, so the edge was missing and a change
- * behind the alias selected no tests.
+ * Every alias the workspace declares: `paths` from each `tsconfig.json` and
+ * `imports` from each `package.json`, each scoped to its own directory.
+ *
+ * Only the `tsconfig.json` in `cwd` used to be read: from a workspace root an
+ * app's own `@/*` named nothing, so the edge was missing and a change behind
+ * the alias selected no tests.
  *
  * Found by walking rather than through the package graph, so a package that
  * discovery missed still has its aliases read. A config that cannot be parsed
@@ -168,16 +172,51 @@ const TSCONFIG_IGNORE = [
  */
 export async function readPathAliases(cwd: string): Promise<PathAlias[]> {
 	const fg = (await import("fast-glob")).default;
-	const configs = (
-		await fg("**/tsconfig.json", {
+	const found = (
+		await fg(["**/tsconfig.json", "**/package.json"], {
 			cwd,
 			onlyFiles: true,
-			ignore: TSCONFIG_IGNORE,
+			ignore: CONFIG_IGNORE,
 		})
 	)
 		.map((file) => file.replace(/\\/g, "/"))
 		.sort();
+	const named = (name: string): string[] =>
+		found.filter((file) => path.posix.basename(file) === name);
 
+	const [fromTsconfig, fromManifests] = await Promise.all([
+		tsconfigAliases(cwd, named("tsconfig.json")),
+		Promise.all(
+			named("package.json").map((file) => manifestImportAliases(cwd, file)),
+		),
+	]);
+	return [...fromTsconfig, ...fromManifests.flat()];
+}
+
+/** An unreadable or malformed manifest contributes nothing. */
+async function manifestImportAliases(
+	cwd: string,
+	manifestPath: string,
+): Promise<PathAlias[]> {
+	try {
+		const manifest: unknown = JSON.parse(
+			await readFile(path.join(cwd, manifestPath), "utf8"),
+		);
+		if (typeof manifest !== "object" || manifest === null) return [];
+		const dir = path.posix.dirname(manifestPath);
+		return toImportAliases(
+			dir === "." ? "" : dir,
+			(manifest as { imports?: unknown }).imports,
+		);
+	} catch {
+		return [];
+	}
+}
+
+async function tsconfigAliases(
+	cwd: string,
+	configs: readonly string[],
+): Promise<PathAlias[]> {
 	// ts-morph is ~50MB, and a repository with no tsconfig has no aliases to
 	// find: paying the load to learn that is the common case in a small project.
 	if (configs.length === 0) return [];

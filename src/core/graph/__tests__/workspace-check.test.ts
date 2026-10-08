@@ -228,6 +228,18 @@ describe("checkWorkspace", () => {
 		expect(result.violations).toEqual([]);
 	});
 
+	it("reads a bare dot specifier as a relative import, not a package", () => {
+		const result = run(
+			{
+				"packages/auth/src/index.ts": [],
+				"packages/auth/src/index.test.ts": [bare(".")],
+				"packages/auth/src/__tests__/a.test.ts": [bare("..")],
+			},
+			[pkg("@org/auth", "packages/auth")],
+		);
+		expect(result.violations).toEqual([]);
+	});
+
 	it("ignores relative imports inside the same package", () => {
 		const result = run(
 			{
@@ -244,6 +256,91 @@ describe("checkWorkspace", () => {
 			[pkg("@org/web", "apps/web")],
 		);
 		expect(result.violations).toEqual([]);
+	});
+});
+
+// One workspace package can hold packages of its own that are not workspace
+// members: sample projects under `examples/`, fixtures. Judged against the
+// outer manifest, every dependency they declare themselves was reported.
+describe("checkWorkspace with packages nested inside a workspace package", () => {
+	const packages = [pkg("examples", "examples")];
+	const manifests = new Map<string, PackageManifest>([
+		["examples", { name: "examples" }],
+		["examples/basic", { name: "basic", devDependencies: { typescript: "5" } }],
+		[
+			"examples/basic/apps/web",
+			{ name: "web", dependencies: { react: "19", "@repo/ui": "workspace:*" } },
+		],
+	]);
+	const check = (imports: ImportEntry[]) =>
+		checkWorkspace({
+			symbolGraph: makeSymbolGraph({
+				"examples/basic/apps/web/src/page.tsx": imports,
+			}),
+			packages,
+			manifests,
+		});
+
+	it("accepts what the nearest package.json declares", () => {
+		expect(check([bare("react"), bare("@repo/ui")]).violations).toEqual([]);
+	});
+
+	it("accepts what a package.json between the file and the workspace package declares", () => {
+		expect(check([bare("typescript")]).violations).toEqual([]);
+	});
+
+	it("accepts the nested package importing itself by name", () => {
+		expect(check([bare("web/utils")]).violations).toEqual([]);
+	});
+
+	it("still reports what none of them declares", () => {
+		expect(check([bare("lodash")]).violations).toMatchObject([
+			{
+				kind: "undeclared-external-dep",
+				package: "examples",
+				target: "lodash",
+			},
+		]);
+	});
+});
+
+// `import type { Node } from "estree"` is satisfied by `@types/estree`: there
+// is no `estree` package to declare.
+describe("checkWorkspace with type-only imports", () => {
+	const typeOnly = (module: string): ImportEntry => ({
+		module,
+		kind: "static",
+		typeOnly: true,
+		names: ["x"],
+	});
+	const check = (imports: ImportEntry[], declared: string[]) =>
+		checkWorkspace({
+			symbolGraph: makeSymbolGraph({ "packages/lint/src/rule.ts": imports }),
+			packages: [pkg("lint", "packages/lint", declared)],
+		});
+
+	it("accepts a type-only import whose @types package is declared", () => {
+		expect(check([typeOnly("estree")], ["@types/estree"]).violations).toEqual(
+			[],
+		);
+	});
+
+	it("maps a scoped package to its @types name", () => {
+		expect(
+			check([typeOnly("@babel/core")], ["@types/babel__core"]).violations,
+		).toEqual([]);
+	});
+
+	it("still reports a value import that only @types covers", () => {
+		expect(check([bare("estree")], ["@types/estree"]).violations).toMatchObject(
+			[{ kind: "undeclared-external-dep", target: "estree" }],
+		);
+	});
+
+	it("still reports a type-only import nothing declares", () => {
+		expect(check([typeOnly("estree")], []).violations).toMatchObject([
+			{ kind: "undeclared-external-dep", target: "estree" },
+		]);
 	});
 });
 
@@ -313,6 +410,13 @@ describe("checkWorkspace with tsconfig aliases", () => {
 		expect(result.violations).toEqual([]);
 	});
 
+	it("never reports a subpath import, which cannot name a package", () => {
+		const result = check({
+			"apps/web/src/page.ts": [bare("#not-declared")],
+		});
+		expect(result.violations).toEqual([]);
+	});
+
 	it("still reports a package's alias used from outside that package", () => {
 		const result = checkWorkspace({
 			symbolGraph: makeSymbolGraph({
@@ -341,7 +445,7 @@ describe("workspaceBlindSpots", () => {
 	}
 
 	it("names a local-protocol dependency that no discovered package provides", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({ "apps/web/src/page.ts": ["@org/ui"] }),
 			packageNames: new Set(["@org/web"]),
 			manifests: new Map([
@@ -358,7 +462,7 @@ describe("workspaceBlindSpots", () => {
 	});
 
 	it("names bare imports that are neither workspace packages nor declared", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({
 				"apps/web/src/page.ts": [
 					"react",
@@ -383,7 +487,7 @@ describe("workspaceBlindSpots", () => {
 	});
 
 	it("judges a nested package that is not a workspace member by its own manifest", () => {
-		const notes = workspaceBlindSpots({
+		const { notes } = workspaceBlindSpots({
 			externals: externals({
 				"test/fixtures/repo/packages/web/src/index.ts": ["utils"],
 			}),
@@ -406,6 +510,22 @@ describe("workspaceBlindSpots", () => {
 				packageNames: new Set(),
 				manifests: new Map([["", { dependencies: { react: "^19.0.0" } }]]),
 			}),
-		).toEqual([]);
+		).toEqual({ notes: [], undiscovered: new Map() });
+	});
+
+	it("says where an undiscovered local package lives, when a manifest carries its name", () => {
+		const { undiscovered } = workspaceBlindSpots({
+			externals: externals({}),
+			packageNames: new Set(["@org/web"]),
+			manifests: new Map<string, PackageManifest>([
+				["", {}],
+				[
+					"apps/web",
+					{ name: "@org/web", dependencies: { "@org/ui": "workspace:*" } },
+				],
+				["libs/ui", { name: "@org/ui" }],
+			]),
+		});
+		expect(undiscovered).toEqual(new Map([["@org/ui", "libs/ui"]]));
 	});
 });

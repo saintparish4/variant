@@ -22,12 +22,20 @@
  * workspace, not a package. It is judged by the package that file belongs
  * to: nothing to declare inside the importer's own package, an
  * `undeclared-workspace-dep` when the alias reaches into a sibling.
+ *
+ * A workspace package can hold packages that are not workspace members
+ * (sample projects, fixtures). A file inside one is also covered by what its
+ * own `package.json`, and any between it and the workspace package, declare.
  */
 
 import { builtinModules } from "node:module";
 import path from "node:path";
 import type { SymbolGraph } from "../semantic/symbol-graph.js";
-import { resolveAliasImport, resolveRelativeImport } from "./import-graph.js";
+import {
+	isRelativeSpecifier,
+	resolveAliasImport,
+	resolveRelativeImport,
+} from "./import-graph.js";
 import type { PathAlias } from "./tsconfig-paths.js";
 import { aliasesInScope, matchPathAlias } from "./tsconfig-paths.js";
 
@@ -68,6 +76,12 @@ export function checkWorkspace(input: {
 	rootDeclared?: ReadonlySet<string>;
 	/** tsconfig `paths` aliases; a specifier one covers is not a package. */
 	pathAliases?: readonly PathAlias[];
+	/**
+	 * Every `package.json` by workspace-relative POSIX dir. Judged against
+	 * the workspace package alone, a nested package's own dependencies were
+	 * all reported as undeclared.
+	 */
+	manifests?: ReadonlyMap<string, PackageManifest>;
 }): WorkspaceCheckResult {
 	const { symbolGraph, packages } = input;
 	const rootDeclared = input.rootDeclared ?? new Set<string>();
@@ -94,13 +108,19 @@ export function checkWorkspace(input: {
 		const owner = fileToPackage(file, packages);
 		if (owner === undefined) continue;
 		const aliases = aliasesInScope(file, input.pathAliases ?? []);
+		const nested = nestedManifests(file, owner.dir, input.manifests);
+		const declares = (name: string): boolean =>
+			owner.declared.has(name) ||
+			nested.some((manifest) => name in allDependencies(manifest));
+		const isSelf = (name: string): boolean =>
+			name === owner.name || nested.some((manifest) => manifest.name === name);
 
 		for (const imp of symbolGraph.files[file]?.imports ?? []) {
 			// A computed specifier's prefix is not a package name to check.
 			if (imp.kind === "pattern") continue;
 			const spec = imp.module;
 
-			if (spec.startsWith("./") || spec.startsWith("../")) {
+			if (isRelativeSpecifier(spec)) {
 				const target = resolveRelativeImport(file, spec, files);
 				if (target === undefined) continue;
 				const targetOwner = fileToPackage(target, packages);
@@ -137,19 +157,28 @@ export function checkWorkspace(input: {
 				continue;
 			}
 
+			// A subpath import maps to the package's own files and can never
+			// name a dependency, whether or not its entry was read.
+			if (spec.startsWith("#")) continue;
+
 			const name = packageNameOf(stripNodePrefix(spec));
 			if (name === undefined || BUILTINS.has(name)) continue;
-			if (spec.startsWith("node:") || name === owner.name) continue;
+			if (spec.startsWith("node:") || isSelf(name)) continue;
 
 			if (byName.has(name)) {
-				if (!owner.declared.has(name)) {
+				if (!declares(name)) {
 					addViolation("undeclared-workspace-dep", owner.name, name, file);
 				}
 				continue;
 			}
-			if (!owner.declared.has(name) && !rootDeclared.has(name)) {
-				addViolation("undeclared-external-dep", owner.name, name, file);
+			if (declares(name) || rootDeclared.has(name)) continue;
+			// A type-only import needs the types, and those can ship apart
+			// from the package: `estree` has no runtime package at all.
+			const types = typesPackageOf(name);
+			if (imp.typeOnly && (declares(types) || rootDeclared.has(types))) {
+				continue;
 			}
+			addViolation("undeclared-external-dep", owner.name, name, file);
 		}
 	}
 
@@ -181,6 +210,32 @@ function fileToPackage(
 		}
 	}
 	return best;
+}
+
+/**
+ * Manifests of packages nested inside the workspace package that owns `file`:
+ * its nearest `package.json` and each one above it, stopping short of the
+ * workspace package's own.
+ */
+function nestedManifests(
+	file: string,
+	ownerDir: string,
+	manifests: ReadonlyMap<string, PackageManifest> | undefined,
+): PackageManifest[] {
+	if (manifests === undefined) return [];
+	const found: PackageManifest[] = [];
+	let dir = path.posix.dirname(file);
+	while (dir !== ownerDir && dir !== "." && dir !== "/" && dir !== "") {
+		const manifest = manifests.get(dir);
+		if (manifest !== undefined) found.push(manifest);
+		dir = path.posix.dirname(dir);
+	}
+	return found;
+}
+
+/** `estree` -> `@types/estree`; `@babel/core` -> `@types/babel__core`. */
+function typesPackageOf(name: string): string {
+	return `@types/${name.startsWith("@") ? name.slice(1).replace("/", "__") : name}`;
 }
 
 /** `@scope/pkg/deep` -> `@scope/pkg`; `pkg/deep` -> `pkg`. */
@@ -224,6 +279,17 @@ const MAX_NOTE_NAMES = 3;
  * notes rather than violations: the missed importer is by definition not in
  * the blast radius, so scoping this to affected files would hide the case.
  */
+export interface WorkspaceBlindSpots {
+	/** The same on every run: they describe the repository, not a change. */
+	notes: string[];
+	/**
+	 * Local-protocol dependencies no workspace package provides, by name, to
+	 * the directory whose `package.json` carries that name. A change under one
+	 * of these is the case the note warns about.
+	 */
+	undiscovered: Map<string, string>;
+}
+
 export function workspaceBlindSpots(input: {
 	/** Bare specifiers per file, as `ImportGraph.externals` records them. */
 	externals: ReadonlyMap<string, ReadonlySet<string>>;
@@ -236,7 +302,7 @@ export function workspaceBlindSpots(input: {
 	 * examples) are judged by their own manifests.
 	 */
 	manifests: ReadonlyMap<string, PackageManifest>;
-}): string[] {
+}): WorkspaceBlindSpots {
 	const { packageNames, manifests } = input;
 	const root = manifests.get("") ?? {};
 	const rootDeclared = new Set(Object.keys(allDependencies(root)));
@@ -282,7 +348,14 @@ export function workspaceBlindSpots(input: {
 		);
 	}
 
-	return notes;
+	const undiscovered = new Map<string, string>();
+	for (const [dir, manifest] of manifests) {
+		if (manifest.name !== undefined && missingLocal.has(manifest.name)) {
+			undiscovered.set(manifest.name, dir);
+		}
+	}
+
+	return { notes, undiscovered };
 }
 
 function nearestManifest(

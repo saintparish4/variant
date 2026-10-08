@@ -115,6 +115,32 @@ describe("predictImpact", () => {
 		expect(report?.result.tests.affectedTests).toHaveLength(2);
 	});
 
+	// A dependency update that touches no package.json changes the lockfile
+	// alone. In a workspace it sits at the root, above the package whose tests
+	// it affects.
+	it.each([
+		["the workspace root", "."],
+		["the package below it", "web"],
+	])("selects every test for a lockfile-only change, run from %s", async (_, from) => {
+		const dir = createGitWorkspace("impact", {
+			"package.json": JSON.stringify({ name: "root", workspaces: ["web"] }),
+			"bun.lock": JSON.stringify({ lockfileVersion: 2 }),
+			"web/package.json": JSON.stringify({ name: "web" }),
+			"web/src/app.ts": 'export const boot = (): string => "a";',
+			"web/src/app.test.ts": FIXTURE["src/app.test.ts"],
+			"web/src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+		writeFiles(dir, {
+			"bun.lock": JSON.stringify({ lockfileVersion: 2, bumped: true }),
+		});
+
+		const report = await predictImpact(path.join(dir, from), { base: "HEAD" });
+
+		expect(report.result.tests.selectAll).toBe(true);
+		expect(report.result.tests.affectedTests).toHaveLength(2);
+		expect(report.verdict).toBe("build-required");
+	});
+
 	it("selects the loader's tests when a file behind a computed import() changes", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {
@@ -177,8 +203,12 @@ describe("predictImpact", () => {
 		});
 
 		expect(report.packagesFound).toBe(1);
-		expect(report.result.radius.notes).toContain(
+		expect(report.result.radius.repositoryNotes).toContain(
 			"1 dependency declared with a local protocol is not a workspace package variant found (@org/ui); imports of it count as external, so a change to it reaches no importer",
+		);
+		// This change is inside that package, so here the gap is about the change.
+		expect(report.result.radius.notes).toContain(
+			"1 changed file belongs to @org/ui, a local package variant did not find as a workspace package (libs/ui/src/index.ts); files importing it by name are not reached",
 		);
 	});
 
@@ -270,6 +300,67 @@ describe("predictImpact", () => {
 		]);
 	});
 
+	// The shape that selected nothing on a real repository: TypeScript source
+	// whose only tests are `*.test.mjs` run by Node's own test runner.
+	it("says so when a package's tests are JavaScript it cannot select", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"apps/factory/package.json": JSON.stringify({ name: "factory" }),
+			"apps/factory/src/models.ts": 'export const model = (): string => "b";',
+			"apps/factory/tests/models.test.mjs":
+				'import { model } from "../src/models.ts";\nmodel();',
+			"apps/web/package.json": JSON.stringify({ name: "web" }),
+			"apps/web/src/page.ts": "export const page = 1;",
+			"apps/web/src/page.test.ts":
+				'import { page } from "./page";\nexport const t = page;',
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: [
+				"apps/factory/src/models.ts",
+				"apps/factory/tests/models.test.mjs",
+			],
+			readBefore: async () => 'export const model = (): string => "a";',
+		});
+
+		const { tests } = report.result;
+		expect(tests.affectedTests).toEqual([]);
+		expect(tests.javascriptTests).toBe(1);
+		expect(tests.unselectedTests).toEqual([
+			"apps/factory/tests/models.test.mjs",
+		]);
+		expect(tests.unreached).toEqual(["apps/factory/src/models.ts"]);
+		expect(tests.resolution).toBe("low");
+		expect(tests.repositoryNotes).toHaveLength(1);
+	});
+
+	it("follows a subpath import declared in the package's own package.json", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"apps/factory/package.json": JSON.stringify({
+				name: "factory",
+				imports: { "#image": "./agent/lib/image.ts" },
+			}),
+			"apps/factory/agent/lib/image.ts":
+				'export const image = (): string => "b";',
+			"apps/factory/agent/sandbox.ts":
+				'import { image } from "#image";\nexport const run = (): string => image();',
+			"apps/factory/agent/sandbox.test.ts":
+				'import { run } from "./sandbox";\nexport const t = run();',
+			"apps/factory/agent/unrelated.test.ts": "export const u = 1;",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["apps/factory/agent/lib/image.ts"],
+			readBefore: async () => 'export const image = (): string => "a";',
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"apps/factory/agent/sandbox.test.ts",
+		]);
+		expect(report.result.radius.notes).toEqual([]);
+	});
+
 	// The usual monorepo layout: aliases live in a shared base config that
 	// each package extends, and their targets are relative to that base.
 	it("follows an alias a package inherits from a base tsconfig", async () => {
@@ -300,6 +391,33 @@ describe("predictImpact", () => {
 
 		expect(report.result.tests.affectedTests).toEqual([
 			"apps/web/src/page.test.ts",
+		]);
+	});
+
+	it('selects a test that imports the code it tests as ".." or "."', async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/logger/index.ts":
+				"export const log = (s: string): string => s.trim();",
+			"src/logger/__tests__/log.test.ts":
+				'import { log } from "..";\nexport const t = log("a");',
+			"src/button/index.ts": "export const press = (): number => 2;",
+			"src/button/index.test.ts":
+				'import { press } from ".";\nexport const t = press();',
+			"src/unrelated.test.ts": FIXTURE["src/unrelated.test.ts"],
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/button/index.ts", "src/logger/index.ts"],
+			readBefore: async (file) =>
+				file === "src/button/index.ts"
+					? "export const press = (): number => 1;"
+					: "export const log = (s: string): string => s;",
+		});
+
+		expect(report.result.tests.affectedTests).toEqual([
+			"src/button/index.test.ts",
+			"src/logger/__tests__/log.test.ts",
 		]);
 	});
 

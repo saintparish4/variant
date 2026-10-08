@@ -90,9 +90,19 @@ export async function auditWorkspace(
 		declared: declaredNames(pkg.manifest),
 	}));
 
-	const [{ graph: symbolGraph }, rootDeclared, pathAliases] = await Promise.all(
-		[updateSymbolGraph(cwd), readRootDeclared(cwd), readPathAliases(cwd)],
-	);
+	const [{ graph: symbolGraph }, rootDeclared, pathAliases, manifests] =
+		await Promise.all([
+			updateSymbolGraph(cwd),
+			readRootDeclared(cwd),
+			readPathAliases(cwd),
+			readManifests(cwd),
+		]);
 
-	return checkWorkspace({ symbolGraph, packages, rootDeclared, pathAliases });
+	return checkWorkspace({
+		symbolGraph,
+		packages,
+		rootDeclared,
+		pathAliases,
+		manifests,
+	});
 }

@@ -51,17 +51,23 @@ Run:   8 test files
 Skip:  47 test files (of 55 total)
 
 Verdict:    build required
-Confidence: medium (82%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
+Confidence: high (90%)  (report-only — run the full suite; skipping unlocks after shadow-mode validation)
 
 Notes:
   - src/lib/legacy.ts: dynamic import of src/auth.ts — names unknowable
+
+Repository: 1 standing note, the same whatever changed (-v lists them)
 ```
 
 `Workspace:` says how many workspace packages were discovered. A bare import of a package discovery missed counts as a third-party dependency, so "no workspace packages found" in a monorepo explains a prediction that is too narrow; see [Monorepo setup](./monorepo.md).
 
-`Confidence:` is a bucket first — `high` at 90% and up, `medium` from 70%, `low` below — then the score. The score starts at 100% and drops 10 points per note, with a floor of 30%: it counts what the analysis could not resolve, not how safe a skip would be.
+`Confidence:` is a bucket first — `high` at 90% and up, `medium` from 70%, `low` below — then the score. The score starts at 100% and drops 10 points per note about the change, with a floor of 30%: it counts what the analysis could not resolve about this change, not how safe a skip would be. Two things override the count. When every test is selected the score is 100%, because nothing is left to a graph that might be wrong. When any changed file reaches no test, or a changed test could not be selected, the score is capped at 50%, which is `low`: part of the change is something the prediction says nothing about.
 
-When a changed file that variant cannot analyze reaches no test, an `Unreached:` line names it. Prose (`.md`, `.txt`, `.rst`, `.adoc`) is left out of that line. No test is selected for such a file, and nothing in the graph says which tests use it, so run those yourself.
+When a changed file reaches no test, an `Unreached:` line names it, whether it is TypeScript or not. Prose (`.md`, `.txt`, `.rst`, `.adoc`) is left out of that line, and so is a deleted file nothing imports. No test is selected for an unreached file. variant cannot tell an untested file from one that is used in a way it does not follow (a JavaScript test, a lookup at runtime), so it reports both the same way; run the tests that use it yourself. A change in which nothing could be analyzed says so on its own line.
+
+`Not selected:` names changed test files that are JavaScript. A changed test always needs running, and variant does not index JavaScript tests.
+
+`Repository:` counts standing notes: gaps in the graph that are the same whatever changed, such as a loader whose import specifier is fully computed, a local dependency that workspace discovery did not find, or JavaScript test files. They do not lower the score, and `-v` lists them. One becomes a note about the change, and lowers the score, when the change touches what it is about: a file in the loader's own package, a file inside the undiscovered package, a file in the package the JavaScript tests belong to.
 
 Verdicts reuse the same vocabulary as `pr check`:
 
@@ -82,9 +88,9 @@ Verdicts reuse the same vocabulary as `pr check`:
 
 Certain changed paths invalidate the whole test suite regardless of import closure, because narrowing would be unsafe:
 
-- `package.json`, lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`)
+- `package.json`, lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb`), and the package-manager config that changes what is installed or how (`pnpm-workspace.yaml`, `bunfig.toml`)
 - `tsconfig*.json`
-- Test/build runner configs (`vitest.config.*`, `vitest.workspace.*`, `vitest.projects.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`, `babel.config.*`, `.babelrc*`)
+- Test/build runner configs (`vitest.config.*`, `vitest.workspace.*`, `vitest.projects.*`, `jest.config.*`, `playwright.config.*`, `vite.config.*`, `babel.config.*`, `.babelrc*`, `next.config.*`)
 - Test setup files with a conventional name (`vitest.setup.*`, `jest.setup.*`, `setupTests.*`, `global-setup.*`, `global-teardown.*`, `test/setup.*`). A runner loads them before every test, but no test imports them.
 
 These match by path, whatever the file's classification: a `vitest.config.ts` edit is `breaking` or `internal` code to the differ, and still selects everything.
@@ -190,6 +196,8 @@ Exits with code `1` when any violation is found — wire it into CI the same way
 
 Classification is per raw import specifier, so a file that imports a sibling both by name and via a relative path gets both findings. Node builtins (with or without the `node:` prefix) and self-imports are always exempt.
 
+A workspace package can contain packages that are not workspace members themselves, such as sample projects or fixtures with their own `package.json`. A file inside one is also covered by what that `package.json`, and any between it and the workspace package, declare. A type-only import (`import type { Node } from "estree"`) is satisfied by the matching `@types` package.
+
 An import that a `tsconfig.json` `paths` alias covers (`@/lib/price`) names a file in the workspace, not a package, and is judged by where that file lives. Inside the importing package there is nothing to declare. When the alias reaches into a sibling package the importer does not declare, it is an `undeclared-workspace-dep`, the same as importing that sibling by name.
 
 ### Output
@@ -221,9 +229,10 @@ Both commands trace imports statically from source text — there is no module b
 - **Path aliases are read from every `tsconfig.json`, and from no other config file.** `compilerOptions.paths` is read through the TypeScript compiler's own config parser, so JSONC, `extends` chains and `baseUrl` behave as `tsc` does, and an alias-only edge (`import { x } from "@/lib/x"`) propagates like any other import. Each `tsconfig.json` applies to the files under its directory, and the nearest one wins, so `@/*` can mean a different directory in every package. Aliases declared only in a differently named file (`tsconfig.app.json`, a `tsconfig.base.json` that no `tsconfig.json` extends) are not read. An alias that matches a pattern but names no indexed file is reported as `unresolved` rather than silently counted as an external package.
 - **Package `exports` maps are read, but the source they name is inferred.** Resolving a bare import of a sibling workspace package (`import { x } from "@org/utils"`) consults the target's `package.json` `exports`, including conditional exports, fallback arrays and `*` subpath patterns. The catch is that `exports` names *published* entry points, which are usually build output that does not exist in a source checkout: a target of `./dist/entry.js` is therefore also probed as `src/entry`, `lib/entry`, `source/entry` and `entry`. A package whose sources sit somewhere else entirely still falls through to the conventional `src/index.*` guesses, and then to `unresolved`. This layer is additive — it can find edges the guesses miss, never lose ones they find.
 - **Imported assets reach their importers; files read at runtime do not.** A changed stylesheet, JSON file or other non-TypeScript file reaches every TypeScript file whose imports name it — relative, workspace-package and alias specifiers alike — and through them the tests. What stays invisible is a file a test reads at runtime rather than imports: a fixture directory, a snapshot, `fs.readFile("data.json")`. A changed file that reaches no test is listed under `Unreached:`, and a selected test whose closure has unresolved imports adds a note ("N selected test file(s) have unresolved imports in their closure — fixtures or assets may be missed").
+- **`package.json` `imports` are followed to files, not to other packages.** A `#name` specifier resolves through the `imports` field of the nearest `package.json`, with every condition's target tried. An entry that points at a build directory, or at another package, names nothing variant indexes and is reported as `unresolved`.
 - **`node_modules` and `dist` are never indexed, at any depth.** A source directory that happens to be named `dist` is left out with them. A changed TypeScript file there is `unanalyzed`: it selects the tests of the files that import it, and otherwise appears under `Unreached:`.
 - **Only the directory variant runs in is indexed.** Run it where the project's `package.json` and `tsconfig.json` are, which need not be the repository root. A file changed elsewhere in the repository is shown as `../…` and is `unanalyzed`: it selects the tests of the files that import it by relative path, and otherwise appears under `Unreached:`. A sibling workspace package imported by name is not followed from inside one package, so its changed files land there too; run from the workspace root to follow them.
-- **JavaScript is not indexed.** Only TypeScript sources and tests (`.ts`, `.tsx`, `.mts`, `.cts`) are. A changed `.js` file reaches the TypeScript files that import it, but a `.js` file's own imports are not followed, and `.js` tests are not counted: a repository whose tests are all JavaScript stops with `NO_TEST_FILES` rather than predicting "0 of 0".
+- **JavaScript is not indexed.** Only TypeScript sources and tests (`.ts`, `.tsx`, `.mts`, `.cts`) are. A changed `.js` file reaches the TypeScript files that import it, but a `.js` file's own imports are not followed, and `.js` tests are not counted: a repository whose tests are all JavaScript stops with `NO_TEST_FILES` rather than predicting "0 of 0". JavaScript test files named `*.test.*` or `*.spec.*` are counted as a standing note, a changed one is listed under `Not selected:`, and TypeScript that only they import is listed under `Unreached:`. This matters most for a package tested with `*.test.mjs` under Node's own test runner: variant selects none of its tests, and now says so.
 - **Computed specifiers are followed as far as their literal start.** `` import(`./locales/${lang}.js`) `` and `require("./plugins/" + name)` link the loader to every indexed file under `./locales/` or `./plugins/` (and to changed non-TypeScript files there), whole workspace packages when the prefix names one, and `tsconfig` alias targets. A specifier with no literal start, such as `import(name)`, could load anything: it is noted on every run, and a change reached only that way selects no tests.
 - **Dynamic `import()` names are unknowable.** A dynamic import edge is treated as using every export: the change propagates (over-including rather than missing it) and a note is emitted. Literal `require("./x")` and `import x = require("./x")` are ordinary edges that take every name.
 - **Edges that exist only at runtime are invisible.** A dependency injection container resolving a class by token, a plugin registry keyed by string, and `eval` never appear as imports. A test that reaches code only through one of these is not selected when that code changes, and nothing in the output says so. This is the largest blind spot and the main reason `impact` is report-only.

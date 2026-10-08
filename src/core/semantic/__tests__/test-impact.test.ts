@@ -135,12 +135,39 @@ describe("computeTestImpact", () => {
 		"packages/web/babel.config.cjs",
 		".babelrc",
 		".babelrc.json",
+		// What the installed dependencies are, or how they are laid out, with
+		// no edit to a package.json. `../` is a lockfile at the repository root
+		// seen from a package below it.
+		"bun.lock",
+		"bun.lockb",
+		"web/bun.lock",
+		"../bun.lock",
+		"bunfig.toml",
+		"npm-shrinkwrap.json",
+		"pnpm-workspace.yaml",
+		"next.config.mjs",
+		"apps/web/next.config.js",
 	])("%s triggers select-all", (file) => {
 		const impact = computeTestImpact(
 			{ changed: [unanalyzed(file)], affectedFiles: [file], confidence: 1 },
 			GRAPH,
 		);
 		expect(impact.selectAll).toBe(true);
+	});
+
+	// With every test selected nothing is left to the graph, so what the graph
+	// could not resolve no longer matters.
+	it("is fully confident when every test is selected", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [unanalyzed("package.json")],
+				affectedFiles: ["package.json"],
+				confidence: 0.3,
+			},
+			GRAPH,
+		);
+		expect(impact.confidence).toBe(1);
+		expect(impact.resolution).toBe("high");
 	});
 
 	it("vitest config changes also trigger select-all", () => {
@@ -158,6 +185,9 @@ describe("computeTestImpact", () => {
 	it.each([
 		["a TypeScript runner config", "vitest.config.ts", "breaking"],
 		["a Jest config", "packages/web/jest.config.ts", "internal"],
+		// `next/jest` loads it to configure the transform every test is
+		// compiled with, and no test imports it.
+		["a Next.js config", "web/next.config.ts", "internal"],
 		["a Vitest setup file", "vitest.setup.ts", "internal"],
 		["a Jest setup file", "jest.setup.js", "internal"],
 		["a setupTests file", "src/setupTests.ts", "internal"],
@@ -222,6 +252,177 @@ describe("computeTestImpact", () => {
 		);
 		expect(impact.affectedTests).toEqual(["src/__tests__/button.test.ts"]);
 		expect(impact.unreached).toEqual(["src/orphan.css"]);
+	});
+
+	// A changed file no test imports selects nothing. variant cannot tell an
+	// untested file from one that is reached in a way it does not follow, so
+	// it says which files those are and does not call the result confident.
+	describe("a changed TypeScript file no test reaches", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"src/auth.ts": [],
+				"src/lonely.ts": [],
+				"src/__tests__/auth.test.ts": [namedImport("../auth.js", ["login"])],
+			}),
+		);
+		const internal = (filePath: string): FileImpact => ({
+			...unanalyzed(filePath),
+			classification: "internal",
+		});
+
+		it("is listed as unreached and makes the result low confidence", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("src/auth.ts"), internal("src/lonely.ts")],
+					affectedFiles: ["src/auth.ts", "src/lonely.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.affectedTests).toEqual(["src/__tests__/auth.test.ts"]);
+			expect(impact.unreached).toEqual(["src/lonely.ts"]);
+			expect(impact.resolution).toBe("low");
+		});
+
+		it("is not listed when the change to it is comments only", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [
+						{ ...unanalyzed("src/lonely.ts"), classification: "non-impacting" },
+					],
+					affectedFiles: [],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+
+		it("does not list a changed test, which selects itself", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("src/__tests__/auth.test.ts")],
+					affectedFiles: ["src/__tests__/auth.test.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+		});
+
+		it("does not list a deleted file nothing imports, which is dead code going away", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [
+						{ ...unanalyzed("src/gone.ts"), classification: "breaking" },
+					],
+					affectedFiles: ["src/gone.ts"],
+					confidence: 1,
+				},
+				graph,
+			);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+	});
+
+	// variant indexes TypeScript only. A package tested with `*.test.mjs` under
+	// Node's own runner has tests it cannot count, select, or follow imports
+	// from, and the code only they import looks untested.
+	describe("JavaScript tests", () => {
+		const graph = buildImportGraph(
+			makeSymbolGraph({
+				"apps/factory/src/models.ts": [],
+				"apps/web/src/page.ts": [],
+				"apps/web/src/page.test.ts": [namedImport("./page.js", ["page"])],
+			}),
+		);
+		const javascriptTests = [
+			"apps/factory/tests/models.test.mjs",
+			"apps/factory/tests/other.test.mjs",
+		];
+		const packageRoots = ["", "apps/factory", "apps/web"];
+		const internal = (filePath: string): FileImpact => ({
+			...unanalyzed(filePath),
+			classification: "internal",
+		});
+
+		it("are counted and noted as a standing gap", () => {
+			const impact = computeTestImpact(
+				{ changed: [], affectedFiles: [], confidence: 1 },
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.javascriptTests).toBe(2);
+			expect(impact.repositoryNotes).toEqual([
+				"2 JavaScript test files are not indexed (apps/factory/tests/models.test.mjs, apps/factory/tests/other.test.mjs); variant cannot select them, and code only they import looks untested",
+			]);
+			expect(impact.notes).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
+
+		it("that changed are reported as not selected, apart from unreached files", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [unanalyzed("apps/factory/tests/models.test.mjs")],
+					affectedFiles: ["apps/factory/tests/models.test.mjs"],
+					confidence: 0.9,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.unselectedTests).toEqual([
+				"apps/factory/tests/models.test.mjs",
+			]);
+			expect(impact.unreached).toEqual([]);
+			expect(impact.notes).toContain(
+				"1 changed test file is JavaScript, which variant does not index, and was not selected (apps/factory/tests/models.test.mjs)",
+			);
+			expect(impact.resolution).toBe("low");
+		});
+
+		it("count against a change in the package they belong to", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("apps/factory/src/models.ts")],
+					affectedFiles: ["apps/factory/src/models.ts"],
+					confidence: 1,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toContain(
+				"2 JavaScript test files in a package this change touches cannot be selected (apps/factory/tests/models.test.mjs, apps/factory/tests/other.test.mjs)",
+			);
+		});
+
+		it("do not count against a changed file no test could import", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [unanalyzed("apps/factory/native/build.rs")],
+					affectedFiles: ["apps/factory/native/build.rs"],
+					confidence: 0.9,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toEqual([]);
+		});
+
+		it("do not count against a change in another package", () => {
+			const impact = computeTestImpact(
+				{
+					changed: [internal("apps/web/src/page.ts")],
+					affectedFiles: ["apps/web/src/page.ts"],
+					confidence: 1,
+				},
+				graph,
+				{ javascriptTests, packageRoots },
+			);
+			expect(impact.notes).toEqual([]);
+			expect(impact.resolution).toBe("high");
+		});
 	});
 
 	it("does not report prose as unreached", () => {

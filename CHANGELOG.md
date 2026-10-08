@@ -16,6 +16,25 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **Confidence describes the change, not the repository.** Notes that are the
+  same on every run (a loader whose specifier is fully computed, a local
+  dependency discovery did not find, bare imports nothing declares) each cost
+  ten points, so in a large repository every prediction read `low` whatever
+  had changed. They are now `repositoryNotes` in `--json`, one `Repository:`
+  line in the output (listed with `-v`), and not scored. One becomes a scored
+  note when the change touches what it is about. `radius.notes` and
+  `tests.notes` hold only what could not be resolved about the change, and the
+  `notes` and `confidence` written to the history files follow.
+- **A prediction that selects every test is 100% confident.** Nothing is then
+  left to a graph that might be wrong, and each "running all tests" note used
+  to cost ten points.
+- **`Unreached` lists every changed file no test reaches, TypeScript
+  included, and caps confidence at `low`.** A changed TypeScript file that no
+  test imports selected nothing and said nothing, at full confidence. An
+  untested file and one reached in a way variant cannot follow look the same
+  to the graph, so both are now reported. A deleted file nothing imports is
+  left out. A change in which nothing could be analyzed says so on its own
+  line.
 - **`doctor` no longer fails when there is no `variant.config.ts`.** It
   prints a warning and exits 0: `impact`, `diff`, `pr` and `workspace check`
   need no config, and exiting 1 read as a broken setup to someone using only
@@ -55,6 +74,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   every file that looks like a test, including helpers under `__tests__/` and
   suites the run never executes, so a skip rate computed from it was
   overstated. Records written before this lack the two fields.
+- **JavaScript tests are counted and named.** variant indexes TypeScript only,
+  so a package tested with `*.test.mjs` files selected nothing with barely a
+  hint. JavaScript test files named `*.test.*` or `*.spec.*` are now a standing
+  note with a count (`tests.javascriptTests`), a changed one is listed under
+  `Not selected:` (`tests.unselectedTests`) and caps confidence at `low`, and
+  they count against a change in the package they belong to. They are still
+  not selected: indexing JavaScript is a separate piece of work.
 - **`examples/github-actions/impact-shadow-workspace.yml`**: shadow mode for a
   pnpm workspace whose packages each run their own tests. It passes one report
   per package to `impact verify` and records the pushed commit. It relies on
@@ -81,12 +107,41 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   node in it and nothing was walked from it: `impact` reported the deletion as
   `breaking` and selected no tests, at full confidence. The files whose
   imports still name the deleted path are now found by that path.
+- **`#name` subpath imports are followed.** A specifier declared under
+  `imports` in a `package.json` was read as a third-party package: no edge to
+  the file it maps to, and `workspace check` reported it as an undeclared
+  dependency. It now resolves through the nearest `package.json`, and a `#`
+  specifier is never treated as a dependency, declared or not.
+- **`import x from ".."` and `from "."` are relative imports.** They name the
+  index file of the parent directory and of the importing file's own. Both were
+  read as package names, so a test written that way had no edge to the code it
+  tests and was not selected when that code changed; `workspace check` reported
+  `.` and `..` as undeclared dependencies.
+- **A `next.config.*` change selects every test.** `next/jest` loads it to
+  configure the transform every test is compiled with, and no test imports
+  it, so an edit was classified as ordinary code and selected nothing, without
+  a warning.
+- **A Bun lockfile change selects every test.** `bun.lock` and `bun.lockb`
+  were not among the files that invalidate the whole suite, so a dependency
+  update that touched no `package.json` selected nothing and was only listed as
+  `Unreached`. They are now, along with `npm-shrinkwrap.json` and the two
+  package-manager config files that can change what is installed or how it is
+  laid out, `pnpm-workspace.yaml` and `bunfig.toml`.
 - **Path aliases in a package's own `tsconfig.json` are followed.** Only the
   `tsconfig.json` in the directory variant ran in was read. From a workspace
   root, an app importing `@/lib/price` through its own `paths` had no edge to
   that file, so a change there selected none of the app's tests. Every
   `tsconfig.json` is now read, each applying to the files under its directory
   with the nearest one first, including aliases inherited through `extends`.
+- **`workspace check` judges a nested package by its own `package.json`.** A
+  workspace package can hold packages that are not workspace members, such as
+  sample projects under `examples/`. Every dependency those declared for
+  themselves was reported against the outer package's manifest; a file is now
+  also covered by its nearest `package.json` and any between it and the
+  workspace package.
+- **`workspace check` accepts `@types/x` for a type-only import of `x`.**
+  `import type { Node } from "estree"` was reported as undeclared although
+  `@types/estree` was declared. A value import still needs the package itself.
 - **`workspace check` no longer reports a path-alias import as an undeclared
   dependency.** It read every bare specifier as a package name, so
   `import "@/lib/price"` failed the check in any package that uses a

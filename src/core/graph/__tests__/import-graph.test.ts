@@ -7,6 +7,7 @@ import {
 	getDependents,
 	importersOfUnindexed,
 } from "../import-graph.js";
+import { toImportAliases } from "../package-imports.js";
 import { toPathAliases } from "../tsconfig-paths.js";
 
 function staticImport(module: string): ImportEntry {
@@ -63,6 +64,71 @@ describe("importersOfUnindexed", () => {
 		["src/unrelated.css", []],
 	])("finds the files whose unresolved imports name %s", (file, expected) => {
 		expect(sorted(importersOfUnindexed(graph, file))).toEqual(expected);
+	});
+});
+
+// `import x from ".."` names the parent directory's index file. Read as a
+// package name it had no edge, so the test had no link to the code it tests.
+describe("a bare dot specifier", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"src/logger/index.ts": [],
+			"src/logger/__tests__/log.test.ts": [staticImport("..")],
+			"src/button/index.ts": [],
+			"src/button/index.test.ts": [staticImport(".")],
+			"index.ts": [],
+			"root.test.ts": [staticImport(".")],
+			"src/orphan/a.test.ts": [staticImport("..")],
+		}),
+	);
+
+	it.each([
+		["src/logger/__tests__/log.test.ts", "src/logger/index.ts"],
+		["src/button/index.test.ts", "src/button/index.ts"],
+		["root.test.ts", "index.ts"],
+	])("resolves the import in %s to %s", (file, target) => {
+		expect(sorted(graph.imports.get(file))).toEqual([target]);
+		expect(sorted(graph.externals.get(file))).toEqual([]);
+	});
+
+	it("records one that names no indexed file as unresolved, not as a package", () => {
+		expect(sorted(graph.unresolved.get("src/orphan/a.test.ts"))).toEqual([
+			"..",
+		]);
+		expect(sorted(graph.externals.get("src/orphan/a.test.ts"))).toEqual([]);
+	});
+});
+
+// `#name` specifiers are a package's own `imports` map (Node subpath imports).
+describe("subpath imports declared in package.json", () => {
+	const graph = buildImportGraph(
+		makeGraph({
+			"apps/factory/agent/lib/factory-image.ts": [],
+			"apps/factory/agent/sandbox.ts": [staticImport("#factory-image")],
+			"apps/factory/agent/other.ts": [staticImport("#not-declared")],
+			"apps/web/src/page.ts": [staticImport("#factory-image")],
+		}),
+		{
+			pathAliases: toImportAliases("apps/factory", {
+				"#factory-image": "./agent/lib/factory-image.ts",
+			}),
+		},
+	);
+
+	it("resolves one to the file its package maps it to", () => {
+		expect(sorted(graph.imports.get("apps/factory/agent/sandbox.ts"))).toEqual([
+			"apps/factory/agent/lib/factory-image.ts",
+		]);
+	});
+
+	it("never counts one as a third-party package, declared or not", () => {
+		for (const file of [
+			"apps/factory/agent/other.ts",
+			"apps/web/src/page.ts",
+		]) {
+			expect(sorted(graph.externals.get(file))).toEqual([]);
+			expect(graph.unresolved.get(file)?.size).toBe(1);
+		}
 	});
 });
 

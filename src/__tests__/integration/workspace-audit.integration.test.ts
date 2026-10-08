@@ -82,6 +82,21 @@ describe("auditWorkspace", () => {
 		expect((await auditWorkspace(dir))?.violations).toEqual([]);
 	});
 
+	it("judges a package nested inside a workspace package by its own manifest", async () => {
+		const dir = createTempWorkspace("wscheck");
+		workspaceImporting(dir, { "@org/auth": "workspace:*" });
+		writeFiles(dir, {
+			"apps/web/samples/basic/package.json": JSON.stringify({
+				name: "basic",
+				dependencies: { react: "19" },
+			}),
+			"apps/web/samples/basic/src/app.ts":
+				'import { use } from "react";\nexport const app = use;',
+		});
+
+		expect((await auditWorkspace(dir))?.violations).toEqual([]);
+	});
+
 	it("returns null outside a workspace", async () => {
 		const dir = createTempWorkspace("wscheck");
 		writeFiles(dir, {

@@ -41,6 +41,7 @@ function report(overrides: {
 		affectedTasks: [],
 		confidence: 1,
 		notes: [],
+		repositoryNotes: [],
 		...overrides.radius,
 	};
 	const tests: TestImpact = {
@@ -48,9 +49,12 @@ function report(overrides: {
 		totalTests: 0,
 		selectAll: false,
 		unreached: [],
+		unselectedTests: [],
+		javascriptTests: 0,
 		confidence: 1,
 		resolution: "high",
 		notes: [],
+		repositoryNotes: [],
 		...overrides.tests,
 	};
 	return {
@@ -201,6 +205,39 @@ describe("renderImpact", () => {
 		expect(capture.stdout()).toContain("- test note");
 	});
 
+	// Printed in full on every run, notes about the repository bury the ones
+	// about the change.
+	it("sums up standing repository notes in one line", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: { repositoryNotes: ["a loader computes its specifier"] },
+				tests: { repositoryNotes: ["some tests are JavaScript"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Repository: 2 standing notes, the same whatever changed (-v lists them)",
+		);
+		expect(capture.stdout()).not.toContain("a loader computes its specifier");
+		expect(capture.stdout()).not.toContain("Notes:");
+	});
+
+	it("lists the standing notes with -v", () => {
+		const capture = captureOutput("verbose");
+
+		renderImpact(
+			report({
+				radius: { repositoryNotes: ["a loader computes its specifier"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain("- a loader computes its specifier");
+	});
+
 	it("warns about changed files no test can reach", () => {
 		const capture = captureOutput();
 
@@ -210,7 +247,62 @@ describe("renderImpact", () => {
 		);
 
 		expect(capture.stdout()).toContain(
-			"Unreached: 1 changed file that variant cannot analyze and no test imports (src/orphan.css).",
+			"Unreached: 1 changed file no test reaches (src/orphan.css). No test is selected for it: it is untested, or used in a way variant cannot follow.",
+		);
+	});
+
+	it("names changed JavaScript tests it could not select", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({ tests: { unselectedTests: ["tests/a.test.mjs"] } }),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Not selected: 1 changed test file is JavaScript (tests/a.test.mjs). variant does not index JavaScript tests, so it cannot select them; run them yourself.",
+		);
+	});
+
+	it("says so when nothing in the change could be analyzed", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: {
+					changed: [
+						fileImpact("crates/cli/src/main.rs", {
+							classification: "unanalyzed",
+						}),
+					],
+				},
+				tests: { unreached: ["crates/cli/src/main.rs"] },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Nothing in this change was analyzed: none of the changed files is TypeScript that variant indexes.",
+		);
+	});
+
+	it("does not say so when every test was selected anyway", () => {
+		const capture = captureOutput();
+
+		renderImpact(
+			report({
+				radius: {
+					changed: [
+						fileImpact("package.json", { classification: "unanalyzed" }),
+					],
+				},
+				tests: { selectAll: true },
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).not.toContain(
+			"Nothing in this change was analyzed",
 		);
 	});
 
