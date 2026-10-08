@@ -11,8 +11,14 @@
       "import": "./dist/index.js"
     },
     "./vitest": {
-      "types": "./dist/vitest.d.ts",
-      "import": "./dist/vitest.js"
+      "import": {
+        "types": "./dist/vitest.d.ts",
+        "default": "./dist/vitest.js"
+      },
+      "require": {
+        "types": "./dist/vitest.d.cts",
+        "default": "./dist/vitest.cjs"
+      }
     }
   },
   "bin": {
@@ -30,7 +36,7 @@
   "packageManager": "pnpm@10.28.1",
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "tsup",
+    "build": "pnpm clean && tsup",
     "test": "vitest",
     "test:run": "vitest run",
     "test:integration": "vitest run --project integration",

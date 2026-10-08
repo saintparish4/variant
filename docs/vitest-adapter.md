@@ -90,5 +90,7 @@ compare.
 
 ## Requirements
 
-Vitest 3 or newer. The prediction is made from the top of the git repository
+Vitest 3 or newer. The adapter ships as both an ES module and CommonJS, because
+a runner loads a config's imports with `require` when the package the config is
+in has no `"type": "module"`. The prediction is made from the top of the git repository
 and stored in `.variant/` there.

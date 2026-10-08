@@ -3,17 +3,17 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../..");
-const adapter = pathToFileURL(path.join(repo, "dist/vitest.js")).href;
 const vitestBin = path.join(repo, "node_modules/vitest/vitest.mjs");
 
 const IDENTITY = ["-c", "user.email=t@t.com", "-c", "user.name=T"];
@@ -24,6 +24,21 @@ function write(cwd: string, files: Record<string, string>): void {
 		mkdirSync(path.dirname(absolute), { recursive: true });
 		writeFileSync(absolute, contents);
 	}
+}
+
+/**
+ * The one line `variant init` adds, importing the adapter by its package name
+ * as a user's config does. How the runner loads that import depends on the
+ * package the config is in, so the fixtures say which kind they are.
+ */
+const CONFIG =
+	'import variant from "@blzsky/variant/vitest";\nexport default { test: { globals: true, reporters: ["default", variant()] } };\n';
+
+/** Makes `@blzsky/variant` resolve to this checkout, as an install would. */
+function linkVariant(cwd: string): void {
+	const scope = path.join(cwd, "node_modules/@blzsky");
+	mkdirSync(scope, { recursive: true });
+	symlinkSync(repo, path.join(scope, "variant"), "junction");
 }
 
 async function git(cwd: string, ...args: string[]): Promise<void> {
@@ -40,7 +55,7 @@ function runTests(cwd: string, env: Record<string, string>) {
 			"--root",
 			cwd,
 			"--config",
-			path.join(cwd, "vitest.config.mjs"),
+			path.join(cwd, "vitest.config.ts"),
 		],
 		{ cwd: repo, reject: false, env: { NO_COLOR: "1", ...env } },
 	);
@@ -51,11 +66,14 @@ function runTests(cwd: string, env: Record<string, string>) {
  * (and now fails) and one that does not. The only trace of variant is one
  * line in the Vitest config.
  */
-async function repoWithFailingChange(): Promise<string> {
+async function repoWithFailingChange(
+	manifest: Record<string, unknown>,
+): Promise<string> {
 	const cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-adapter-"));
 	write(cwd, {
-		".gitignore": ".variant/\n",
-		"vitest.config.mjs": `import variant from ${JSON.stringify(adapter)};\nexport default { test: { globals: true, reporters: ["default", variant()] } };\n`,
+		".gitignore": ".variant/\nnode_modules\n",
+		"package.json": JSON.stringify(manifest),
+		"vitest.config.ts": CONFIG,
 		"src/math.ts":
 			"export function add(a: number, b: number): number { return a + b; }\n",
 		"src/math.test.ts":
@@ -70,6 +88,7 @@ async function repoWithFailingChange(): Promise<string> {
 			"export function add(a: number, b: number): number { return a - b; }\n",
 	});
 	await git(cwd, "commit", "-q", "-am", "break add");
+	linkVariant(cwd);
 	return cwd;
 }
 
@@ -90,8 +109,10 @@ function reconciliations(cwd: string): Array<Record<string, unknown>> {
 describe("E2E: the Vitest adapter", () => {
 	let cwd: string;
 
+	// No `"type": "module"`: the usual case, and the one where the runner
+	// loads what its config imports with `require`.
 	beforeAll(async () => {
-		cwd = await repoWithFailingChange();
+		cwd = await repoWithFailingChange({ name: "app" });
 	});
 
 	afterAll(() => {
@@ -129,6 +150,30 @@ describe("E2E: the Vitest adapter", () => {
 	});
 });
 
+describe("E2E: the Vitest adapter in an ES-module package", () => {
+	let cwd: string;
+
+	beforeAll(async () => {
+		cwd = await repoWithFailingChange({ name: "app", type: "module" });
+	});
+
+	afterAll(() => {
+		try {
+			rmSync(cwd, { recursive: true, force: true });
+		} catch {
+			// Windows holds handles on a temp dir briefly after a child exits.
+		}
+	});
+
+	it("loads and reports the same way", async () => {
+		const result = await runTests(cwd, { CI: "true" });
+
+		expect(result.stdout).toContain(
+			"variant: predicted 1 of 2 test files (high). 1 failed, and it was predicted.",
+		);
+	});
+});
+
 // The layout that makes the lock necessary: one Vitest process per package,
 // all started at once, as `pnpm -r test` or a task runner does.
 describe("E2E: the Vitest adapter with one test process per package", () => {
@@ -138,7 +183,7 @@ describe("E2E: the Vitest adapter with one test process per package", () => {
 	beforeAll(async () => {
 		cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-adapter-ws-"));
 		const files: Record<string, string> = {
-			".gitignore": ".variant/\n",
+			".gitignore": ".variant/\nnode_modules\n",
 			"package.json": JSON.stringify({
 				name: "root",
 				workspaces: ["packages/*"],
@@ -147,8 +192,7 @@ describe("E2E: the Vitest adapter with one test process per package", () => {
 		for (const name of packages) {
 			const dir = `packages/${name}`;
 			files[`${dir}/package.json`] = JSON.stringify({ name: `@x/${name}` });
-			files[`${dir}/vitest.config.mjs`] =
-				`import variant from ${JSON.stringify(adapter)};\nexport default { test: { globals: true, reporters: ["default", variant()] } };\n`;
+			files[`${dir}/vitest.config.ts`] = CONFIG;
 			files[`${dir}/src/${name}.ts`] =
 				"export const value = (): number => 1;\n";
 			files[`${dir}/src/${name}.test.ts`] =
@@ -162,6 +206,7 @@ describe("E2E: the Vitest adapter with one test process per package", () => {
 			"packages/b/src/b.ts": "export const value = (): number => 2;\n",
 		});
 		await git(cwd, "commit", "-q", "-am", "break b");
+		linkVariant(cwd);
 	});
 
 	afterAll(() => {
@@ -184,7 +229,7 @@ describe("E2E: the Vitest adapter with one test process per package", () => {
 						"--root",
 						root,
 						"--config",
-						path.join(root, "vitest.config.mjs"),
+						path.join(root, "vitest.config.ts"),
 					],
 					{ cwd: repo, reject: false, env: { NO_COLOR: "1", CI: "true" } },
 				);
