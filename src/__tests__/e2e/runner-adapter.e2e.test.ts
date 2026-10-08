@@ -128,3 +128,84 @@ describe("E2E: the Vitest adapter", () => {
 		]);
 	});
 });
+
+// The layout that makes the lock necessary: one Vitest process per package,
+// all started at once, as `pnpm -r test` or a task runner does.
+describe("E2E: the Vitest adapter with one test process per package", () => {
+	let cwd: string;
+	const packages = ["a", "b", "c"];
+
+	beforeAll(async () => {
+		cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-adapter-ws-"));
+		const files: Record<string, string> = {
+			".gitignore": ".variant/\n",
+			"package.json": JSON.stringify({
+				name: "root",
+				workspaces: ["packages/*"],
+			}),
+		};
+		for (const name of packages) {
+			const dir = `packages/${name}`;
+			files[`${dir}/package.json`] = JSON.stringify({ name: `@x/${name}` });
+			files[`${dir}/vitest.config.mjs`] =
+				`import variant from ${JSON.stringify(adapter)};\nexport default { test: { globals: true, reporters: ["default", variant()] } };\n`;
+			files[`${dir}/src/${name}.ts`] =
+				"export const value = (): number => 1;\n";
+			files[`${dir}/src/${name}.test.ts`] =
+				`import { value } from "./${name}";\ntest("${name}", () => { expect(value()).toBe(1); });\n`;
+		}
+		write(cwd, files);
+		await git(cwd, "init", "-q", "-b", "main");
+		await git(cwd, "add", "-A");
+		await git(cwd, "commit", "-q", "-m", "initial");
+		write(cwd, {
+			"packages/b/src/b.ts": "export const value = (): number => 2;\n",
+		});
+		await git(cwd, "commit", "-q", "-am", "break b");
+	});
+
+	afterAll(() => {
+		try {
+			rmSync(cwd, { recursive: true, force: true });
+		} catch {
+			// Windows holds handles on a temp dir briefly after a child exits.
+		}
+	});
+
+	it("predicts once for the repository and records each process's own files", async () => {
+		const runs = await Promise.all(
+			packages.map((name) => {
+				const root = path.join(cwd, "packages", name);
+				return execa(
+					"node",
+					[
+						vitestBin,
+						"run",
+						"--root",
+						root,
+						"--config",
+						path.join(root, "vitest.config.mjs"),
+					],
+					{ cwd: repo, reject: false, env: { NO_COLOR: "1", CI: "true" } },
+				);
+			}),
+		);
+
+		for (const run of runs) expect(run.stdout).toContain("variant: predicted");
+		const predictions = readFileSync(
+			path.join(cwd, ".variant/history/impact.jsonl"),
+			"utf8",
+		)
+			.split("\n")
+			.filter((line) => line.trim() !== "");
+		expect(predictions).toHaveLength(1);
+
+		const records = reconciliations(cwd);
+		expect(records).toHaveLength(3);
+		expect(
+			records.filter((record) => record["failedTests"] === 1),
+		).toMatchObject([
+			{ ranTests: 1, predictedRan: 1, caught: 1, falseSkips: 0 },
+		]);
+	});
+});
