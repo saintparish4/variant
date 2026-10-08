@@ -131,12 +131,12 @@ const TEST_SETUP_FILE =
  * that fires on every documentation edit is one people learn to skip. This
  * only quiets the warning; it selects nothing either way.
  */
-const PROSE_FILE = /\.(?:md|markdown|rst|txt|adoc)$/i;
+export const PROSE_FILE = /\.(?:md|markdown|rst|txt|adoc)$/i;
 
 /** The most a prediction can score with a changed file no test reaches: low. */
 const UNREACHED_CONFIDENCE = 0.5;
 
-function invalidatesAllTests(filePath: string): boolean {
+export function invalidatesAllTests(filePath: string): boolean {
 	return TEST_CONFIG_FILE.test(filePath) || TEST_SETUP_FILE.test(filePath);
 }
 
@@ -321,6 +321,8 @@ export function computeTestImpact(
 export interface TestImpactResult {
 	radius: BlastRadius;
 	tests: TestImpact;
+	/** The graph both were read from, for a caller explaining them. */
+	graph: ImportGraph;
 }
 
 /**
@@ -362,6 +364,7 @@ export async function traceTestImpact(
 
 	return {
 		radius,
+		graph: importGraph,
 		tests: computeTestImpact(radius, importGraph, {
 			...(options.isTestFile !== undefined && {
 				isTestFile: options.isTestFile,

@@ -99,7 +99,8 @@ variant pr report --base origin/main --markdown --output pr-report.md
 ```
 
 `pr check` classifies every changed TypeScript file and rolls the result into
-one verdict. `pr report` renders the same thing as JSON or as markdown suitable
+one verdict. `pr report` says what the change needs verified (tests and why,
+package checks, and what no test reaches) as JSON or as markdown suitable
 for a sticky PR comment — see [pr-commands.md](./pr-commands.md), and
 [`examples/github-actions`](../examples/github-actions) for workflows to copy.
 

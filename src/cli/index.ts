@@ -155,7 +155,9 @@ prCmd
 
 prCmd
 	.command("report")
-	.description("Render `pr check` as a structured JSON or markdown report")
+	.description(
+		"Describe what this PR changes and what must be verified before it merges",
+	)
 	.option(
 		"--base <ref>",
 		"base branch or ref for the PR diff (default: the target or default branch)",

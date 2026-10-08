@@ -299,8 +299,13 @@ The parenthesis counts exported symbols added (`+`), removed (`-`) and changed
 variant pr report [--base <ref>] [--markdown] [--output <file>]
 ```
 
-The `pr check` result as an artifact: JSON by default, or markdown for a pull
-request comment. [Both formats are documented here](./api.md#pr-report).
+What a pull request changes and what has to be verified before it merges:
+the risk of each changed file, the test files to run and the import chain
+that puts each one there, the typecheck, build and lint commands of the
+packages it affects, and the changed files no test reaches. JSON by default,
+or markdown for a pull request comment.
+[Both formats are documented here](./api.md#pr-report). It plans; it runs
+nothing and records no prediction.
 
 | Option | Default | Description |
 |---|---|---|

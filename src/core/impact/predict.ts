@@ -11,6 +11,7 @@
  */
 
 import { GitRefError, NoTestFilesError } from "../errors.js";
+import type { PackageGraph } from "../graph/package-graph.js";
 import { loadPackageGraph } from "../graph/package-graph.js";
 import {
 	appendImpactPrediction,
@@ -73,15 +74,21 @@ export interface ImpactReport {
 	historyLogged: boolean;
 }
 
+export interface ImpactAnalysis {
+	base: ChangeBase;
+	result: TestImpactResult;
+	packageGraph: PackageGraph | undefined;
+}
+
 /**
- * Throws `GitRefError` when the changed set cannot be listed, and
- * `NoTestFilesError` when no test file is indexed: an empty prediction in
- * either case would read as "run nothing".
+ * The analysis without the record: for a caller describing a change, which
+ * must not leave a prediction behind that no test run will ever reconcile.
+ * Throws `GitRefError` when the changed set cannot be listed.
  */
-export async function predictImpact(
+export async function analyzeImpact(
 	cwd: string,
 	options: ImpactOptions = {},
-): Promise<ImpactReport> {
+): Promise<ImpactAnalysis> {
 	// An injected change set has no diff to take, so no base to detect.
 	const base: ChangeBase =
 		options.changedFiles === undefined
@@ -111,6 +118,20 @@ export async function predictImpact(
 			`Could not list the files changed since "${baseRef}"`,
 		);
 	}
+	return { base, result, packageGraph };
+}
+
+/**
+ * Throws `GitRefError` when the changed set cannot be listed, and
+ * `NoTestFilesError` when no test file is indexed: an empty prediction in
+ * either case would read as "run nothing".
+ */
+export async function predictImpact(
+	cwd: string,
+	options: ImpactOptions = {},
+): Promise<ImpactReport> {
+	const { base, result, packageGraph } = await analyzeImpact(cwd, options);
+	const baseRef = base.ref;
 	// "0 of 0" is not a prediction, and logged it would count as a clean run.
 	if (result.tests.totalTests === 0) throw new NoTestFilesError();
 

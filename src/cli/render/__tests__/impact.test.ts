@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { captureOutput } from "../../../__tests__/helpers/cli-harness.js";
+import { buildImportGraph } from "../../../core/graph/import-graph.js";
 import type { ImpactReport } from "../../../core/impact/predict.js";
 import type {
 	BlastRadius,
@@ -68,7 +69,11 @@ function report(overrides: {
 		baseLabel: "HEAD~1",
 		headSha: null,
 		...overrides.base,
-		result: { radius, tests },
+		result: {
+			radius,
+			tests,
+			graph: buildImportGraph({ version: 1, generatedAt: "", files: {} }),
+		},
 		verdict: "build-required",
 		packagesFound: overrides.packagesFound ?? 0,
 		historyLogged: overrides.historyLogged ?? true,

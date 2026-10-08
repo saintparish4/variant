@@ -87,6 +87,7 @@ src/
 │   │   ├── validation.ts     # validateTaskGraph(), behind `variant check`
 │   │   ├── package-graph.ts  # Workspace discovery and cross-package tasks
 │   │   ├── import-graph.ts   # File-level import graph over the symbol index
+│   │   ├── import-paths.ts   # The import chain from a file to a changed one
 │   │   ├── package-exports.ts  # Resolves package `exports` maps
 │   │   ├── tsconfig-paths.ts   # Resolves tsconfig `paths` aliases
 │   │   ├── workspace-check.ts  # Pure declared-vs-imported dependency audit
@@ -94,8 +95,10 @@ src/
 │   ├── history/          # impact-log.ts: the .variant/history JSONL files
 │   ├── impact/           # predict.ts (`impact`), verify.ts (`impact verify`)
 │   ├── insight/          # computeInsights(): stats from results + cache
+│   ├── plan/             # plan.ts: the verification plan (risk, tests and why,
+│   │                     # checks, what nothing verifies); checks.ts
 │   ├── plugins/          # BuildPlugin interface and the registry that fans out hooks
-│   ├── pr/               # check.ts (classify a PR), report.ts (JSON / markdown)
+│   ├── pr/               # check.ts (classify a PR), report.ts (the plan as JSON / markdown)
 │   ├── progress/         # reporter.ts: the progress port; every renderer is in cli/
 │   ├── provenance/       # Why each task was selected to run
 │   ├── scaffold/         # The template behind `variant init --tasks`

@@ -106,6 +106,13 @@ async function detectPackageManager(
 	return null;
 }
 
+/** The package manager a repository installs with, or null when nothing says. */
+export async function packageManagerOf(
+	cwd: string,
+): Promise<PackageManagerName | null> {
+	return detectPackageManager(cwd, await readManifest(cwd));
+}
+
 /**
  * Where the adapter goes. A root config's reporters cover every project it
  * runs, so it alone is enough. Without one, each workspace package's own

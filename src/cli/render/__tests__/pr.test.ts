@@ -22,6 +22,7 @@ function classified(
 function checkResult(files: ClassifyResult[] = []): PrCheckResult {
 	return {
 		baseRef: "main",
+		changedFiles: [],
 		tsFilesChanged: files.length,
 		files,
 		verdict: "safe-to-skip",

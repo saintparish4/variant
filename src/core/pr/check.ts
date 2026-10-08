@@ -23,6 +23,8 @@ export interface PrCheckOptions {
 
 export interface PrCheckResult {
 	baseRef: string;
+	/** Every file the branch changed, TypeScript or not. */
+	changedFiles: string[];
 	tsFilesChanged: number;
 	files: ClassifyResult[];
 	verdict: BuildVerdict;
@@ -64,6 +66,7 @@ export async function runPrCheck(
 
 	return {
 		baseRef,
+		changedFiles: changed,
 		tsFilesChanged: tsFiles.length,
 		files,
 		verdict: deriveVerdict(files.map((file) => file.classification)),

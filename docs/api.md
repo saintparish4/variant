@@ -367,10 +367,13 @@ type PrReport = {
 	generatedAt: string;
 	check: {
 		baseRef: string;
+		/** Every file the branch changed, TypeScript or not. */
+		changedFiles: string[];
 		tsFilesChanged: number;
 		files: FileClassification[];
 		verdict: BuildVerdict;
 	};
+	plan: VerificationPlan;
 };
 
 type FileClassification = {
@@ -388,44 +391,84 @@ type FileClassification = {
 	/** True when either version does not parse; the file is then `breaking`. */
 	syntaxErrors: boolean;
 };
+
+type VerificationPlan = {
+	baseRef: string;
+	baseLabel: string;
+	/** Highest risk first. */
+	changes: {
+		filePath: string;
+		classification: "non-impacting" | "internal" | "breaking" | "unanalyzed";
+		/** Exported names whose shape changed or that were removed. */
+		symbols: string[];
+		/** Files importing it, directly or through other files. */
+		dependents: number;
+		/** Packages other than its own that those files are in. */
+		crossesInto: string[];
+		/** Test files that reach it. */
+		tests: number;
+		risk: "high" | "medium" | "low" | "none";
+		/** The rule that set `risk`, in words. */
+		reason: string;
+	}[];
+	tests: {
+		selected: number;
+		total: number;
+		/** True when every test is in the plan, whatever it imports. */
+		all: boolean;
+		runs: {
+			runner: "vitest" | "jest" | "unknown";
+			/** Directory of the config the files run under; "" for the root. */
+			dir: string;
+			files: string[];
+		}[];
+		/** Test file -> import chain from it to the nearest changed file. */
+		why: Record<string, string[]>;
+	};
+	checks: {
+		kind: "typecheck" | "build" | "lint" | "e2e";
+		package: string;
+		dir: string;
+		script: string;
+		command: string;
+	}[];
+	/** Why the plan holds more than the import graph alone would select. */
+	widened: string[];
+	notVerified: {
+		filePath: string;
+		symbols: string[];
+		/** Files importing it directly. */
+		usedBy: string[];
+		reason: string;
+	}[];
+	/** How much of the change the graph resolved. Not a safety figure. */
+	resolution: "high" | "medium" | "low";
+	notes: string[];
+	repositoryNotes: string[];
+};
 ```
 
 `kind` is `signature` for a runtime-visible change (parameters, return type,
 value type), `type` for a type-space-only change (interfaces, type aliases), and
 `body` for an implementation-only change.
 
-```json
-{
-  "generatedAt": "2026-09-24T22:38:12.380Z",
-  "check": {
-    "baseRef": "main",
-    "tsFilesChanged": 2,
-    "files": [
-      {
-        "filePath": "packages/utils/src/price.ts",
-        "classification": "breaking",
-        "exportedSymbols": {
-          "added": [],
-          "removed": [],
-          "changed": [{ "name": "formatPrice", "kind": "signature" }]
-        },
-        "confidence": 1,
-        "confidenceNotes": [],
-        "syntaxErrors": false
-      },
-      {
-        "filePath": "packages/utils/src/slug.ts",
-        "classification": "non-impacting",
-        "exportedSymbols": { "added": [], "removed": [], "changed": [] },
-        "confidence": 1,
-        "confidenceNotes": [],
-        "syntaxErrors": false
-      }
-    ],
-    "verdict": "build-required"
-  }
-}
-```
+`risk` follows one rule, applied in this order:
+
+| Risk | When |
+|---|---|
+| `none` | Only comments or formatting changed, or the file is documentation |
+| `medium` | The file configures every test and build (a manifest, a lockfile, a `tsconfig`, a runner config) |
+| `high` | No test reaches the file |
+| `high` | Its exports changed, and a file in another package imports it |
+| `medium` | Its exports changed; or variant cannot read the file |
+| `low` | Only its implementation changed, and at least one test reaches it |
+
+"Reaches" means imports, directly or through other files. A test that reaches
+a file does not necessarily exercise what changed in it.
+
+`checks` are the `typecheck`, `build`, `lint` and end-to-end scripts, recognized
+by name, of each package holding an affected file. variant plans them and runs
+none. Unit-test scripts are left out, because `tests` lists the files.
 
 With `--output <file>`, the file holds the JSON without a trailing newline, and
 stdout gets `Report written to <file>`.
@@ -435,27 +478,53 @@ stdout gets `Report written to <file>`.
 ```markdown
 ## Variant PR Report
 
-**Generated:** 2026-09-24T22:31:58.071Z
-**Base ref:** `main`
+2 changed files against `main`.
 
-### Semantic Diff
+### What changed
 
-🔴 **Build required**
+| Risk | File | Change | Reached by | Why |
+|------|------|--------|------------|-----|
+| **high** | `packages/utils/src/legacy.ts` | internal | 0 files, 0 test files | no test reaches it |
+| **high** | `packages/utils/src/price.ts` | breaking: `formatPrice` | 4 files, into `web`, 2 test files | its exports changed, and other packages import it |
 
-| File | Classification | API Changes |
-|------|----------------|-------------|
-| `packages/utils/src/price.ts` | breaking | ~1 |
-| `packages/utils/src/slug.ts` | non-impacting | — |
+### What to verify
+
+**Tests:** 2 of 31 test files.
+
+- Vitest in `packages/utils`: 1 file
+- Vitest in `apps/web`: 1 file
+
+<details><summary>Why these tests</summary>
+
+Each line is the import chain from a test to a file this change touches.
+
+- `apps/web/src/cart.test.ts` → `apps/web/src/cart.ts` → `packages/utils/src/index.ts` → `packages/utils/src/price.ts`
+- `packages/utils/src/price.test.ts` → `packages/utils/src/price.ts`
+
+</details>
+
+**Checks** in the packages this change affects:
+
+- typecheck: `pnpm --filter utils run typecheck`
+- typecheck: `pnpm --filter web run typecheck`
+- build: `pnpm --filter web run build`
+
+### Not verified
+
+- `packages/utils/src/legacy.ts`: no test reaches it: it is untested, or used in a way variant cannot follow. Nothing variant indexes imports it.
+
+<sub>Graph resolution: low. It says how much of this change variant could follow, not how safe the change is. Reaching a file is not the same as testing what changed in it.</sub>
 ```
 
 - The first line is always `## Variant PR Report`, which is what lets a
   workflow find and update its own comment.
-- The verdict line is `✅ **Safe to skip build**`, `⚠️ **Build recommended**` or
-  `🔴 **Build required**`.
-- **API Changes** counts exported symbols added (`+N`), removed (`-N`) and
-  changed (`~N`), or `—` when none did.
-- With no TypeScript changes, the table is replaced by
-  `_No TypeScript files changed._`.
+- Tables and lists stop at 25 rows and say how many were left out; the JSON
+  has all of them.
+- **Wider than the import graph** appears when a change selects every test
+  (configuration) or reaches every importer of a file regardless of the names
+  it takes.
+- With nothing changed, everything after the first paragraph is replaced by
+  `_Nothing changed against the base._`.
 
 ---
 

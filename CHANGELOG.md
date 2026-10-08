@@ -16,6 +16,12 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **The `pr report` markdown has a new layout**, and no longer shows the
+  build verdict or the `Generated` and `Base ref` lines. Its first line is
+  still `## Variant PR Report`. The JSON keeps `check` as it was, with
+  `check.changedFiles` added, and gains `plan`.
+- **`pr report` no longer fails in a repository with no test files.** It says
+  that none were found.
 - **`variant init` no longer writes `variant.config.ts`.** That is now
   `variant init --tasks`. `init` on its own sets the repository up for change
   verification (see Added).
@@ -68,6 +74,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **`pr report` is now a verification plan.** For a pull request it gives the
+  risk of each changed file by a stated rule (what changed, how far it
+  reaches, whether it crosses a package boundary, whether any test reaches
+  it); the test files to run, grouped by runner, each with the import chain
+  from the test to the changed file; the `typecheck`, `build`, `lint` and
+  end-to-end commands of every package the change affects; where the plan is
+  wider than the import graph and why; and the changed files no test reaches,
+  with the exported names that changed and the files importing them. It plans
+  and runs nothing, and records no prediction.
 - **`variant init` sets a repository up, once.** It detects the package
   manager (npm, pnpm, Yarn, Bun), the workspace, Turborepo or Nx, the test
   runners, GitHub Actions and the default branch, and then shows each change
