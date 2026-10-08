@@ -8,6 +8,8 @@ Not in a published release yet.
 
 ## Setup
 
+`variant init` does all of this for you and shows each change first. By hand:
+
 ```ts
 // vitest.config.ts
 import { defineConfig } from "vitest/config";

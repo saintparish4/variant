@@ -113,10 +113,10 @@ static analysis cannot see an edge.
 variant also runs your tasks as a cached DAG. This part needs a config file.
 
 ```bash
-variant init
+variant init --tasks
 ```
 
-`init` detects your package manager, framework, and existing `package.json`
+`init --tasks` detects your package manager, framework, and existing `package.json`
 scripts, then writes `variant.config.ts`:
 
 ```typescript

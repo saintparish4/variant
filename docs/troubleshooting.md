@@ -54,7 +54,7 @@ Or add a script to `package.json`, where the local `variant` binary is on PATH:
 
 **Cause:** variant looks for `variant.config.ts`, `variant.config.mjs`, `variant.config.js`, or `variant.config.json`, in that order, in the current working directory.
 
-**Fix:** Create the config with `variant init`, or check you're running from the project root. Only the task runner (`build`, `run`, `insight`) needs a config; `impact`, `pr` and `workspace check` work without one.
+**Fix:** Create the config with `variant init --tasks`, or check you're running from the project root. Only the task runner (`build`, `run`, `insight`) needs a config; `impact`, `pr` and `workspace check` work without one.
 
 ---
 

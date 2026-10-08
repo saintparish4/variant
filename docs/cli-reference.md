@@ -383,14 +383,41 @@ Each task's last run time and duration, read from the local cache.
 ### `init`
 
 ```
-variant init
+variant init [--dry-run] [--yes] [--no-install] [--package <spec>]
+variant init --tasks
 ```
 
-Writes `variant.config.ts` to the current directory. In a terminal, it asks
-which tasks to configure, then a command and inputs for each, suggesting
-defaults from your `package.json` scripts, package manager and framework. When
-stdin is not a terminal, it writes a single `build` task without asking. If a
-config already exists, it writes nothing.
+Sets variant up in a repository, once. It finds out how the repository
+installs, tests and runs CI, shows every change it would make, and makes them
+when you agree:
+
+- installs `@blzsky/variant` as a dev dependency with your package manager
+  (npm, pnpm, Yarn or Bun);
+- adds the [Vitest adapter](./vitest-adapter.md) to your Vitest config: the
+  root config if there is one, otherwise each workspace package's;
+- adds `.variant/` to `.gitignore`;
+- adds `fetch-depth: 0` to the checkout in any workflow that runs your tests,
+  because the adapter compares against an earlier commit;
+- writes `.github/workflows/variant.yml`, which keeps one comment on each pull
+  request.
+
+Files are shown as a diff first. A config or workflow that `init` cannot edit
+with confidence is left untouched, and it prints the lines to add yourself.
+Running it again changes nothing that is already in place.
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Show what was found and what would change, and stop |
+| `-y`, `--yes` | Apply without asking. Needed when there is no terminal to ask in |
+| `--no-install` | Do not run the package manager; print the command instead |
+| `--package <spec>` | Install this in place of `@blzsky/variant`: a tarball path or a version |
+| `--tasks` | Write `variant.config.ts` for the task runner instead (see below) |
+
+`init --tasks` writes `variant.config.ts` to the current directory, for `build`
+and `run`. In a terminal it asks which tasks to configure, then a command and
+inputs for each, suggesting defaults from your `package.json` scripts, package
+manager and framework. When stdin is not a terminal, it writes a single `build`
+task without asking. If a config already exists, it writes nothing.
 
 ### `doctor`
 

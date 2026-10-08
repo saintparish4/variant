@@ -16,6 +16,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **`variant init` no longer writes `variant.config.ts`.** That is now
+  `variant init --tasks`. `init` on its own sets the repository up for change
+  verification (see Added).
 - **The default base changed.** `impact` with no `--base` compared against
   `HEAD~1`, and `pr check`/`pr report` against `main`. Both now detect the base
   (see Added). On the default branch `impact` still compares against the
@@ -65,6 +68,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **`variant init` sets a repository up, once.** It detects the package
+  manager (npm, pnpm, Yarn, Bun), the workspace, Turborepo or Nx, the test
+  runners, GitHub Actions and the default branch, and then shows each change
+  as a diff: installing the package, adding the Vitest adapter to the right
+  configs, ignoring `.variant/`, giving the test workflow's checkout the
+  history a prediction needs, and writing a workflow that comments on pull
+  requests. Nothing is changed until you agree (`--yes` where there is no
+  terminal, `--dry-run` to only look). A config or workflow it cannot edit
+  with confidence is left as it is, with the lines to add by hand.
 - **A Vitest adapter: `@blzsky/variant/vitest`.** One line in the Vitest
   config, and a normal test run in CI predicts alongside the tests, compares
   the failures with the prediction when they end, prints one line and records
