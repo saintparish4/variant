@@ -419,11 +419,11 @@ type VerificationPlan = {
 		/** True when every test is in the plan, whatever it imports. */
 		all: boolean;
 		runs: {
-			runner: "vitest" | "jest" | "unknown";
+			runner: "vitest" | "jest" | "playwright" | "unknown";
 			/** Directory of the config the files run under; "" for the root. */
 			dir: string;
 			files: string[];
-			/** The `test` script of the files' package. It runs the whole suite. */
+			/** The script of the files' package that runs this runner, whole suite and all. */
 			command?: string;
 		}[];
 		/** Test file -> import chain from it to the nearest changed file. */
@@ -476,8 +476,15 @@ is listed and kept out of "not verified".
 "Reaches" means imports, directly or through other files. A test that reaches
 a file does not necessarily exercise what changed in it.
 
+A test file's `runner` comes from the nearest config or, without one, the
+package's dependencies; a `*.spec.*` file or one under `e2e/` in a package with
+a Playwright config is Playwright's. The plan lists every test file the change
+reaches. It does not know which of them your CI runs.
+
 `checks` are the `typecheck`, `build`, `lint` and end-to-end scripts, recognized
-by name, of each package holding an affected file. variant plans them and runs
+by name, of each package holding an affected file. When every package is in the
+plan and the root has a script of the same kind that fans out (through Turbo,
+Nx, or a recursive package-manager flag), the root's is listed alone. variant plans them and runs
 none. Unit-test scripts are left out, because `tests` lists the files.
 
 With `--output <file>`, the file holds the JSON without a trailing newline, and
@@ -532,6 +539,8 @@ Each line is the import chain from a test to a file this change touches.
   has all of them.
 - A group of tests run by Jest is followed by a line saying that variant has
   no Jest adapter yet, so those runs are not compared with the plan.
+- **Reached by** is `—` for a file nothing imports by nature (a lockfile, a
+  workflow), and "Not verified" speaks only for source files.
 - **Wider than the import graph** appears when a change selects every test
   (configuration) or reaches every importer of a file regardless of the names
   it takes.

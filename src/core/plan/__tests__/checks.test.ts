@@ -59,4 +59,45 @@ describe("planChecks", () => {
 				?.command,
 		).toBe("npm run lint");
 	});
+
+	// pyra: the root `typecheck` is `turbo run typecheck`, and the plan listed
+	// it and then every package it already covers.
+	it("lists a root script alone when it already runs every package's", () => {
+		const root = {
+			name: "root",
+			dir: "",
+			scripts: { build: "turbo run build", lint: "biome check ." },
+		};
+		const web = {
+			name: "@x/web",
+			dir: "apps/web",
+			scripts: { build: "next build", lint: "next lint" },
+		};
+
+		const checks = planChecks(
+			[root, API, web],
+			{ packageManager: "pnpm", taskRunner: "turborepo" },
+			{ everyPackage: true },
+		);
+
+		expect(
+			checks.filter((check) => check.kind === "build").map((c) => c.command),
+		).toEqual(["pnpm run build"]);
+		// The root lint only lints the root, so the package's own stays.
+		expect(
+			checks.filter((check) => check.kind === "lint").map((c) => c.command),
+		).toEqual(["pnpm run lint", "turbo run lint --filter=@x/web"]);
+	});
+
+	it("keeps each package's check when only some packages are affected", () => {
+		const root = {
+			name: "root",
+			dir: "",
+			scripts: { build: "turbo run build" },
+		};
+
+		expect(
+			planChecks([root, API], { packageManager: "pnpm", taskRunner: null }),
+		).toHaveLength(4);
+	});
 });

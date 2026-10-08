@@ -57,7 +57,7 @@ export interface PlannedChange {
 	reason: string;
 }
 
-export type TestRunner = "vitest" | "jest" | "unknown";
+export type TestRunner = "vitest" | "jest" | "playwright" | "unknown";
 
 export interface PlannedTests {
 	runner: TestRunner;
@@ -65,8 +65,8 @@ export interface PlannedTests {
 	dir: string;
 	files: string[];
 	/**
-	 * The `test` script of the package these files are in, as a command. It
-	 * runs that package's whole suite, not only these files.
+	 * The script of the files' package that runs this runner, as a command.
+	 * It runs that script's whole suite, not only these files.
 	 */
 	command?: string;
 }
@@ -154,6 +154,64 @@ function nearest<T extends { dir: string }>(
 		}
 	}
 	return best;
+}
+
+const END_TO_END_FILE = /\.spec\.[cm]?[jt]sx?$|(?:^|\/)e2e\//;
+
+/**
+ * The runner a test file belongs to. A Playwright config and a unit runner's
+ * often sit in the same package, so the file's name decides between them:
+ * Playwright's own convention is `*.spec.*` or an `e2e/` directory.
+ */
+function runnerOf(
+	file: string,
+	roots: readonly RunnerRoot[],
+): RunnerRoot | undefined {
+	const unit = nearest(
+		file,
+		roots.filter((root) => root.runner !== "playwright"),
+	);
+	const browser = nearest(
+		file,
+		roots.filter((root) => root.runner === "playwright"),
+	);
+	if (browser === undefined || !END_TO_END_FILE.test(file)) return unit;
+	return unit === undefined || browser.dir.length >= unit.dir.length
+		? browser
+		: unit;
+}
+
+/**
+ * The script of `pkg` that runs `file`: `test` when it is this runner's, or
+ * the one script that invokes the runner. A package can keep its integration
+ * tests behind a script of their own, and a name is all there is to match on.
+ */
+function scriptFor(
+	pkg: PackageScripts,
+	runner: TestRunner,
+	file: string,
+): string | undefined {
+	const names = Object.keys(pkg.scripts).sort();
+	if (runner === "unknown") return names.includes("test") ? "test" : undefined;
+	const invoking = names.filter((name) =>
+		new RegExp(`\\b${runner}\\b`).test(pkg.scripts[name] ?? ""),
+	);
+	const kind = /\.(integration|e2e)\./.exec(file)?.[1];
+	const byKind =
+		kind === undefined
+			? undefined
+			: invoking.find((name) =>
+					`${name} ${pkg.scripts[name] ?? ""}`.includes(kind),
+				);
+	if (byKind !== undefined) return byKind;
+	if (invoking.includes("test")) return "test";
+	if (invoking.length === 1) return invoking[0];
+	// A `test` script that goes through a task runner names no test runner.
+	return runner !== "playwright" &&
+		invoking.length === 0 &&
+		names.includes("test")
+		? "test"
+		: undefined;
 }
 
 function reachOf(file: string, graph: ImportGraph): Set<string> {
@@ -278,19 +336,22 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 	for (const test of tests.affectedTests) {
 		const chain = chainFrom(test);
 		if (chain !== null) why[test] = chain;
-		const root = nearest(test, inputs.runnerRoots);
+		const root = runnerOf(test, inputs.runnerRoots);
 		const owner = nearest(test, inputs.packages);
-		const command =
-			owner !== undefined && "test" in owner.scripts
-				? commandFor(owner, "test", inputs.style)
-				: undefined;
+		const script =
+			owner === undefined
+				? undefined
+				: scriptFor(owner, root?.runner ?? "unknown", test);
 		const run: PlannedTests = {
 			runner: root?.runner ?? "unknown",
 			dir: root?.dir ?? "",
 			files: [],
-			...(command !== undefined && { command }),
+			...(owner !== undefined &&
+				script !== undefined && {
+					command: commandFor(owner, script, inputs.style),
+				}),
 		};
-		const key = `${run.runner}\0${run.dir}`;
+		const key = `${run.runner}\0${run.dir}\0${run.command ?? ""}`;
 		const existing = runs.get(key) ?? run;
 		existing.files.push(test);
 		runs.set(key, existing);
@@ -351,7 +412,9 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 			),
 			why,
 		},
-		checks: planChecks(checked, inputs.style),
+		checks: planChecks(checked, inputs.style, {
+			everyPackage: tests.selectAll,
+		}),
 		widened,
 		notVerified,
 		resolution: tests.resolution,
@@ -361,14 +424,20 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 }
 
 const RUNNER_CONFIGS: ReadonlyArray<[RegExp, RunnerRoot["runner"]]> = [
-	[/^vitest\.(?:config|workspace|projects)\./, "vitest"],
-	[/^jest\.config\./, "jest"],
+	// `vitest.integration.config.ts` is as much a Vitest config as the default.
+	[/^vitest(?:\.[\w-]+)?\.(?:config|workspace|projects)\./, "vitest"],
+	[/^jest(?:\.[\w-]+)?\.config\./, "jest"],
+	[/^playwright(?:\.[\w-]+)?\.config\./, "playwright"],
 ];
 
 async function findRunnerRoots(cwd: string): Promise<RunnerRoot[]> {
 	const fg = (await import("fast-glob")).default;
 	const found = await fg(
-		["**/vitest.{config,workspace,projects}.*", "**/jest.config.*"],
+		[
+			"**/vitest*.{config,workspace,projects}.*",
+			"**/jest*.config.*",
+			"**/playwright*.config.*",
+		],
 		{
 			cwd,
 			onlyFiles: true,
@@ -386,6 +455,26 @@ async function findRunnerRoots(cwd: string): Promise<RunnerRoot[]> {
 	return roots;
 }
 
+const RUNNER_PACKAGES: ReadonlyArray<[string, RunnerRoot["runner"]]> = [
+	["vitest", "vitest"],
+	["jest", "jest"],
+	["@playwright/test", "playwright"],
+];
+
+/** A package that depends on a runner uses it, config file or not. */
+function runnersDeclared(
+	dir: string,
+	manifest: {
+		dependencies?: Record<string, unknown>;
+		devDependencies?: Record<string, unknown>;
+	},
+): RunnerRoot[] {
+	const declared = { ...manifest.dependencies, ...manifest.devDependencies };
+	return RUNNER_PACKAGES.filter(([name]) => name in declared).map(
+		([, runner]) => ({ dir, runner }),
+	);
+}
+
 async function taskRunnerOf(cwd: string): Promise<CommandStyle["taskRunner"]> {
 	const { access } = await import("node:fs/promises");
 	const exists = (file: string): Promise<boolean> =>
@@ -400,15 +489,29 @@ async function taskRunnerOf(cwd: string): Promise<CommandStyle["taskRunner"]> {
 interface ScriptsManifest {
 	name?: string;
 	scripts?: Record<string, string>;
+	dependencies?: Record<string, unknown>;
+	devDependencies?: Record<string, unknown>;
 }
 
-async function readRootPackage(cwd: string): Promise<PackageScripts | null> {
+interface RootPackage {
+	scripts: PackageScripts;
+	runners: RunnerRoot[];
+}
+
+async function readRootPackage(cwd: string): Promise<RootPackage | null> {
 	const { readFile } = await import("node:fs/promises");
 	try {
 		const manifest = JSON.parse(
 			await readFile(path.join(cwd, "package.json"), "utf8"),
 		) as ScriptsManifest;
-		return { name: manifest.name, dir: "", scripts: manifest.scripts ?? {} };
+		return {
+			scripts: {
+				name: manifest.name,
+				dir: "",
+				scripts: manifest.scripts ?? {},
+			},
+			runners: runnersDeclared("", manifest),
+		};
 	} catch {
 		return null;
 	}
@@ -431,7 +534,10 @@ export async function buildVerificationPlan(
 		taskRunner: CommandStyle["taskRunner"];
 	} = { packageManager: manager, taskRunner: runner };
 
-	const packages: PackageScripts[] = root === null ? [] : [root];
+	const packages: PackageScripts[] = root === null ? [] : [root.scripts];
+	// After the configs, so that a config wins over a dependency in the
+	// same directory.
+	const declared: RunnerRoot[] = [...(root?.runners ?? [])];
 	for (const pkg of packageGraph?.packages ?? []) {
 		const dir = path.relative(cwd, pkg.dir).replace(/\\/g, "/");
 		if (dir === "") continue;
@@ -440,6 +546,7 @@ export async function buildVerificationPlan(
 			dir,
 			scripts: pkg.manifest.scripts ?? {},
 		});
+		declared.push(...runnersDeclared(dir, pkg.manifest));
 	}
 
 	return assemblePlan({
@@ -449,7 +556,7 @@ export async function buildVerificationPlan(
 		tests: result.tests,
 		graph: result.graph,
 		packages,
-		runnerRoots,
+		runnerRoots: [...runnerRoots, ...declared],
 		style,
 	});
 }

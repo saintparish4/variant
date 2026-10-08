@@ -59,7 +59,12 @@ function capped(rows: readonly string[], noun: string): string[] {
 	];
 }
 
-const RUNNER_NAME = { vitest: "Vitest", jest: "Jest", unknown: "Tests" };
+const RUNNER_NAME = {
+	vitest: "Vitest",
+	jest: "Jest",
+	playwright: "Playwright",
+	unknown: "Tests",
+};
 
 function changeRows(plan: VerificationPlan): string[] {
 	return plan.changes.map((change) => {
@@ -71,7 +76,13 @@ function changeRows(plan: VerificationPlan): string[] {
 			reach.push(`into ${inline(change.crossesInto)}`);
 		}
 		reach.push(count(change.tests, "test file"));
-		return `| **${change.risk}** | ${code(change.filePath)} | ${what} | ${reach.join(", ")} | ${change.reason} |`;
+		// Nothing imports a lockfile or a workflow. "0 files" there would read
+		// as a finding when it is only what such a file is.
+		const reached =
+			change.dependents === 0 && change.tests === 0 && change.risk !== "high"
+				? "—"
+				: reach.join(", ");
+		return `| **${change.risk}** | ${code(change.filePath)} | ${what} | ${reached} | ${change.reason} |`;
 	});
 }
 
@@ -177,7 +188,13 @@ export function formatPrReportMarkdown(report: PrReportResult): string {
 		lines.push(
 			plan.tests.total === 0
 				? "_With no test files found, nothing here is verified by a test._"
-				: "_Every changed file is reached by at least one test in the plan._",
+				: `_Every changed source file is reached by at least one test in the plan.${
+						plan.changes.some(
+							(change) => change.tests === 0 && change.risk !== "none",
+						)
+							? " Configuration and housekeeping files are not counted: no test imports them."
+							: ""
+					}_`,
 			"",
 		);
 	} else {

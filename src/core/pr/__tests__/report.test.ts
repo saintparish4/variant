@@ -194,13 +194,53 @@ describe("formatPrReportMarkdown", () => {
 		);
 	});
 
+	// pyra: "every changed file is reached by a test" sat under a table
+	// showing 0 test files for eight of nine rows.
+	it("claims only source files are reached, and leaves reach blank where it means nothing", () => {
+		const text = markdown({
+			changes: [
+				change(),
+				change({
+					filePath: "pnpm-lock.yaml",
+					classification: "unanalyzed",
+					dependents: 0,
+					tests: 0,
+					risk: "medium",
+					reason: "configuration every test and build runs under",
+				}),
+			],
+		});
+
+		expect(text).toContain(
+			"_Every changed source file is reached by at least one test in the plan. Configuration and housekeeping files are not counted: no test imports them._",
+		);
+		expect(text).toContain("| `pnpm-lock.yaml` | unanalyzed | — |");
+		expect(text).not.toContain("0 files, 0 test files");
+	});
+
+	it("names Playwright as the runner of end-to-end specs", () => {
+		expect(
+			markdown({
+				tests: {
+					selected: 1,
+					total: 4,
+					all: false,
+					runs: [
+						{ runner: "playwright", dir: "apps/web", files: ["e2e/a.spec.ts"] },
+					],
+					why: {},
+				},
+			}),
+		).toContain("- Playwright in `apps/web`: 1 file");
+	});
+
 	it("does not call a change verified when there are no tests at all", () => {
 		const text = markdown({
 			tests: { selected: 0, total: 0, all: false, runs: [], why: {} },
 		});
 
 		expect(text).toContain("variant found no TypeScript test files here.");
-		expect(text).not.toContain("Every changed file is reached");
+		expect(text).not.toContain("is reached by at least one test");
 	});
 
 	it("never presents graph resolution as a safety figure", () => {

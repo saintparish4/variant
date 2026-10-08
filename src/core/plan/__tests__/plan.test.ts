@@ -200,6 +200,93 @@ describe("the verification plan", () => {
 		]);
 	});
 
+	// pyra: two Playwright specs appeared as "Tests: 2 files", and two
+	// integration tests under Vitest with no way to run them.
+	it("groups end-to-end specs under Playwright, with the script that runs them", () => {
+		const graph = graphOf({
+			"apps/web/src/page.ts": [],
+			"apps/web/e2e/login.spec.ts": ["../src/page.js"],
+			"apps/web/src/page.test.ts": ["./page.js"],
+		});
+		const radius = assembleBlastRadius(
+			"main",
+			[changed("apps/web/src/page.ts", "internal")],
+			graph,
+		);
+		const plan = assemblePlan({
+			baseRef: "main",
+			baseLabel: "main",
+			radius,
+			tests: computeTestImpact(radius, graph, {
+				isTestFile: (file) => /\.(test|spec)\.ts$/.test(file),
+			}),
+			graph,
+			packages: [
+				{
+					name: "@x/web",
+					dir: "apps/web",
+					scripts: { test: "vitest run", "test:e2e": "playwright test" },
+				},
+			],
+			runnerRoots: [
+				{ dir: "apps/web", runner: "vitest" },
+				{ dir: "apps/web", runner: "playwright" },
+			],
+			style: { packageManager: "pnpm", taskRunner: null },
+		});
+
+		expect(plan.tests.runs).toEqual([
+			{
+				runner: "playwright",
+				dir: "apps/web",
+				files: ["apps/web/e2e/login.spec.ts"],
+				command: "pnpm --filter @x/web run test:e2e",
+			},
+			{
+				runner: "vitest",
+				dir: "apps/web",
+				files: ["apps/web/src/page.test.ts"],
+				command: "pnpm --filter @x/web run test",
+			},
+		]);
+	});
+
+	it("finds the script that runs a package's tests when it is not called test", () => {
+		const graph = graphOf({
+			"apps/api/src/db.ts": [],
+			"apps/api/src/db.integration.test.ts": ["./db.js"],
+		});
+		const radius = assembleBlastRadius(
+			"main",
+			[changed("apps/api/src/db.ts", "internal")],
+			graph,
+		);
+		const plan = assemblePlan({
+			baseRef: "main",
+			baseLabel: "main",
+			radius,
+			tests: computeTestImpact(radius, graph),
+			graph,
+			packages: [
+				{
+					name: "@x/api",
+					dir: "apps/api",
+					scripts: {
+						dev: "tsx watch src",
+						"test:integration":
+							"vitest run --config vitest.integration.config.ts",
+					},
+				},
+			],
+			runnerRoots: [{ dir: "apps/api", runner: "vitest" }],
+			style: { packageManager: "pnpm", taskRunner: null },
+		});
+
+		expect(plan.tests.runs[0]?.command).toBe(
+			"pnpm --filter @x/api run test:integration",
+		);
+	});
+
 	it("says why each test is in the plan, as an import chain", () => {
 		const plan = planFor([changed("packages/math/src/add.ts", "internal")]);
 

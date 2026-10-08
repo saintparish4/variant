@@ -70,15 +70,37 @@ export function commandFor(
 	return `npm run ${script} --workspace ${pkg.name}`;
 }
 
+/**
+ * A root script that hands the work to every package: a task runner, or a
+ * package manager told to recurse.
+ */
+const FANS_OUT =
+	/\b(?:turbo|nx|lerna)\b|\s(?:-r|--recursive|--filter|--workspaces|-ws)\b|\bworkspaces\s+foreach\b/;
+
 export function planChecks(
 	packages: readonly PackageScripts[],
 	style: CommandStyle,
+	options: {
+		/**
+		 * True when `packages` is the whole workspace. A root script that
+		 * already runs every package's then stands for all of them.
+		 */
+		everyPackage?: boolean;
+	} = {},
 ): PlannedCheck[] {
+	const covered = new Set<CheckKind>();
 	const checks: PlannedCheck[] = [];
 	for (const pkg of packages) {
 		for (const script of Object.keys(pkg.scripts).sort()) {
 			const kind = KINDS.find(([, pattern]) => pattern.test(script))?.[0];
 			if (kind === undefined) continue;
+			if (
+				options.everyPackage === true &&
+				pkg.dir === "" &&
+				FANS_OUT.test(` ${pkg.scripts[script] ?? ""}`)
+			) {
+				covered.add(kind);
+			}
 			checks.push({
 				kind,
 				package: pkg.name ?? pkg.dir,
@@ -88,10 +110,12 @@ export function planChecks(
 			});
 		}
 	}
-	return checks.sort(
-		(a, b) =>
-			ORDER[a.kind] - ORDER[b.kind] ||
-			a.dir.localeCompare(b.dir) ||
-			a.script.localeCompare(b.script),
-	);
+	return checks
+		.filter((check) => check.dir === "" || !covered.has(check.kind))
+		.sort(
+			(a, b) =>
+				ORDER[a.kind] - ORDER[b.kind] ||
+				a.dir.localeCompare(b.dir) ||
+				a.script.localeCompare(b.script),
+		);
 }
