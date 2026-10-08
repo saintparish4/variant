@@ -144,6 +144,22 @@ describe("planSetup and applySetup", () => {
 		expect(again.filter((action) => action.kind === "write")).toEqual([]);
 	});
 
+	// pyra: `VARIANT_SHADOW=0 pnpm test` left the adapter on, because Turbo
+	// never handed the variable to the test task.
+	it("says that Turborepo has to be told to pass the adapter's variables on", async () => {
+		const dir = pnpmWorkspace();
+
+		const actions = await planSetup(dir, await discoverRepository(dir));
+
+		expect(
+			actions.some(
+				(action) =>
+					action.kind === "note" &&
+					action.lines.some((line) => line.includes("globalPassThroughEnv")),
+			),
+		).toBe(true);
+	});
+
 	it("keeps the files it wrote when the install fails, and says what to run", async () => {
 		const dir = pnpmWorkspace();
 		const actions = await planSetup(dir, await discoverRepository(dir));

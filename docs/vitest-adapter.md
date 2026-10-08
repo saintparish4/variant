@@ -95,6 +95,23 @@ and a line of output nobody asked for.
 | `variant({ silent: true })` | Record without printing |
 | `variant({ timeoutMs: 60000 })` | Wait longer for the prediction once the tests end |
 
+Under Turborepo these variables reach a test task only if `turbo.json` lets
+them through: its strict environment mode, the default, drops what it has not
+been told about, so `VARIANT_SHADOW=0 turbo run test` leaves the adapter on.
+
+```json
+{ "globalPassThroughEnv": ["VARIANT_*"] }
+```
+
+## The first runs after setup
+
+The pull request that adds variant changes the lockfile, `package.json` and
+the test configs. Each of those selects every test, so every run on that
+branch reads `selected all N test files, because configuration changed`. That
+is the right answer for such a change, and it says nothing yet about how well
+variant narrows. The first narrowed predictions come with the first pull
+requests after the setup is merged.
+
 ## What it compares against
 
 No flags are needed. The base is worked out the way `variant impact` does it:

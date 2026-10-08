@@ -386,6 +386,28 @@ describe("startShadow", () => {
 		expect(second.reconciled).toHaveLength(1);
 	});
 
+	// An outcome is read by the other test processes of the same run and by
+	// nobody after that, so it has no reason to outlive the run by a day.
+	it("clears out an outcome once no process of its run could still read it", async () => {
+		const root = tempRoot();
+		const pending = path.join(root, ".variant/history/pending");
+		mkdirSync(pending, { recursive: true });
+		const finished = path.join(pending, `${"c".repeat(40)}.json`);
+		const recent = path.join(pending, `${"d".repeat(40)}.json`);
+		writeFileSync(finished, "{}");
+		writeFileSync(recent, "{}");
+		const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+		const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
+		utimesSync(finished, twoHoursAgo, twoHoursAgo);
+		utimesSync(recent, fiveMinutesAgo, fiveMinutesAgo);
+
+		await startShadow("/r", {}, harness(root).deps).finish(RESULTS);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(existsSync(finished)).toBe(false);
+		expect(existsSync(recent)).toBe(true);
+	});
+
 	it("clears out outcomes left by runs long past", async () => {
 		const root = tempRoot();
 		const pending = path.join(root, ".variant/history/pending");

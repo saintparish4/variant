@@ -97,7 +97,11 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 /** A lock this old was left by a process that died; see `acquire`. */
 const STALE_LOCK_MS = 10 * 60_000;
 const POLL_MS = 200;
-const KEEP_OUTCOME_MS = 24 * 60 * 60_000;
+/**
+ * Well past the window in which another process of the same run reuses an
+ * outcome (`STALE_LOCK_MS`), and no longer: nothing reads one after that.
+ */
+const KEEP_OUTCOME_MS = 60 * 60_000;
 
 const DISABLED: ShadowRun = { finish: async () => {}, cancel: () => {} };
 

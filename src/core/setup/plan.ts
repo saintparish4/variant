@@ -175,6 +175,15 @@ export async function planSetup(
 			],
 		});
 	}
+	if (observed && facts.taskRunner === "turborepo") {
+		actions.push({
+			kind: "note",
+			lines: [
+				"Turborepo passes a task only the environment variables it is told about.",
+				'To switch the adapter with VARIANT_SHADOW, or point it with VARIANT_BASE, add "VARIANT_*" to `globalPassThroughEnv` in turbo.json.',
+			],
+		});
+	}
 	if (
 		!observed &&
 		facts.viteConfigs.length === 0 &&
