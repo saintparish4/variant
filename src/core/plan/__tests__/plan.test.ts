@@ -43,7 +43,7 @@ const PACKAGES = [
 	{
 		name: "@x/math",
 		dir: "packages/math",
-		scripts: { build: "tsup", typecheck: "tsc" },
+		scripts: { build: "tsup", typecheck: "tsc", test: "vitest run" },
 	},
 	{
 		name: "@x/web",
@@ -190,6 +190,7 @@ describe("the verification plan", () => {
 				runner: "vitest",
 				dir: "packages/math",
 				files: ["packages/math/src/add.test.ts"],
+				command: "pnpm --filter @x/math run test",
 			},
 			{
 				runner: "jest",

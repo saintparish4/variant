@@ -49,7 +49,8 @@ const ORDER: Record<CheckKind, number> = {
 	e2e: 3,
 };
 
-function commandFor(
+/** How this repository runs one script of one package. */
+export function commandFor(
 	pkg: PackageScripts,
 	script: string,
 	style: CommandStyle,

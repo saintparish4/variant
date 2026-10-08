@@ -88,8 +88,16 @@ function testLines(plan: VerificationPlan): string[] {
 	];
 	for (const run of tests.runs) {
 		const where = run.dir === "" ? "" : ` in ${code(run.dir)}`;
+		const how =
+			run.command === undefined ? "" : `, run by ${code(run.command)}`;
 		lines.push(
-			`- ${RUNNER_NAME[run.runner]}${where}: ${count(run.files.length, "file")}`,
+			`- ${RUNNER_NAME[run.runner]}${where}: ${count(run.files.length, "file")}${how}`,
+		);
+	}
+	if (tests.runs.some((run) => run.runner === "jest")) {
+		lines.push(
+			"",
+			"variant has no Jest adapter yet, so Jest runs are not compared with this plan.",
 		);
 	}
 	if (tests.runs.length > 0) lines.push("");

@@ -32,7 +32,7 @@ import type { Resolution } from "../semantic/verdict.js";
 import type { PackageManagerName } from "../setup/discover.js";
 import { packageManagerOf } from "../setup/discover.js";
 import type { CommandStyle, PackageScripts, PlannedCheck } from "./checks.js";
-import { planChecks } from "./checks.js";
+import { commandFor, planChecks } from "./checks.js";
 
 export type Risk = "high" | "medium" | "low" | "unrated" | "none";
 
@@ -64,6 +64,11 @@ export interface PlannedTests {
 	/** Directory of the config these files run under; "" for the root. */
 	dir: string;
 	files: string[];
+	/**
+	 * The `test` script of the package these files are in, as a command. It
+	 * runs that package's whole suite, not only these files.
+	 */
+	command?: string;
 }
 
 export interface Unverified {
@@ -274,10 +279,16 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 		const chain = chainFrom(test);
 		if (chain !== null) why[test] = chain;
 		const root = nearest(test, inputs.runnerRoots);
+		const owner = nearest(test, inputs.packages);
+		const command =
+			owner !== undefined && "test" in owner.scripts
+				? commandFor(owner, "test", inputs.style)
+				: undefined;
 		const run: PlannedTests = {
 			runner: root?.runner ?? "unknown",
 			dir: root?.dir ?? "",
 			files: [],
+			...(command !== undefined && { command }),
 		};
 		const key = `${run.runner}\0${run.dir}`;
 		const existing = runs.get(key) ?? run;

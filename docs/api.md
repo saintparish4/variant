@@ -423,6 +423,8 @@ type VerificationPlan = {
 			/** Directory of the config the files run under; "" for the root. */
 			dir: string;
 			files: string[];
+			/** The `test` script of the files' package. It runs the whole suite. */
+			command?: string;
 		}[];
 		/** Test file -> import chain from it to the nearest changed file. */
 		why: Record<string, string[]>;
@@ -528,6 +530,8 @@ Each line is the import chain from a test to a file this change touches.
   workflow find and update its own comment.
 - Tables and lists stop at 25 rows and say how many were left out; the JSON
   has all of them.
+- A group of tests run by Jest is followed by a line saying that variant has
+  no Jest adapter yet, so those runs are not compared with the plan.
 - **Wider than the import graph** appears when a change selects every test
   (configuration) or reaches every importer of a file regardless of the names
   it takes.

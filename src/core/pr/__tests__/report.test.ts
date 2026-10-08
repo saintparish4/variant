@@ -99,6 +99,47 @@ describe("formatPrReportMarkdown", () => {
 		expect(text).toContain("- `src/math.test.ts` → `src/math.ts`");
 	});
 
+	it("gives the command that runs each group of tests", () => {
+		expect(
+			markdown({
+				tests: {
+					selected: 1,
+					total: 4,
+					all: false,
+					runs: [
+						{
+							runner: "vitest",
+							dir: "web",
+							files: ["web/a.test.ts"],
+							command: "bun run --filter web test",
+						},
+					],
+					why: {},
+				},
+			}),
+		).toContain(
+			"- Vitest in `web`: 1 file, run by `bun run --filter web test`",
+		);
+	});
+
+	// `init` says there is no Jest adapter; the report is what reviewers read.
+	it("says Jest runs are not compared with the plan", () => {
+		const text = markdown({
+			tests: {
+				selected: 1,
+				total: 4,
+				all: false,
+				runs: [{ runner: "jest", dir: "web", files: ["web/a.test.ts"] }],
+				why: {},
+			},
+		});
+
+		expect(text).toContain(
+			"variant has no Jest adapter yet, so Jest runs are not compared with this plan.",
+		);
+		expect(markdown()).not.toContain("no Jest adapter");
+	});
+
 	it("says a changed test is in the plan because it changed", () => {
 		expect(
 			markdown({
