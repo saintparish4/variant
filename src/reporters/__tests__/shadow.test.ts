@@ -335,20 +335,52 @@ describe("startShadow", () => {
 
 	it("gives up on a prediction that outlasts the tests by too long", async () => {
 		let cancelled = false;
-		const h = harness(tempRoot());
-		h.deps.predict = () => ({
-			result: new Promise(() => {}),
-			cancel: () => {
-				cancelled = true;
-			},
+		let started: () => void = () => {};
+		const predicting = new Promise<void>((resolve) => {
+			started = resolve;
 		});
+		const h = harness(tempRoot());
+		h.deps.predict = () => {
+			started();
+			return {
+				result: new Promise(() => {}),
+				cancel: () => {
+					cancelled = true;
+				},
+			};
+		};
 
-		await startShadow("/r", { timeoutMs: 20 }, h.deps).finish(RESULTS);
+		const run = startShadow("/r", { timeoutMs: 20 }, h.deps);
+		// The tests end after the prediction began; how long the file system
+		// takes to get there is not what this is about.
+		await predicting;
+		await run.finish(RESULTS);
 
 		expect(cancelled).toBe(true);
 		expect(h.written[0]).toContain(
 			"variant: skipped (the prediction did not finish",
 		);
+	});
+
+	// On a slow file system the run can give up before the prediction has
+	// even started. Started afterwards, it was a child process nobody would
+	// ever stop.
+	it("starts no prediction once the run has given up on it", async () => {
+		const root = tempRoot();
+		const h = harness(root);
+		h.deps.repositoryRoot = async () => {
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			return root;
+		};
+
+		await startShadow("/r", { timeoutMs: 20 }, h.deps).finish(RESULTS);
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		expect(h.predictions).toBe(0);
+		expect(h.written[0]).toContain(
+			"variant: skipped (the prediction did not finish",
+		);
+		expect(existsSync(path.join(root, ".variant/history/pending"))).toBe(false);
 	});
 
 	// One test process per package: every one of them starts the adapter for

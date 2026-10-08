@@ -273,7 +273,9 @@ export function startShadow(
 	} | null> => {
 		const root = await deps.repositoryRoot(cwd);
 		const headSha = await deps.headSha(root);
-		if (headSha === null) return null;
+		// `finish` can give up while these are still being read. A prediction
+		// started after that is a child process nothing will ever stop.
+		if (headSha === null || cancelled) return null;
 		const paths = pendingPaths(root, headSha);
 
 		// In CI the tree does not change during a job, so a prediction another
@@ -287,6 +289,10 @@ export function startShadow(
 		const lock = await acquire(paths.lock, paths.dir, deps.now);
 		if (lock === true) {
 			held = paths.lock;
+			if (cancelled) {
+				await release();
+				return null;
+			}
 			void prune(paths.dir, deps.now);
 			handle = deps.predict(root, headSha);
 			const outcome = await handle.result;
