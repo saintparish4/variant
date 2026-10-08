@@ -401,13 +401,15 @@ type VerificationPlan = {
 		classification: "non-impacting" | "internal" | "breaking" | "unanalyzed";
 		/** Exported names whose shape changed or that were removed. */
 		symbols: string[];
+		/** True when its exports only gained names: a new file, or new exports. */
+		additive: boolean;
 		/** Files importing it, directly or through other files. */
 		dependents: number;
 		/** Packages other than its own that those files are in. */
 		crossesInto: string[];
 		/** Test files that reach it. */
 		tests: number;
-		risk: "high" | "medium" | "low" | "none";
+		risk: "high" | "medium" | "low" | "unrated" | "none";
 		/** The rule that set `risk`, in words. */
 		reason: string;
 	}[];
@@ -458,10 +460,16 @@ value type), `type` for a type-space-only change (interfaces, type aliases), and
 |---|---|
 | `none` | Only comments or formatting changed, or the file is documentation |
 | `medium` | The file configures every test and build (a manifest, a lockfile, a `tsconfig`, a runner config) |
+| `unrated` | Repository housekeeping no test can import: `.github/`, `.husky/`, `.vscode/`, `.gitignore`, `.gitattributes`, `.editorconfig`, a license |
 | `high` | No test reaches the file |
+| `low` | It is a test file |
+| `low` | Its exports only gained names (a new file, or new exports), and a test reaches it |
 | `high` | Its exports changed, and a file in another package imports it |
 | `medium` | Its exports changed; or variant cannot read the file |
 | `low` | Only its implementation changed, and at least one test reaches it |
+
+An `unrated` file still matters; a test plan has nothing to say about it, so it
+is listed and kept out of "not verified".
 
 "Reaches" means imports, directly or through other files. A test that reaches
 a file does not necessarily exercise what changed in it.

@@ -34,13 +34,18 @@ import { packageManagerOf } from "../setup/discover.js";
 import type { CommandStyle, PackageScripts, PlannedCheck } from "./checks.js";
 import { planChecks } from "./checks.js";
 
-export type Risk = "high" | "medium" | "low" | "none";
+export type Risk = "high" | "medium" | "low" | "unrated" | "none";
 
 export interface PlannedChange {
 	filePath: string;
 	classification: ImpactClass;
 	/** Exported names whose shape changed or that were removed. */
 	symbols: string[];
+	/**
+	 * True when the only change to its exports is that there are more of
+	 * them: a new file, or new names in an old one.
+	 */
+	additive: boolean;
 	/** Files that import this one, directly or through other files. */
 	dependents: number;
 	/** Packages other than its own that those files are in. */
@@ -117,8 +122,17 @@ const RISK_ORDER: Record<Risk, number> = {
 	high: 0,
 	medium: 1,
 	low: 2,
-	none: 3,
+	unrated: 3,
+	none: 4,
 };
+
+/**
+ * Files that keep the repository itself running: no test could import one,
+ * so "no test reaches it" would be true of every one of them and say
+ * nothing. A change to them still matters; a test plan cannot speak to it.
+ */
+const HOUSEKEEPING_FILE =
+	/(?:^|\/)(?:\.github|\.vscode|\.husky)\/|(?:^|\/)(?:\.gitignore|\.gitattributes|\.editorconfig|LICENSE[^/]*)$/;
 
 function nearest<T extends { dir: string }>(
 	file: string,
@@ -147,13 +161,13 @@ function reachOf(file: string, graph: ImportGraph): Set<string> {
 }
 
 /**
- * The stated rule. In order: nothing reaches it; its shape changed for
- * another package; its shape changed, or variant could not read it, or it
- * configures every test; only its body changed and a test reaches it.
+ * The stated rule, in order. `docs/api.md` carries it as a table; change one
+ * with the other.
  */
 function riskOf(
 	change: Omit<PlannedChange, "risk" | "reason">,
 	unverified: boolean,
+	isTest: boolean,
 ): Pick<PlannedChange, "risk" | "reason"> {
 	if (change.classification === "non-impacting") {
 		return { risk: "none", reason: "comments or formatting only" };
@@ -167,7 +181,19 @@ function riskOf(
 			reason: "configuration every test and build runs under",
 		};
 	}
+	if (HOUSEKEEPING_FILE.test(change.filePath)) {
+		return {
+			risk: "unrated",
+			reason: "repository housekeeping, which no test can reach",
+		};
+	}
 	if (unverified) return { risk: "high", reason: "no test reaches it" };
+	if (isTest) {
+		return { risk: "low", reason: "a changed test, which the plan runs" };
+	}
+	if (change.additive) {
+		return { risk: "low", reason: "only adds exports, and tests reach it" };
+	}
 	if (change.classification === "breaking" && change.crossesInto.length > 0) {
 		return {
 			risk: "high",
@@ -210,6 +236,10 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 			symbols: impact.impactedSymbols.filter(
 				(name) => !isStarReexportKey(name),
 			),
+			additive:
+				impact.classification === "breaking" &&
+				impact.impactedSymbols.length === 0 &&
+				impact.ungated !== true,
 			dependents: reach.size,
 			crossesInto: [...crossesInto].sort(),
 			tests: reaching,
@@ -222,7 +252,7 @@ export function assemblePlan(inputs: PlanInputs): VerificationPlan {
 			!graph.imports.has(impact.filePath);
 		const unverified =
 			unselected.has(impact.filePath) || (reaching === 0 && !deleted);
-		const scored = riskOf(facts, unverified);
+		const scored = riskOf(facts, unverified, isTest(impact.filePath));
 		if (scored.risk === "high" && unverified) {
 			unverifiedFiles.add(impact.filePath);
 		}

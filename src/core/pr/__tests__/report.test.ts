@@ -8,6 +8,7 @@ function change(overrides: Partial<PlannedChange> = {}): PlannedChange {
 		filePath: "src/math.ts",
 		classification: "internal",
 		symbols: [],
+		additive: false,
 		dependents: 2,
 		crossesInto: [],
 		tests: 1,

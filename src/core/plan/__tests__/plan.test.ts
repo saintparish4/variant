@@ -130,6 +130,58 @@ describe("the verification plan", () => {
 		expect(plan.notVerified).toEqual([]);
 	});
 
+	// A new file, or a file that only gained an export, breaks no importer:
+	// nothing could have been using a name that did not exist.
+	it("rates a file that only gained exports like a body change, not a breaking one", () => {
+		const plan = planFor([changed("packages/math/src/add.ts", "breaking")]);
+
+		expect(plan.changes[0]).toMatchObject({
+			risk: "low",
+			additive: true,
+			reason: "only adds exports, and tests reach it",
+		});
+	});
+
+	it("still rates a changed export as breaking when the file also gained others", () => {
+		const plan = planFor([
+			changed("packages/math/src/index.ts", "breaking", ["add"]),
+		]);
+
+		expect(plan.changes[0]).toMatchObject({ risk: "high", additive: false });
+	});
+
+	it("rates a changed test as a changed test", () => {
+		const plan = planFor([
+			changed("packages/math/src/add.test.ts", "internal"),
+		]);
+
+		expect(plan.changes[0]).toMatchObject({
+			risk: "low",
+			reason: "a changed test, which the plan runs",
+		});
+	});
+
+	// The pull request that adopts variant once opened with `.gitignore`
+	// above the lockfile and every source file.
+	it("leaves repository housekeeping unrated, and out of what is not verified", () => {
+		const plan = planFor([
+			changed(".gitignore", "unanalyzed"),
+			changed(".github/workflows/ci.yml", "unanalyzed"),
+			changed("supabase/migrations/1_add.sql", "unanalyzed"),
+		]);
+
+		expect(
+			plan.changes.map((change) => [change.filePath, change.risk]),
+		).toEqual([
+			["supabase/migrations/1_add.sql", "high"],
+			[".github/workflows/ci.yml", "unrated"],
+			[".gitignore", "unrated"],
+		]);
+		expect(plan.notVerified.map((entry) => entry.filePath)).toEqual([
+			"supabase/migrations/1_add.sql",
+		]);
+	});
+
 	it("groups the selected tests by the runner each one runs under", () => {
 		const plan = planFor([changed("packages/math/src/add.ts", "internal")]);
 

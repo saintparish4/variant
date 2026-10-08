@@ -63,10 +63,9 @@ const RUNNER_NAME = { vitest: "Vitest", jest: "Jest", unknown: "Tests" };
 
 function changeRows(plan: VerificationPlan): string[] {
 	return plan.changes.map((change) => {
+		const kind = change.additive ? "new exports" : change.classification;
 		const what =
-			change.symbols.length > 0
-				? `${change.classification}: ${inline(change.symbols)}`
-				: change.classification;
+			change.symbols.length > 0 ? `${kind}: ${inline(change.symbols)}` : kind;
 		const reach = [count(change.dependents, "file")];
 		if (change.crossesInto.length > 0) {
 			reach.push(`into ${inline(change.crossesInto)}`);
