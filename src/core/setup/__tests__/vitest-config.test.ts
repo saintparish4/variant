@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withAdapter } from "../vitest-config.js";
+import { newConfig, withAdapter } from "../vitest-config.js";
 
 async function edited(
 	source: string,
@@ -13,7 +13,9 @@ async function edited(
 }
 
 describe("withAdapter", () => {
-	it("adds reporters to a config that names none", async () => {
+	// Setting `reporters` replaces Vitest's defaults, one of which exists only
+	// on GitHub Actions. `variantReporters()` carries them along.
+	it("keeps Vitest's default reporters in a config that names none", async () => {
 		expect(
 			await edited(
 				[
@@ -30,11 +32,11 @@ describe("withAdapter", () => {
 		).toBe(
 			[
 				'import { defineConfig } from "vitest/config";',
-				'import variant from "@blzsky/variant/vitest";',
+				'import { variantReporters } from "@blzsky/variant/vitest";',
 				"",
 				"export default defineConfig({",
 				"\ttest: {",
-				'\t\treporters: ["default", variant()],',
+				"\t\treporters: variantReporters(),",
 				"\t\tglobals: true,",
 				"\t},",
 				"});",
@@ -64,9 +66,7 @@ describe("withAdapter", () => {
 				"});",
 			].join("\n"),
 		);
-		expect(text).toMatch(
-			/test: \{\s+reporters: \["default", variant\(\)\],?\s+\}/,
-		);
+		expect(text).toMatch(/test: \{\s+reporters: variantReporters\(\),?\s+\}/);
 	});
 
 	it("follows a config through mergeConfig, a variable and a function", async () => {
@@ -76,15 +76,13 @@ describe("withAdapter", () => {
 			'import { defineConfig } from "vitest/config";\nexport default defineConfig(() => ({ test: { globals: true } }));',
 			"export default { test: { globals: true } };",
 		]) {
-			expect(await edited(source)).toContain(
-				'reporters: ["default", variant()]',
-			);
+			expect(await edited(source)).toContain("reporters: variantReporters()");
 		}
 	});
 
 	it("keeps single quotes in a config written with them", async () => {
 		const text = await edited(
-			"import { defineConfig } from 'vitest/config';\nexport default defineConfig({ test: { globals: true } });",
+			"import { defineConfig } from 'vitest/config';\nexport default defineConfig({ test: { reporters: ['default'] } });",
 		);
 		expect(text).toContain("import variant from '@blzsky/variant/vitest';");
 		expect(text).toContain("reporters: ['default', variant()]");
@@ -92,7 +90,7 @@ describe("withAdapter", () => {
 
 	it("uses the named export when the config already has a `variant`", async () => {
 		const text = await edited(
-			'import { defineConfig } from "vitest/config";\nconst variant = process.env.VARIANT;\nexport default defineConfig({ test: { name: variant } });',
+			'import { defineConfig } from "vitest/config";\nconst variant = process.env.VARIANT;\nexport default defineConfig({ test: { name: variant, reporters: ["default"] } });',
 		);
 		expect(text).toContain(
 			'import { variantReporter } from "@blzsky/variant/vitest";',
@@ -133,5 +131,16 @@ describe("withAdapter", () => {
 	])("leaves %s alone and says why", async (_, source, fileName) => {
 		const result = await withAdapter(source, fileName);
 		expect(result.kind).toBe("manual");
+	});
+});
+
+describe("newConfig", () => {
+	it("sets the reporters and nothing else, and reads as already set up", async () => {
+		expect(newConfig()).toBe(
+			'import { variantReporters } from "@blzsky/variant/vitest";\n\nexport default {\n\ttest: {\n\t\treporters: variantReporters(),\n\t},\n};\n',
+		);
+		expect(await withAdapter(newConfig(), "vitest.config.ts")).toEqual({
+			kind: "present",
+		});
 	});
 });

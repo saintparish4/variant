@@ -8,19 +8,42 @@ Not in a published release yet.
 
 ## Setup
 
-`variant init` does all of this for you and shows each change first. By hand:
+`variant init` does all of this for you and shows each change first. By hand,
+in a config that sets no `reporters` of its own:
 
 ```ts
 // vitest.config.ts
 import { defineConfig } from "vitest/config";
+import { variantReporters } from "@blzsky/variant/vitest";
+
+export default defineConfig({
+	test: {
+		reporters: variantReporters(),
+	},
+});
+```
+
+`variantReporters()` is Vitest's own default reporters with the adapter after
+them. It matters because setting `reporters` replaces the defaults, and one of
+them, the reporter that annotates failures on GitHub Actions, is only added
+when you set none.
+
+In a config that already lists reporters, add the adapter to the list:
+
+```ts
 import variant from "@blzsky/variant/vitest";
 
 export default defineConfig({
 	test: {
-		reporters: ["default", variant()],
+		reporters: ["default", "junit", variant()],
 	},
 });
 ```
+
+A package that runs Vitest with no config file needs one for the adapter to be
+in; `init` creates it with the `reporters` line and nothing else. A
+`--reporter` flag on the command line replaces the config's reporters, the
+adapter included, so a test script that passes one has to drop it.
 
 Add `.variant/` to `.gitignore`. In CI, check out with `fetch-depth: 0`, so the
 commit to compare against is there.

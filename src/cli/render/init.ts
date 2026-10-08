@@ -36,7 +36,11 @@ export function renderFacts(
 				]),
 		facts.vitestConfigs.length > 0
 			? found(`Vitest detected (${facts.vitestConfigs.join(", ")})`)
-			: absent("no Vitest config at the root or in a workspace package"),
+			: facts.vitestWithoutConfig.length + facts.viteConfigs.length > 0
+				? found(
+						`Vitest detected, with no Vitest config (${[...facts.vitestWithoutConfig.map((dir) => dir || "the root"), ...facts.viteConfigs].join(", ")})`,
+					)
+				: absent("no Vitest found at the root or in a workspace package"),
 		...(facts.jestConfigs.length > 0 ? [found("Jest detected")] : []),
 		...(facts.playwrightConfigs.length > 0
 			? [found("Playwright detected")]
@@ -80,8 +84,11 @@ export function renderPlan(
 				`  ${action.reason}`,
 			);
 			if (action.before === null) {
-				const length = action.after.trimEnd().split("\n").length;
-				lines(printer, `  ${green("+")} ${plural(length, "line")}`);
+				// In full: a file nobody has seen cannot be agreed to by its
+				// line count.
+				for (const line of action.after.trimEnd().split("\n")) {
+					lines(printer, green(`  + ${line}`));
+				}
 			} else {
 				for (const line of renderDiff(action.before, action.after)) {
 					lines(
@@ -116,9 +123,14 @@ export function renderApplied(
 			`The install did not finish (${result.installError}). Run it yourself: ${install.command.join(" ")}`,
 		);
 	}
+	const unchecked = actions.some(
+		(action) => action.kind === "note" && action.gap === true,
+	);
 	lines(
 		printer,
 		"",
-		"variant is configured. Your test command and your pull requests are all you need from here.",
+		unchecked
+			? "The pull-request report is set up. Test runs are not checked yet: see the note above."
+			: "variant is configured. Your test command and your pull requests are all you need from here.",
 	);
 }

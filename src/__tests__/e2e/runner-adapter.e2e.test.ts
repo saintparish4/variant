@@ -34,6 +34,14 @@ function write(cwd: string, files: Record<string, string>): void {
 const CONFIG =
 	'import variant from "@blzsky/variant/vitest";\nexport default { test: { globals: true, reporters: ["default", variant()] } };\n';
 
+/**
+ * The whole config `variant init` writes for a package that runs Vitest
+ * without one. Kept as text here on purpose: this is the file a user ends up
+ * with, and the test is that a real run accepts it.
+ */
+const CREATED_CONFIG =
+	'import { variantReporters } from "@blzsky/variant/vitest";\n\nexport default {\n\ttest: {\n\t\treporters: variantReporters(),\n\t},\n};\n';
+
 /** Makes `@blzsky/variant` resolve to this checkout, as an install would. */
 function linkVariant(cwd: string): void {
 	const scope = path.join(cwd, "node_modules/@blzsky");
@@ -68,17 +76,19 @@ function runTests(cwd: string, env: Record<string, string>) {
  */
 async function repoWithFailingChange(
 	manifest: Record<string, unknown>,
+	config: string = CONFIG,
 ): Promise<string> {
 	const cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-adapter-"));
 	write(cwd, {
 		".gitignore": ".variant/\nnode_modules\n",
 		"package.json": JSON.stringify(manifest),
-		"vitest.config.ts": CONFIG,
+		"vitest.config.ts": config,
 		"src/math.ts":
 			"export function add(a: number, b: number): number { return a + b; }\n",
 		"src/math.test.ts":
-			'import { add } from "./math";\ntest("adds", () => { expect(add(1, 2)).toBe(3); });\n',
-		"src/other.test.ts": 'test("holds", () => { expect(1).toBe(1); });\n',
+			'import { expect, test } from "vitest";\nimport { add } from "./math";\ntest("adds", () => { expect(add(1, 2)).toBe(3); });\n',
+		"src/other.test.ts":
+			'import { expect, test } from "vitest";\ntest("holds", () => { expect(1).toBe(1); });\n',
 	});
 	await git(cwd, "init", "-q", "-b", "main");
 	await git(cwd, "add", "-A");
@@ -171,6 +181,42 @@ describe("E2E: the Vitest adapter in an ES-module package", () => {
 		expect(result.stdout).toContain(
 			"variant: predicted 1 of 2 test files (high). 1 failed, and it was predicted.",
 		);
+	});
+});
+
+describe("E2E: the Vitest adapter in the config `init` creates", () => {
+	let cwd: string;
+
+	beforeAll(async () => {
+		cwd = await repoWithFailingChange({ name: "app" }, CREATED_CONFIG);
+	});
+
+	afterAll(() => {
+		try {
+			rmSync(cwd, { recursive: true, force: true });
+		} catch {
+			// Windows holds handles on a temp dir briefly after a child exits.
+		}
+	});
+
+	it("runs the suite as before and adds the variant line", async () => {
+		const result = await runTests(cwd, { CI: "true" });
+
+		expect(result.exitCode).toBe(1);
+		expect(result.stdout).toContain("1 failed | 1 passed");
+		expect(result.stdout).toContain(
+			"variant: predicted 1 of 2 test files (high). 1 failed, and it was predicted.",
+		);
+	});
+
+	it("keeps Vitest's GitHub Actions annotations", async () => {
+		const result = await runTests(cwd, {
+			CI: "true",
+			GITHUB_ACTIONS: "true",
+			VARIANT_SHADOW: "0",
+		});
+
+		expect(result.stdout).toContain("::error");
 	});
 });
 

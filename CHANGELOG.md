@@ -91,7 +91,14 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   history a prediction needs, and writing a workflow that comments on pull
   requests. Nothing is changed until you agree (`--yes` where there is no
   terminal, `--dry-run` to only look). A config or workflow it cannot edit
-  with confidence is left as it is, with the lines to add by hand.
+  with confidence is left as it is, with the lines to add by hand. A package
+  that runs Vitest with no config file gets one that sets the reporters and
+  nothing else; a repository that only runs Jest is told there is no adapter
+  for it yet, and its test workflow is not touched.
+- **`variantReporters()`**, exported from `@blzsky/variant/vitest`: Vitest's
+  default reporters with the adapter after them, for a config that sets none.
+  Setting `reporters` replaces the defaults, including the one that annotates
+  failures on GitHub Actions.
 - **A Vitest adapter: `@blzsky/variant/vitest`.** One line in the Vitest
   config, and a normal test run in CI predicts alongside the tests, compares
   the failures with the prediction when they end, prints one line and records

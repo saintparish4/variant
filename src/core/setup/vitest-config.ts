@@ -91,6 +91,17 @@ function addImport(file: SourceFile, name: string, isDefault: boolean): void {
 	});
 }
 
+/** Vitest's defaults plus the adapter; see `variantReporters`. */
+const WITH_DEFAULTS = "variantReporters";
+
+/**
+ * The config for a package that runs Vitest with none. It sets nothing but
+ * the reporters, so the run is otherwise the one the package had.
+ */
+export function newConfig(): string {
+	return `import { ${WITH_DEFAULTS} } from "${ADAPTER_MODULE}";\n\nexport default {\n\ttest: {\n\t\treporters: ${WITH_DEFAULTS}(),\n\t},\n};\n`;
+}
+
 export async function withAdapter(
 	source: string,
 	fileName: string,
@@ -131,9 +142,6 @@ export async function withAdapter(
 	// its own and gets the named export.
 	const clash = file.getLocals().some((local) => local.getName() === "variant");
 	const name = clash ? "variantReporter" : "variant";
-	const quote = /from\s+'/.test(source) ? "'" : '"';
-	const entry = `${name}()`;
-	const reporters = `[${quote}default${quote}, ${entry}]`;
 
 	const test = objectProperty(config, "test", tsm);
 	if (test === "unreadable") {
@@ -142,40 +150,46 @@ export async function withAdapter(
 			reason: "its `test` option is not written inline",
 		};
 	}
+	// A config naming no reporters runs with Vitest's defaults, and has to
+	// keep them: see `variantReporters`.
 	if (test === undefined) {
 		config.addPropertyAssignment({
 			name: "test",
 			initializer: (writer) =>
-				writer.block(() => writer.write(`reporters: ${reporters},`)),
+				writer.block(() => writer.write(`reporters: ${WITH_DEFAULTS}(),`)),
 		});
-	} else if (!tsm.Node.isObjectLiteralExpression(test)) {
+		addImport(file, WITH_DEFAULTS, false);
+		return { kind: "edited", text: file.getFullText() };
+	}
+	if (!tsm.Node.isObjectLiteralExpression(test)) {
 		return {
 			kind: "manual",
 			reason: "its `test` option is not an object literal",
 		};
-	} else {
-		const existing = objectProperty(test, "reporters", tsm);
-		if (existing === "unreadable") {
-			return {
-				kind: "manual",
-				reason: "its `reporters` are not written inline",
-			};
-		}
-		if (existing === undefined) {
-			test.insertPropertyAssignment(0, {
-				name: "reporters",
-				initializer: reporters,
-			});
-		} else if (tsm.Node.isArrayLiteralExpression(existing)) {
-			(existing as ArrayLiteralExpression).addElement(entry);
-		} else {
-			return {
-				kind: "manual",
-				reason: "its `reporters` option is not an array literal",
-			};
-		}
 	}
 
+	const existing = objectProperty(test, "reporters", tsm);
+	if (existing === "unreadable") {
+		return {
+			kind: "manual",
+			reason: "its `reporters` are not written inline",
+		};
+	}
+	if (existing === undefined) {
+		test.insertPropertyAssignment(0, {
+			name: "reporters",
+			initializer: `${WITH_DEFAULTS}()`,
+		});
+		addImport(file, WITH_DEFAULTS, false);
+		return { kind: "edited", text: file.getFullText() };
+	}
+	if (!tsm.Node.isArrayLiteralExpression(existing)) {
+		return {
+			kind: "manual",
+			reason: "its `reporters` option is not an array literal",
+		};
+	}
+	(existing as ArrayLiteralExpression).addElement(`${name}()`);
 	addImport(file, name, !clash);
 	return { kind: "edited", text: file.getFullText() };
 }
@@ -188,7 +202,8 @@ function extensionOf(fileName: string): string {
 export function manualInstructions(file: string): string[] {
 	return [
 		`Add the adapter to ${file} yourself:`,
-		`  import variant from "${ADAPTER_MODULE}";`,
-		'  test: { reporters: ["default", variant()] }',
+		`  import { ${WITH_DEFAULTS} } from "${ADAPTER_MODULE}";`,
+		`  test: { reporters: ${WITH_DEFAULTS}() }`,
+		"If the config already lists reporters, import the default export as `variant` and add `variant()` to that list instead.",
 	];
 }

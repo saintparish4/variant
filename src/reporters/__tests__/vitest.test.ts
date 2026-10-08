@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TestModule, Vitest } from "vitest/node";
 import type { FileResult, ShadowDeps } from "../shadow.js";
-import { variantReporter } from "../vitest.js";
+import { variantReporter, variantReporters } from "../vitest.js";
 
 function fakeVitest(watch: boolean): Vitest {
 	return {
@@ -80,5 +80,31 @@ describe("the Vitest adapter", () => {
 		await reporter.onTestRunEnd?.([], [], "interrupted");
 
 		expect(record.reconciled).toEqual([]);
+	});
+});
+
+describe("variantReporters", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("is Vitest's default reporter and the adapter", () => {
+		vi.stubEnv("GITHUB_ACTIONS", "");
+		const reporters = variantReporters();
+
+		expect(reporters).toHaveLength(2);
+		expect(reporters[0]).toBe("default");
+		expect(reporters[1]).toHaveProperty("onTestRunEnd");
+	});
+
+	// Vitest adds this one itself only when no reporters are set, so a config
+	// that sets them has to bring it along or lose its annotations.
+	it("keeps the annotations Vitest adds by default on GitHub Actions", () => {
+		vi.stubEnv("GITHUB_ACTIONS", "true");
+
+		expect(variantReporters().slice(0, 2)).toEqual([
+			"default",
+			"github-actions",
+		]);
 	});
 });

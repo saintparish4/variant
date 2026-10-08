@@ -8,8 +8,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { PackageManagerName, RepositoryFacts } from "./discover.js";
-import { manualInstructions, withAdapter } from "./vitest-config.js";
-import { pullRequestWorkflow, withFullHistory } from "./workflow.js";
+import { manualInstructions, newConfig, withAdapter } from "./vitest-config.js";
+import {
+	pullRequestWorkflow,
+	withFullHistory,
+	workflowStyle,
+} from "./workflow.js";
 
 export type SetupAction =
 	/** Run the package manager. */
@@ -22,8 +26,11 @@ export type SetupAction =
 			after: string;
 			reason: string;
 	  }
-	/** Something the user has to know or do; nothing is changed. */
-	| { kind: "note"; lines: string[] };
+	/**
+	 * Something the user has to know or do; nothing is changed. `gap` marks a
+	 * note saying that test runs are not being checked.
+	 */
+	| { kind: "note"; lines: string[]; gap?: true };
 
 export interface PlanOptions {
 	/** What to install; a tarball path or a version, for an unreleased build. */
@@ -95,11 +102,18 @@ export async function planSetup(
 		];
 	}
 
+	// Whether any test run will load the adapter once this is applied. Without
+	// one, nothing `init` says or does may assume it.
+	const observed =
+		facts.vitestConfigs.length > 0 || facts.vitestWithoutConfig.length > 0;
+
 	if (!facts.installed && options.install !== false) {
 		actions.push({
 			kind: "install",
 			command: installCommand(facts, options.packageSpec),
-			reason: "the adapter is imported from your test config",
+			reason: observed
+				? "the adapter is imported from your test config"
+				: "the pull-request workflow runs it",
 		});
 	} else if (!facts.installed) {
 		actions.push({
@@ -132,11 +146,45 @@ export async function planSetup(
 			});
 		}
 	}
-	if (facts.vitestConfigs.length === 0 && facts.jestConfigs.length === 0) {
+	for (const dir of facts.vitestWithoutConfig) {
+		const file = dir === "" ? "vitest.config.ts" : `${dir}/vitest.config.ts`;
+		actions.push({
+			kind: "write",
+			file,
+			before: null,
+			after: newConfig(),
+			reason:
+				"Vitest runs here without a config, and the adapter needs one to be in; this sets nothing else",
+		});
+	}
+	for (const file of facts.viteConfigs) {
+		actions.push({
+			kind: "note",
+			gap: true,
+			lines: [
+				`${file} was left alone: Vitest reads its settings from it, and a separate Vitest config would replace it.`,
+				...manualInstructions(file),
+			],
+		});
+	}
+	for (const file of facts.reporterFlags) {
 		actions.push({
 			kind: "note",
 			lines: [
-				"No Vitest config found at the root or in a workspace package, so no adapter was added.",
+				`A script in ${file} passes --reporter to Vitest. That replaces the reporters in the config, the adapter with them: remove the flag, or the adapter will not load.`,
+			],
+		});
+	}
+	if (
+		!observed &&
+		facts.viteConfigs.length === 0 &&
+		facts.jestConfigs.length === 0
+	) {
+		actions.push({
+			kind: "note",
+			gap: true,
+			lines: [
+				"No package here runs Vitest, so no adapter was added.",
 				...manualInstructions("your Vitest config"),
 			],
 		});
@@ -144,6 +192,7 @@ export async function planSetup(
 	if (facts.jestConfigs.length > 0) {
 		actions.push({
 			kind: "note",
+			gap: true,
 			lines: [
 				`Jest found (${facts.jestConfigs.join(", ")}). There is no Jest adapter yet, so Jest runs are not checked.`,
 			],
@@ -162,7 +211,9 @@ export async function planSetup(
 	}
 
 	for (const workflow of facts.workflows) {
-		if (!workflow.runsTests || !workflow.shallow) continue;
+		// Only the adapter reads history in a test job. Without one, the edit
+		// would slow that job's checkout for nothing.
+		if (!observed || !workflow.runsTests || !workflow.shallow) continue;
 		const after = withFullHistory(workflow.content);
 		if (after === null) continue;
 		actions.push({
@@ -180,7 +231,12 @@ export async function planSetup(
 			kind: "write",
 			file: PULL_REQUEST_WORKFLOW,
 			before: null,
-			after: pullRequestWorkflow(facts.packageManager ?? "npm"),
+			after: pullRequestWorkflow(
+				facts.packageManager ?? "npm",
+				workflowStyle(
+					facts.workflows.find((workflow) => workflow.runsTests)?.content ?? "",
+				),
+			),
 			reason: "one comment on each pull request saying what it affects",
 		});
 	}

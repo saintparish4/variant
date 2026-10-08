@@ -3,6 +3,7 @@ import {
 	pullRequestWorkflow,
 	runsTests,
 	withFullHistory,
+	workflowStyle,
 } from "../workflow.js";
 
 describe("runsTests", () => {
@@ -147,5 +148,50 @@ describe("pullRequestWorkflow", () => {
 		expect(pullRequestWorkflow("pnpm")).toContain("pnpm/action-setup");
 		expect(pullRequestWorkflow("bun")).toContain("oven-sh/setup-bun");
 		expect(pullRequestWorkflow("npm")).not.toContain("action-setup");
+	});
+
+	it("stops an older run when a newer push arrives, and cannot hang", () => {
+		const workflow = pullRequestWorkflow("npm");
+
+		expect(workflow).toContain(
+			"  group: variant-${" + "{ github.event.pull_request.number }}",
+		);
+		expect(workflow).toContain("    timeout-minutes: 10");
+	});
+
+	// A second Node version or an unpinned bun is a second environment the
+	// repository has to keep green.
+	it("uses the versions the repository's own test workflow uses", () => {
+		const style = workflowStyle(
+			[
+				"jobs:",
+				"  test:",
+				"    steps:",
+				"      - uses: actions/checkout@v6",
+				"      - uses: oven-sh/setup-bun@v2",
+				"        with:",
+				"          bun-version: 1.4.2",
+				"      - uses: actions/setup-node@v6",
+				"        with:",
+				"          node-version: 24",
+				"      - run: bun run test",
+			].join("\n"),
+		);
+		const workflow = pullRequestWorkflow("bun", style);
+
+		expect(workflow).toContain("- uses: actions/checkout@v6");
+		expect(workflow).toContain("- uses: actions/setup-node@v6");
+		expect(workflow).toContain("          node-version: 24");
+		expect(workflow).toContain("          bun-version: 1.4.2");
+	});
+
+	it("does not copy a version that is a matrix expression", () => {
+		const style = workflowStyle(
+			"      - uses: actions/setup-node@v6\n        with:\n          node-version: ${" +
+				"{ matrix.node }}\n",
+		);
+
+		expect(style.node).toBeUndefined();
+		expect(pullRequestWorkflow("npm", style)).toContain("node-version: 22");
 	});
 });

@@ -7,6 +7,13 @@
  * import variant from "@blzsky/variant/vitest";
  * export default defineConfig({ test: { reporters: ["default", variant()] } });
  * ```
+ *
+ * or, in a config that sets no reporters of its own:
+ *
+ * ```ts
+ * import { variantReporters } from "@blzsky/variant/vitest";
+ * export default defineConfig({ test: { reporters: variantReporters() } });
+ * ```
  */
 
 import type { Reporter, TestModule, Vitest } from "vitest/node";
@@ -62,6 +69,22 @@ export function variantReporter(
 			);
 		},
 	};
+}
+
+/**
+ * Vitest's own default reporters with the adapter after them, for a config
+ * that names none. Setting `reporters` replaces the defaults, and one of
+ * them exists only on GitHub Actions: writing `["default", variant()]` into
+ * such a config would quietly take the annotations off every pull request.
+ */
+export function variantReporters(
+	options: VariantReporterOptions = {},
+): Array<string | Reporter> {
+	return [
+		"default",
+		...(process.env["GITHUB_ACTIONS"] === "true" ? ["github-actions"] : []),
+		variantReporter(options),
+	];
 }
 
 export default variantReporter;

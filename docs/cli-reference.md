@@ -399,14 +399,24 @@ when you agree:
 - installs `@blzsky/variant` as a dev dependency with your package manager
   (npm, pnpm, Yarn or Bun);
 - adds the [Vitest adapter](./vitest-adapter.md) to your Vitest config: the
-  root config if there is one, otherwise each workspace package's;
+  root config if there is one, otherwise each workspace package's. A package
+  that runs Vitest with no config gets a new `vitest.config.ts` that sets the
+  reporters and nothing else;
 - adds `.variant/` to `.gitignore`;
 - adds `fetch-depth: 0` to the checkout in any workflow that runs your tests,
   because the adapter compares against an earlier commit;
 - writes `.github/workflows/variant.yml`, which keeps one comment on each pull
-  request.
+  request. It uses the action versions, Node version and Bun version of your
+  existing test workflow when there is one.
 
-Files are shown as a diff first. A config or workflow that `init` cannot edit
+Where there is no adapter to add, `init` says so and does less. A repository
+that only runs Jest gets the pull-request workflow and no change to its test
+workflow. A package whose Vitest settings live in `vite.config.*` is left
+alone, with the lines to add, because a separate Vitest config would replace
+that file. A test script that passes `--reporter` gets a warning, since the
+flag keeps the adapter from loading.
+
+Edits are shown as a diff and new files in full. A config or workflow that `init` cannot edit
 with confidence is left untouched, and it prints the lines to add yourself.
 Running it again changes nothing that is already in place.
 

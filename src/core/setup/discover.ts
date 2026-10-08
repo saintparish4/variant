@@ -33,6 +33,20 @@ export interface RepositoryFacts {
 	taskRunner: "turborepo" | "nx" | null;
 	/** Vitest configs the adapter belongs in; see `adapterTargets`. */
 	vitestConfigs: string[];
+	/**
+	 * Directories ("" for the root) of packages that depend on Vitest and
+	 * have no config of any kind: Vitest runs there on its defaults, and the
+	 * adapter needs a config to be in.
+	 */
+	vitestWithoutConfig: string[];
+	/**
+	 * Vite configs of packages that depend on Vitest and have no Vitest
+	 * config. Vitest reads these, and a new `vitest.config` beside one would
+	 * replace it, plugins and aliases included.
+	 */
+	viteConfigs: string[];
+	/** Packages whose scripts pass `--reporter` to Vitest, overriding any config. */
+	reporterFlags: string[];
 	jestConfigs: string[];
 	playwrightConfigs: string[];
 	workflows: WorkflowFacts[];
@@ -65,6 +79,7 @@ async function readText(file: string): Promise<string | null> {
 
 interface RootManifest {
 	packageManager?: unknown;
+	scripts?: Record<string, unknown>;
 	dependencies?: Record<string, unknown>;
 	devDependencies?: Record<string, unknown>;
 }
@@ -154,6 +169,7 @@ export async function discoverRepository(
 		fg(
 			[
 				"**/vitest.config.{ts,mts,cts,js,mjs,cjs}",
+				"**/vite.config.{ts,mts,cts,js,mjs,cjs}",
 				"**/jest.config.{ts,mts,cts,js,mjs,cjs,json}",
 				"**/playwright.config.{ts,mts,cts,js,mjs,cjs}",
 				".github/workflows/*.{yml,yaml}",
@@ -187,6 +203,43 @@ export async function discoverRepository(
 			}),
 	);
 
+	const vitestConfigs = adapterTargets(named("vitest.config."), packageDirs);
+	const hasRootConfig = vitestConfigs.some((file) => !file.includes("/"));
+	const configDirs = (prefix: string): Map<string, string> =>
+		new Map(
+			named(prefix).map((file) => {
+				const dir = path.posix.dirname(file);
+				return [dir === "." ? "" : dir, file];
+			}),
+		);
+	const vitestDirs = configDirs("vitest.config.");
+	const viteDirs = configDirs("vite.config.");
+
+	const members: Array<{ dir: string; manifest: RootManifest | null }> = (
+		packageGraph?.packages ?? []
+	)
+		.map((pkg) => ({
+			dir: path.relative(cwd, pkg.dir).replace(/\\/g, "/"),
+			manifest: pkg.manifest as RootManifest,
+		}))
+		.filter((member) => member.dir !== "");
+	const usesVitest = (candidate: RootManifest | null): boolean =>
+		"vitest" in (candidate?.devDependencies ?? {}) ||
+		"vitest" in (candidate?.dependencies ?? {});
+	// Each package that depends on Vitest runs its own; the root's counts
+	// only when no package does.
+	const users = members.filter((member) => usesVitest(member.manifest));
+	const runners =
+		users.length > 0
+			? users
+			: usesVitest(manifest)
+				? [{ dir: "", manifest }]
+				: [];
+	// A root config's reporters already cover every project it runs.
+	const unconfigured = hasRootConfig
+		? []
+		: runners.filter((runner) => !vitestDirs.has(runner.dir));
+
 	return {
 		packageManager: await detectPackageManager(cwd),
 		workspacePackages: packageDirs.filter((dir) => dir !== "").length,
@@ -195,7 +248,26 @@ export async function discoverRepository(
 			: files.includes("nx.json")
 				? "nx"
 				: null,
-		vitestConfigs: adapterTargets(named("vitest.config."), packageDirs),
+		vitestConfigs,
+		vitestWithoutConfig: unconfigured
+			.filter((runner) => !viteDirs.has(runner.dir))
+			.map((runner) => runner.dir)
+			.sort(),
+		viteConfigs: unconfigured
+			.flatMap((runner) => viteDirs.get(runner.dir) ?? [])
+			.sort(),
+		reporterFlags: [{ dir: "", manifest }, ...members]
+			.filter((member) =>
+				Object.values(member.manifest?.scripts ?? {}).some(
+					(script) =>
+						typeof script === "string" &&
+						/\bvitest\b.*--reporter\b/.test(script),
+				),
+			)
+			.map((member) =>
+				member.dir === "" ? "package.json" : `${member.dir}/package.json`,
+			)
+			.sort(),
 		jestConfigs: named("jest.config."),
 		playwrightConfigs: named("playwright.config."),
 		workflows,

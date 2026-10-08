@@ -93,11 +93,61 @@ export function withFullHistory(workflow: string): string | null {
 	return changed ? out.join("\n") : null;
 }
 
-const SETUP: Record<PackageManagerName, string[]> = {
-	npm: [],
-	pnpm: ["      - uses: pnpm/action-setup@v4", ""],
-	yarn: [],
-	bun: ["      - uses: oven-sh/setup-bun@v2", ""],
+/**
+ * What a repository's own test workflow already decided, so the workflow
+ * `init` writes does not disagree with it: a second Node version or an
+ * unpinned package manager is a second environment to keep green.
+ */
+export interface WorkflowStyle {
+	/** `uses:` references by action, as written: `actions/checkout@v6`. */
+	actions: Readonly<Record<string, string>>;
+	/** The `with:` line that picks Node: `node-version: 24`. */
+	node?: string;
+	/** The `with:` line that picks Bun: `bun-version: 1.4.2`. */
+	bun?: string;
+}
+
+const ACTIONS = [
+	"actions/checkout",
+	"actions/setup-node",
+	"actions/github-script",
+	"pnpm/action-setup",
+	"oven-sh/setup-bun",
+];
+
+export function workflowStyle(workflow: string): WorkflowStyle {
+	const actions: Record<string, string> = {};
+	let node: string | undefined;
+	let bun: string | undefined;
+	for (const raw of workflow.split("\n")) {
+		const line = raw.trim();
+		if (line.startsWith("#")) continue;
+		const uses = /^(?:-\s+)?uses:\s*(\S+)@(\S+)/.exec(line);
+		if (uses !== null) {
+			const [, action, version] = uses;
+			if (action !== undefined && ACTIONS.includes(action)) {
+				actions[action] ??= `${action}@${version}`;
+			}
+			continue;
+		}
+		// A matrix expression names several versions; one job needs one.
+		if (line.includes("${{")) continue;
+		if (/^node-version(?:-file)?:\s*\S/.test(line)) node ??= line;
+		if (/^bun-version(?:-file)?:\s*\S/.test(line)) bun ??= line;
+	}
+	return {
+		actions,
+		...(node !== undefined && { node }),
+		...(bun !== undefined && { bun }),
+	};
+}
+
+const DEFAULT_ACTIONS: Record<string, string> = {
+	"actions/checkout": "actions/checkout@v7",
+	"actions/setup-node": "actions/setup-node@v7",
+	"actions/github-script": "actions/github-script@v9",
+	"pnpm/action-setup": "pnpm/action-setup@v4",
+	"oven-sh/setup-bun": "oven-sh/setup-bun@v2",
 };
 
 const INSTALL: Record<PackageManagerName, string> = {
@@ -129,8 +179,23 @@ const NODE_CACHE: Partial<Record<PackageManagerName, string>> = {
 /** The workflow that keeps one comment on each pull request up to date. */
 export function pullRequestWorkflow(
 	packageManager: PackageManagerName,
+	style: WorkflowStyle = { actions: {} },
 ): string {
 	const cache = NODE_CACHE[packageManager];
+	const action = (name: string): string =>
+		style.actions[name] ?? DEFAULT_ACTIONS[name] ?? name;
+	const setup =
+		packageManager === "pnpm"
+			? [`      - uses: ${action("pnpm/action-setup")}`, ""]
+			: packageManager === "bun"
+				? [
+						`      - uses: ${action("oven-sh/setup-bun")}`,
+						...(style.bun === undefined
+							? []
+							: ["        with:", `          ${style.bun}`]),
+						"",
+					]
+				: [];
 	return [
 		"# Written by `variant init`. It keeps one comment on each pull request",
 		"# saying what the change affects. It is yours to edit.",
@@ -144,19 +209,27 @@ export function pullRequestWorkflow(
 		"  contents: read",
 		"  pull-requests: write",
 		"",
+		"# A newer push makes the report for an older one pointless.",
+		"concurrency:",
+		// Split so the linter does not take a workflow expression for a
+		// template placeholder someone forgot the backticks on.
+		`  group: variant-$${"{{ github.event.pull_request.number }}"}`,
+		"  cancel-in-progress: true",
+		"",
 		"jobs:",
 		"  report:",
 		"    runs-on: ubuntu-latest",
+		"    timeout-minutes: 10",
 		"    steps:",
-		"      - uses: actions/checkout@v7",
+		`      - uses: ${action("actions/checkout")}`,
 		"        with:",
 		"          # variant compares against the commit the branch started from.",
 		"          fetch-depth: 0",
 		"",
-		...SETUP[packageManager],
-		"      - uses: actions/setup-node@v7",
+		...setup,
+		`      - uses: ${action("actions/setup-node")}`,
 		"        with:",
-		"          node-version: 22",
+		`          ${style.node ?? "node-version: 22"}`,
 		...(cache === undefined ? [] : [`          cache: ${cache}`]),
 		"",
 		`      - run: ${INSTALL[packageManager]}`,
@@ -167,7 +240,7 @@ export function pullRequestWorkflow(
 		"      - name: Post or update the comment",
 		"        # Pull requests from forks get a read-only token and cannot comment.",
 		"        if: github.event.pull_request.head.repo.full_name == github.repository",
-		"        uses: actions/github-script@v9",
+		`        uses: ${action("actions/github-script")}`,
 		"        with:",
 		"          script: |",
 		'            const fs = require("node:fs");',

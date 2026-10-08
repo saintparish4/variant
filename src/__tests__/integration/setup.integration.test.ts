@@ -128,7 +128,7 @@ describe("planSetup and applySetup", () => {
 			"packages/b/vitest.config.ts",
 		]);
 		expect(read(dir, "packages/a/vitest.config.ts")).toContain(
-			'reporters: ["default", variant()]',
+			"reporters: variantReporters()",
 		);
 		expect(read(dir, ".gitignore")).toBe("node_modules\n.variant/\n");
 		expect(read(dir, ".github/workflows/ci.yml")).toContain("fetch-depth: 0");
@@ -176,6 +176,143 @@ describe("planSetup and applySetup", () => {
 		).toBe(true);
 	});
 
+	// dearly: `init` once edited the CI checkout "for the adapter" and closed
+	// with "variant is configured" in a repository that has no adapter.
+	it("claims nothing about an adapter in a repository that only runs Jest", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "app" }),
+			"jest.config.ts": "export default {};\n",
+			".github/workflows/ci.yml": CI_WORKFLOW,
+		});
+		const output = captureGlobalOutput();
+
+		const actions = await planSetup(dir, await discoverRepository(dir));
+		await withCwd(dir, () => registerInitAction({ yes: true, install: false }));
+
+		expect(
+			actions.some(
+				(action) =>
+					action.kind === "write" && action.file === ".github/workflows/ci.yml",
+			),
+		).toBe(false);
+		expect(read(dir, ".github/workflows/ci.yml")).toBe(CI_WORKFLOW);
+		expect(output.stdout()).not.toContain("variant is configured");
+		expect(output.stdout()).toContain("Test runs are not checked yet");
+	});
+
+	// pyra: one Vitest per package through Turbo, and no config file anywhere.
+	it("gives a package that runs Vitest without a config one that only adds the adapter", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "root", private: true }),
+			"pnpm-workspace.yaml": "packages:\n  - 'packages/*'\n",
+			"pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+			"packages/a/package.json": JSON.stringify({
+				name: "@x/a",
+				devDependencies: { vitest: "^4.0.0" },
+			}),
+			"packages/b/package.json": JSON.stringify({ name: "@x/b" }),
+		});
+
+		const facts = await discoverRepository(dir);
+		const actions = await planSetup(dir, facts);
+		await applySetup(dir, actions, { run: async () => {} });
+
+		expect(facts.vitestWithoutConfig).toEqual(["packages/a"]);
+		expect(read(dir, "packages/a/vitest.config.ts")).toBe(
+			'import { variantReporters } from "@blzsky/variant/vitest";\n\nexport default {\n\ttest: {\n\t\treporters: variantReporters(),\n\t},\n};\n',
+		);
+		expect(existsSync(path.join(dir, "packages/b/vitest.config.ts"))).toBe(
+			false,
+		);
+		const again = await discoverRepository(dir);
+		expect(again.vitestWithoutConfig).toEqual([]);
+		expect(again.vitestConfigs).toEqual(["packages/a/vitest.config.ts"]);
+	});
+
+	// A Vitest config beside a Vite config replaces it, plugins and aliases
+	// included: the package's tests would stop resolving their imports.
+	it("creates nothing beside a Vite config, and says what to add to it", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({
+				name: "app",
+				devDependencies: { vitest: "^4.0.0" },
+			}),
+			"vite.config.ts": "export default { plugins: [] };\n",
+		});
+
+		const actions = await planSetup(dir, await discoverRepository(dir));
+
+		expect(
+			actions.some(
+				(action) =>
+					action.kind === "write" && action.file === "vitest.config.ts",
+			),
+		).toBe(false);
+		expect(
+			actions.some(
+				(action) =>
+					action.kind === "note" &&
+					action.lines[0]?.includes("vite.config.ts was left alone"),
+			),
+		).toBe(true);
+	});
+
+	it("warns when a test script's --reporter flag would keep the adapter from loading", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({
+				name: "app",
+				scripts: { test: "vitest run --reporter=dot" },
+				devDependencies: { vitest: "^4.0.0" },
+			}),
+		});
+
+		const actions = await planSetup(dir, await discoverRepository(dir));
+
+		expect(
+			actions.some(
+				(action) =>
+					action.kind === "note" &&
+					action.lines[0]?.includes("passes --reporter to Vitest"),
+			),
+		).toBe(true);
+	});
+
+	it("writes the pull-request workflow with the versions the test workflow uses", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "app" }),
+			"bun.lock": "{}",
+			"jest.config.ts": "export default {};\n",
+			".github/workflows/ci.yml": [
+				"jobs:",
+				"  test:",
+				"    steps:",
+				"      - uses: actions/checkout@v6",
+				"      - uses: oven-sh/setup-bun@v2",
+				"        with:",
+				"          bun-version: 1.4.2",
+				"      - uses: actions/setup-node@v6",
+				"        with:",
+				"          node-version: 24",
+				"      - run: bun run test",
+				"",
+			].join("\n"),
+		});
+
+		const actions = await planSetup(dir, await discoverRepository(dir));
+		const workflow = actions.find(
+			(action) =>
+				action.kind === "write" &&
+				action.file === ".github/workflows/variant.yml",
+		);
+
+		expect(workflow?.kind === "write" && workflow.after).toContain(
+			"bun-version: 1.4.2",
+		);
+		expect(workflow?.kind === "write" && workflow.after).toContain(
+			"node-version: 24",
+		);
+	});
+
 	it("leaves a config it cannot edit safely exactly as it is", async () => {
 		const config =
 			'const reporters = ["default"];\nexport default { test: { reporters } };\n';
@@ -207,9 +344,10 @@ describe("init command", () => {
 		expect(output.stdout()).toContain("pnpm detected");
 		expect(output.stdout()).toContain("2 workspace packages discovered");
 		expect(output.stdout()).toContain("Edit packages/a/vitest.config.ts");
-		expect(output.stdout()).toContain(
-			'+ \t\treporters: ["default", variant()],',
-		);
+		expect(output.stdout()).toContain("+ \t\treporters: variantReporters(),");
+		// A new file is shown whole: its line count is nothing to agree to.
+		expect(output.stdout()).toContain("  + name: variant");
+		expect(output.stdout()).toContain("pnpm exec variant pr report");
 		expect(output.stdout()).toContain("Dry run: nothing was changed.");
 		expect(read(dir, "packages/a/vitest.config.ts")).toBe(VITEST_CONFIG);
 		expect(existsSync(path.join(dir, ".github/workflows/variant.yml"))).toBe(
@@ -233,7 +371,10 @@ describe("init command", () => {
 
 		await withCwd(dir, () => registerInitAction({ yes: true, install: false }));
 
-		expect(read(dir, "packages/b/vitest.config.ts")).toContain("variant()");
+		expect(read(dir, "packages/b/vitest.config.ts")).toContain(
+			"variantReporters()",
+		);
+		expect(output.stdout()).toContain("variant is configured.");
 		expect(output.stdout()).toContain("Wrote .github/workflows/variant.yml");
 		expect(output.stdout()).toContain(
 			"pnpm add --save-dev --workspace-root @blzsky/variant",
