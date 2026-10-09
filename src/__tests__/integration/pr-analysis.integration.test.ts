@@ -11,6 +11,7 @@ import {
 	registerPrReportAction,
 } from "../../cli/commands/pr.js";
 import { runPrCheck } from "../../core/pr/check.js";
+import { buildPrReport } from "../../core/pr/report.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
@@ -119,6 +120,110 @@ describe("runPrCheck", () => {
 	});
 });
 
+describe("buildPrReport", () => {
+	const WORKSPACE = {
+		"package.json": JSON.stringify({
+			name: "app",
+			scripts: { typecheck: "tsc --noEmit", test: "vitest run" },
+		}),
+		"package-lock.json": "{}\n",
+		"vitest.config.ts": "export default {};\n",
+		"src/price.ts":
+			"export function total(a: number, b: number): number { return a + b; }\n",
+		"src/cart.ts":
+			'import { total } from "./price.js";\nexport const cart = (): number => total(1, 2);\n',
+		"src/cart.test.ts": 'import { cart } from "./cart.js";\ncart();\n',
+		"src/legacy.ts": "export const legacy = (): number => 1;\n",
+	};
+
+	it("plans a branch's change: its tests and why, its checks, and what nothing verifies", async () => {
+		const dir = createGitWorkspace("pr", WORKSPACE);
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, {
+			"src/price.ts":
+				"export function total(a: number, b: number): number { return a + b + 0; }\n",
+			"src/legacy.ts": "export const legacy = (): number => 2;\n",
+		});
+		git(dir, "commit", "-q", "-am", "change two bodies");
+
+		const { plan } = await buildPrReport(dir, { base: "main" });
+
+		expect(plan.tests).toMatchObject({
+			selected: 1,
+			total: 1,
+			runs: [{ runner: "vitest", dir: "", files: ["src/cart.test.ts"] }],
+			why: {
+				"src/cart.test.ts": ["src/cart.test.ts", "src/cart.ts", "src/price.ts"],
+			},
+		});
+		expect(plan.checks).toMatchObject([
+			{ kind: "typecheck", command: "npm run typecheck" },
+		]);
+		expect(plan.notVerified.map((entry) => entry.filePath)).toEqual([
+			"src/legacy.ts",
+		]);
+		expect(
+			plan.changes.map((change) => [change.filePath, change.risk]),
+		).toEqual([
+			["src/legacy.ts", "high"],
+			["src/price.ts", "low"],
+		]);
+	});
+
+	// The lockfile of a workspace is at its root. Asked from an app's own
+	// directory, the plan once proposed `npm run build` in a bun repository.
+	it("writes commands for the package manager of the repository, from a subdirectory too", async () => {
+		const dir = createGitWorkspace("pr", {
+			"package.json": JSON.stringify({ name: "root", workspaces: ["web"] }),
+			"bun.lock": "{}\n",
+			"web/package.json": JSON.stringify({
+				name: "web",
+				scripts: { build: "next build" },
+			}),
+			"web/src/a.ts": "export const a = 1;\n",
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, { "web/src/a.ts": "export const a = 2;\n" });
+		git(dir, "commit", "-q", "-am", "change");
+
+		const { plan } = await buildPrReport(path.join(dir, "web"), {
+			base: "main",
+		});
+
+		expect(plan.checks.map((check) => check.command)).toEqual([
+			"bun run build",
+		]);
+	});
+
+	// A report describes a change; only a test run's own prediction is ever
+	// reconciled, so one left behind here would count as a run that never was.
+	it("records no prediction", async () => {
+		const dir = createGitWorkspace("pr", WORKSPACE);
+
+		await buildPrReport(dir, { base: "main" });
+
+		await expect(
+			readFile(path.join(dir, ".variant/history/impact.jsonl"), "utf8"),
+		).rejects.toMatchObject({ code: "ENOENT" });
+	});
+
+	it("reports on a repository with no tests instead of failing", async () => {
+		const dir = createGitWorkspace("pr", {
+			"src/a.ts": "export const a = 1;\n",
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, { "src/a.ts": "export const a = 2;\n" });
+		git(dir, "commit", "-q", "-am", "change");
+
+		const { plan } = await buildPrReport(dir, { base: "main" });
+
+		expect(plan.tests.total).toBe(0);
+		expect(plan.notVerified.map((entry) => entry.filePath)).toEqual([
+			"src/a.ts",
+		]);
+	});
+});
+
 describe("pr check command", () => {
 	it("prints the base ref, file count, and verdict", async () => {
 		const dir = createGitWorkspace("pr", {});
@@ -156,8 +261,7 @@ describe("pr report command", () => {
 		);
 
 		expect(output.stdout()).toContain("## Variant PR Report");
-		expect(output.stdout()).toContain("### Semantic Diff");
-		expect(output.stdout()).toContain("Safe to skip build");
+		expect(output.stdout()).toContain("_Nothing changed against the base._");
 	});
 
 	it("writes JSON to the path given by --output", async () => {

@@ -54,7 +54,7 @@ Or add a script to `package.json`, where the local `variant` binary is on PATH:
 
 **Cause:** variant looks for `variant.config.ts`, `variant.config.mjs`, `variant.config.js`, or `variant.config.json`, in that order, in the current working directory.
 
-**Fix:** Create the config with `variant init`, or check you're running from the project root. Only the task runner (`build`, `run`, `insight`) needs a config; `impact`, `pr` and `workspace check` work without one.
+**Fix:** Create the config with `variant init --tasks`, or check you're running from the project root. Only the task runner (`build`, `run`, `insight`) needs a config; `impact`, `pr` and `workspace check` work without one.
 
 ---
 
@@ -171,9 +171,9 @@ Locally, `git rev-parse --verify <ref>` confirms a ref exists. The [example work
 
 ## 10. `[NO_TEST_FILES] No test files found, so there is nothing to predict`
 
-**Cause:** `impact` found no TypeScript test file. It indexes `*.test.ts` and `*.spec.ts` (and the `.tsx`, `.mts` and `.cts` forms) and anything under a `__tests__/` directory. Tests written in JavaScript, or named another way (`*.cy.ts`, `*.e2e.ts`), are not counted. It stops rather than printing "0 of 0 tests", which would read as "run nothing".
+**Cause:** `impact` found no test file. It indexes `*.test.*` and `*.spec.*` in TypeScript and JavaScript, and anything under a `__tests__/` directory. Tests named another way (`*.cy.ts`, `*.e2e.ts`), and JavaScript tests that git ignores, are not counted. It stops rather than printing "0 of 0 tests", which would read as "run nothing".
 
-**Fix:** Rename the tests to a pattern above, or run `impact` from the directory that holds the TypeScript tests. JavaScript tests cannot be predicted for yet; run them in full.
+**Fix:** Rename the tests to a pattern above, or run `impact` from the directory that holds the tests.
 
 ---
 

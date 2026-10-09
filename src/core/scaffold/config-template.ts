@@ -1,6 +1,6 @@
 /**
  * @module
- * The defaults and template behind `variant init`. The command owns the
+ * The defaults and template behind `variant init --tasks`. The command owns the
  * prompting; everything it suggests and everything it writes is decided here.
  */
 

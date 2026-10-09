@@ -16,6 +16,23 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **variant's own suite runs its adapter in CI**, loaded from the build when
+  there is one, and CI checks out full history for it.
+- **The `pr report` markdown has a new layout**, and no longer shows the
+  build verdict or the `Generated` and `Base ref` lines. Its first line is
+  still `## Variant PR Report`. The JSON keeps `check` as it was, with
+  `check.changedFiles` added, and gains `plan`.
+- **`pr report` no longer fails in a repository with no test files.** It says
+  that none were found.
+- **`variant init` no longer writes `variant.config.ts`.** That is now
+  `variant init --tasks`. `init` on its own sets the repository up for change
+  verification (see Added).
+- **The default base changed.** `impact` with no `--base` compared against
+  `HEAD~1`, and `pr check`/`pr report` against `main`. Both now detect the base
+  (see Added). On the default branch `impact` still compares against the
+  previous commit; on any other branch it now reports everything the branch
+  changed. A repository whose default branch is not `main` no longer needs
+  `--base` for `pr check`.
 - **Confidence describes the change, not the repository.** Notes that are the
   same on every run (a loader whose specifier is fully computed, a local
   dependency discovery did not find, bare imports nothing declares) each cost
@@ -59,6 +76,56 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **JavaScript is indexed.** `.js`, `.jsx`, `.mjs` and `.cjs` files that are
+  the repository's own (tracked by git, or new and not ignored) are read
+  like TypeScript: their imports are followed, their tests are counted and
+  selected, and a change to one is classified. A package tested with
+  `*.test.mjs` no longer selects nothing. Build output, `*.min.js` and files
+  over 512 KB are left out. A changed CommonJS module is `breaking` and
+  reaches every file that requires it. The index is rebuilt once.
+- **`pr report` is now a verification plan.** For a pull request it gives the
+  risk of each changed file by a stated rule (what changed, how far it
+  reaches, whether it crosses a package boundary, whether any test reaches
+  it); the test files to run, grouped by runner, each with the import chain
+  from the test to the changed file; the `typecheck`, `build`, `lint` and
+  end-to-end commands of every package the change affects; where the plan is
+  wider than the import graph and why; and the changed files no test reaches,
+  with the exported names that changed and the files importing them. It plans
+  and runs nothing, and records no prediction.
+- **`variant init` sets a repository up, once.** It detects the package
+  manager (npm, pnpm, Yarn, Bun), the workspace, Turborepo or Nx, the test
+  runners, GitHub Actions and the default branch, and then shows each change
+  as a diff: installing the package, adding the Vitest adapter to the right
+  configs, ignoring `.variant/`, giving the test workflow's checkout the
+  history a prediction needs, and writing a workflow that comments on pull
+  requests. Nothing is changed until you agree (`--yes` where there is no
+  terminal, `--dry-run` to only look). A config or workflow it cannot edit
+  with confidence is left as it is, with the lines to add by hand. A package
+  that runs Vitest with no config file gets one that sets the reporters and
+  nothing else; a repository that only runs Jest is told there is no adapter
+  for it yet, and its test workflow is not touched.
+- **`variantReporters()`**, exported from `@blzsky/variant/vitest`: Vitest's
+  default reporters with the adapter after them, for a config that sets none.
+  Setting `reporters` replaces the defaults, including the one that annotates
+  failures on GitHub Actions.
+- **A Vitest adapter: `@blzsky/variant/vitest`.** One line in the Vitest
+  config, and a normal test run in CI predicts alongside the tests, compares
+  the failures with the prediction when they end, prints one line and records
+  the result. No variant command is run by anyone. The prediction is made in a
+  separate process and never affects the run: no exit code is set, and a
+  failure in variant is one line of output. A workspace with one test process
+  per package predicts once and shares the result. See
+  [the adapter's page](./docs/vitest-adapter.md).
+- **`impact`, `pr check` and `pr report` need no `--base`.** The base is
+  worked out from git and the CI environment: in a GitHub Actions pull request
+  the merge base with the target branch, on a push the commit it replaced,
+  locally the merge base with the default branch, and the previous commit on
+  the default branch itself. `impact` prints which rule applied and carries it
+  in `--json` as `baseSource` and `baseLabel`. `VARIANT_BASE` names a base for
+  a CI system variant cannot read. In a pull request the prediction is recorded
+  against the pushed commit and `impact verify` finds it the same way, so
+  neither needs `--head-sha`. A push with nothing to compare against is
+  reported and exits 0.
 - `impact` prints how many workspace packages it found (`Workspace: 3
   packages`, or `no workspace packages found`), and `--json` carries it as
   `packagesFound`. Bare imports of a package discovery missed count as

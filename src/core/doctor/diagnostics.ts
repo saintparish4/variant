@@ -96,7 +96,7 @@ async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 				level: "warn",
 				label: "No variant.config.ts found",
 				detail:
-					"`impact`, `diff`, `pr` and `workspace check` work without one. `build` and `run` need it: `variant init` creates one.",
+					"`impact`, `diff`, `pr` and `workspace check` work without one. `build` and `run` need it: `variant init --tasks` creates one.",
 			},
 		];
 	}

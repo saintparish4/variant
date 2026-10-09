@@ -161,12 +161,12 @@ describe("insight command", () => {
 	});
 });
 
-describe("init command", () => {
+describe("init --tasks command", () => {
 	it("scaffolds a config when none exists", async () => {
 		const dir = createTempWorkspace("init");
 		const output = captureGlobalOutput();
 
-		await withCwd(dir, () => registerInitAction());
+		await withCwd(dir, () => registerInitAction({ tasks: true }));
 
 		expect(existsSync(path.join(dir, "variant.config.ts"))).toBe(true);
 		expect(output.stdout()).toMatch(/Created/);
@@ -177,7 +177,7 @@ describe("init command", () => {
 		writeFiles(dir, { "variant.config.ts": "// existing" });
 		const output = captureGlobalOutput();
 
-		await withCwd(dir, () => registerInitAction());
+		await withCwd(dir, () => registerInitAction({ tasks: true }));
 
 		expect(output.stdout()).toMatch(/already exists/);
 	});
@@ -187,7 +187,7 @@ describe("init command", () => {
 		writeFiles(dir, { "variant.config.json": "{}" });
 		const output = captureGlobalOutput();
 
-		await withCwd(dir, () => registerInitAction());
+		await withCwd(dir, () => registerInitAction({ tasks: true }));
 
 		expect(output.stdout()).toMatch(/variant\.config\.json.*already exists/);
 		expect(existsSync(path.join(dir, "variant.config.ts"))).toBe(false);

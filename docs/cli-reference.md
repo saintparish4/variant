@@ -74,13 +74,37 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `CACHE_ERROR` | The task cache cannot be read or written. Deleting `.variant/cache/` fixes it. |
 | `GRAPH_ERROR` | The symbol index cannot be read or written. Deleting `.variant/graph/` fixes it. |
 | `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
-| `NO_TEST_FILES` | `impact` found no TypeScript test file to predict over (`*.test.ts`, `*.spec.ts`, or under `__tests__/`; JavaScript is not indexed) |
+| `NO_BASE_COMMIT` | Raised inside `impact` when a detected base does not exist (a branch's first push). `impact` reports it and exits 0; with `--json` it prints `{ "prediction": null, "code": "NO_BASE_COMMIT", "reason": … }` |
+| `NO_TEST_FILES` | `impact` found no test file to predict over (`*.test.*`, `*.spec.*`, or under `__tests__/`, in TypeScript or JavaScript) |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
 
+`impact`, `pr check` and `pr report` need no `--base`. Left out, the base is
+worked out from git and the CI environment:
+
+| Where | `impact` compares against | `pr check`, `pr report` compare against |
+|---|---|---|
+| A GitHub Actions pull request | the merge base of `HEAD` and `origin/<target branch>` | `origin/<target branch>` |
+| A GitHub Actions push | the commit the push replaced | the default branch |
+| `VARIANT_BASE` is set | that ref | the default branch |
+| Anywhere else, on a branch | the merge base with the default branch | the default branch |
+| Anywhere else, on the default branch | the previous commit | the default branch |
+
+The default branch is what the remote calls its default, or the first of
+`origin/main`, `origin/master`, `main` and `master` that exists. `impact` prints
+which rule applied: `Base ref: 1a2b3c4d5e6f (merge base with origin/main)`.
+
+In a pull request `impact` also records its prediction against the commit that
+was pushed, not the merge commit GitHub checks out for the run, and
+`impact verify` looks the prediction up the same way. Neither needs `--head-sha`.
+
+A push with no previous commit to compare against (a branch's first push, or a
+force-push whose old head is gone) is not an error: `impact` says no prediction
+was made and exits 0.
+
 Commands that take `--base <ref>` accept anything git resolves: a branch, a
-tag, a SHA, `HEAD~3`. They do not compare the same things:
+tag, a SHA, `HEAD~3`. With an explicit ref they do not compare the same things:
 
 | Command | Changed files | "Before" content | "After" content |
 |---|---|---|---|
@@ -108,12 +132,17 @@ Three consequences:
 - **Source files:** `.ts`, `.tsx`, `.mts` and `.cts`, excluding declaration
   files (`.d.ts`, `.d.mts`, `.d.cts`), anything under a `node_modules/` or
   `dist/` directory at any depth, and `.git/` and `.variant/`.
-  Imports written with `.js`, `.mjs`, `.cjs` or `.jsx` extensions resolve to the
-  TypeScript source.
+  JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`) is indexed when it is the repository's own: tracked by git, or new and not ignored.
+  Build output, vendored bundles, `*.min.js` and files over 512 KB are left out.
+  Outside a git repository every JavaScript file not under those directories
+  is indexed. An import written with a `.js`, `.mjs`, `.cjs` or `.jsx`
+  extension resolves to the TypeScript source when there is one, and to the
+  JavaScript file otherwise. A changed CommonJS module (`module.exports`,
+  `exports.x`) is `breaking` and reaches every file that requires it: it has
+  no export list to compare.
 - **Tests** (for `impact`): indexed files under a `__tests__/` directory, or
-  named `*.test.*` / `*.spec.*`. A `.test.js` file is not indexed, so it is
-  never counted; with no TypeScript tests at all, `impact` stops with
-  `NO_TEST_FILES`.
+  named `*.test.*` / `*.spec.*`. With no test files at all, `impact` stops
+  with `NO_TEST_FILES`.
 - **Imports:** `import` and `export … from` declarations, `import()`,
   `require()` and `import x = require()`. A computed `import()` or `require()`
   is followed as far as its literal start (`` `./locales/${lang}` `` reaches
@@ -150,7 +179,7 @@ prediction to `.variant/history/impact.jsonl`.
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `HEAD~1` | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
+| `--base <ref>` | detected | Ref to compare against. See [Refs and diffs](#refs-and-diffs). |
 | `--head-sha <sha>` | `HEAD` | Commit to record the prediction against. In a pull request, GitHub Actions checks out a merge commit it makes for the run; pass the pushed commit here and to `impact verify` so the record names something that can be looked up. |
 | `--json` | off | Print the full report, [shape here](./api.md#impact---json). |
 
@@ -161,7 +190,7 @@ Each changed file is classified:
 | `non-impacting` | Comments or whitespace only | Selects nothing |
 | `internal` | An exported symbol's body changed, but no signature did | Selects every test that imports the file, directly or transitively |
 | `breaking` | An exported signature changed, or an export was added or removed | Also propagates to dependents that import the changed names |
-| `unanalyzed` | Not TypeScript (`.json`, `.css`, `.js`, `.d.ts`, …), in a directory that is not indexed, or outside the directory variant runs in | Selects the tests of every TypeScript file whose imports name it; listed as `Unreached` when there are none |
+| `unanalyzed` | Not TypeScript or JavaScript (`.json`, `.css`, `.d.ts`, …), a source file the index leaves out, or outside the directory variant runs in | Selects the tests of every indexed file whose imports name it; listed as `Unreached` when there are none |
 
 A file that does not parse is `breaking`, whatever the comparison says.
 
@@ -179,13 +208,13 @@ Confidence starts at 100% and drops 10 points per note about the change
 (unresolved imports on affected files, a dynamic `import()`, unanalyzed files,
 a test that may depend on fixtures), with a floor of 30%. It is 100% when every
 test is selected, and at most 50% when a changed file reaches no test or a
-changed JavaScript test could not be selected. It prints as a bucket first:
+changed JavaScript test the index leaves out could not be selected. It prints as a bucket first:
 `high` at 90% and up, `medium` from 70%, `low` below. It is not a probability
 that skipping is safe.
 
 Notes that describe the repository and not the change (a loader with a fully
 computed specifier, a local dependency discovery did not find, JavaScript test
-files) are counted on a `Repository:` line and listed with `-v`. They lower the
+files the index leaves out) are counted on a `Repository:` line and listed with `-v`. They lower the
 score only when the change touches what they are about.
 
 The output also says how many workspace packages were found. Exits 0, or 1 with
@@ -253,7 +282,7 @@ is `internal`, else `safe to skip build`.
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `main` | Branch or ref the pull request targets. See [Refs and diffs](#refs-and-diffs). |
+| `--base <ref>` | detected | Branch or ref the pull request targets. See [Refs and diffs](#refs-and-diffs). |
 
 ```
 Base ref: main
@@ -275,12 +304,17 @@ The parenthesis counts exported symbols added (`+`), removed (`-`) and changed
 variant pr report [--base <ref>] [--markdown] [--output <file>]
 ```
 
-The `pr check` result as an artifact: JSON by default, or markdown for a pull
-request comment. [Both formats are documented here](./api.md#pr-report).
+What a pull request changes and what has to be verified before it merges:
+the risk of each changed file, the test files to run and the import chain
+that puts each one there, the typecheck, build and lint commands of the
+packages it affects, and the changed files no test reaches. JSON by default,
+or markdown for a pull request comment.
+[Both formats are documented here](./api.md#pr-report). It plans; it runs
+nothing and records no prediction.
 
 | Option | Default | Description |
 |---|---|---|
-| `--base <ref>` | `main` | As for `pr check` |
+| `--base <ref>` | detected | As for `pr check` |
 | `--markdown` | off | Markdown instead of JSON |
 | `--output <file>` | stdout | Write to this path, relative to the current directory |
 
@@ -359,14 +393,51 @@ Each task's last run time and duration, read from the local cache.
 ### `init`
 
 ```
-variant init
+variant init [--dry-run] [--yes] [--no-install] [--package <spec>]
+variant init --tasks
 ```
 
-Writes `variant.config.ts` to the current directory. In a terminal, it asks
-which tasks to configure, then a command and inputs for each, suggesting
-defaults from your `package.json` scripts, package manager and framework. When
-stdin is not a terminal, it writes a single `build` task without asking. If a
-config already exists, it writes nothing.
+Sets variant up in a repository, once. It finds out how the repository
+installs, tests and runs CI, shows every change it would make, and makes them
+when you agree:
+
+- installs `@blzsky/variant` as a dev dependency with your package manager
+  (npm, pnpm, Yarn or Bun);
+- adds the [Vitest adapter](./vitest-adapter.md) to your Vitest config: the
+  root config if there is one, otherwise each workspace package's. A package
+  that runs Vitest with no config gets a new `vitest.config.mts` that sets the
+  reporters and nothing else;
+- adds `.variant/` to `.gitignore`;
+- adds `fetch-depth: 0` to the checkout in any workflow that runs your tests,
+  because the adapter compares against an earlier commit;
+- writes `.github/workflows/variant.yml`, which keeps one comment on each pull
+  request. It uses the action versions, Node version and Bun version of your
+  existing test workflow when there is one.
+
+Where there is no adapter to add, `init` says so and does less. A repository
+that only runs Jest gets the pull-request workflow and no change to its test
+workflow. A package whose Vitest settings live in `vite.config.*` is left
+alone, with the lines to add, because a separate Vitest config would replace
+that file. A test script that passes `--reporter` gets a warning, since the
+flag keeps the adapter from loading.
+
+Edits are shown as a diff and new files in full. A config or workflow that `init` cannot edit
+with confidence is left untouched, and it prints the lines to add yourself.
+Running it again changes nothing that is already in place.
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Show what was found and what would change, and stop |
+| `-y`, `--yes` | Apply without asking. Needed when there is no terminal to ask in |
+| `--no-install` | Do not run the package manager; print the command instead |
+| `--package <spec>` | Install this in place of `@blzsky/variant`: a tarball path or a version |
+| `--tasks` | Write `variant.config.ts` for the task runner instead (see below) |
+
+`init --tasks` writes `variant.config.ts` to the current directory, for `build`
+and `run`. In a terminal it asks which tasks to configure, then a command and
+inputs for each, suggesting defaults from your `package.json` scripts, package
+manager and framework. When stdin is not a terminal, it writes a single `build`
+task without asking. If a config already exists, it writes nothing.
 
 ### `doctor`
 

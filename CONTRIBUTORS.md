@@ -87,6 +87,7 @@ src/
 │   │   ├── validation.ts     # validateTaskGraph(), behind `variant check`
 │   │   ├── package-graph.ts  # Workspace discovery and cross-package tasks
 │   │   ├── import-graph.ts   # File-level import graph over the symbol index
+│   │   ├── import-paths.ts   # The import chain from a file to a changed one
 │   │   ├── package-exports.ts  # Resolves package `exports` maps
 │   │   ├── tsconfig-paths.ts   # Resolves tsconfig `paths` aliases
 │   │   ├── workspace-check.ts  # Pure declared-vs-imported dependency audit
@@ -94,11 +95,13 @@ src/
 │   ├── history/          # impact-log.ts: the .variant/history JSONL files
 │   ├── impact/           # predict.ts (`impact`), verify.ts (`impact verify`)
 │   ├── insight/          # computeInsights(): stats from results + cache
+│   ├── plan/             # plan.ts: the verification plan (risk, tests and why,
+│   │                     # checks, what nothing verifies); checks.ts
 │   ├── plugins/          # BuildPlugin interface and the registry that fans out hooks
-│   ├── pr/               # check.ts (classify a PR), report.ts (JSON / markdown)
+│   ├── pr/               # check.ts (classify a PR), report.ts (the plan as JSON / markdown)
 │   ├── progress/         # reporter.ts: the progress port; every renderer is in cli/
 │   ├── provenance/       # Why each task was selected to run
-│   ├── scaffold/         # The template behind `variant init`
+│   ├── scaffold/         # The template behind `variant init --tasks`
 │   ├── scope/            # Package sets -> runner predicates
 │   ├── semantic/
 │   │   ├── surface.ts        # Collects a file's exported surface
@@ -108,8 +111,15 @@ src/
 │   │   ├── blast-radius.ts   # Reverse-graph traversal from changed files
 │   │   ├── test-impact.ts    # Which tests a change requires
 │   │   └── verdict.ts        # The build verdict shared by `pr check` and `impact`
-│   ├── vcs/              # git.ts: the git porcelain every capability reads through
+│   ├── setup/            # `variant init`: discover.ts, plan.ts (the changes, as
+│   │                     # values), apply.ts, and the config and workflow edits
+│   ├── vcs/              # git.ts: the git porcelain every capability reads through;
+│   │                     # change-base.ts: the base and pushed commits, detected
 │   └── errors.ts         # VariantError and its subclasses, each with a .code
+│
+├── reporters/            # The surface inside a user's test run
+│   ├── shadow.ts         # Predict beside the run, reconcile after it; no runner types
+│   └── vitest.ts         # `@blzsky/variant/vitest`: Vitest hooks -> shadow.ts
 │
 ├── adapters/
 │   ├── types.ts          # Adapter interfaces
@@ -120,8 +130,9 @@ src/
 └── types/                # Contracts shared across layers
 ```
 
-`tsup` builds two entry points: `dist/index.js` (the library) and `dist/cli.js`
-(the `variant` binary).
+`tsup` builds three entry points: `dist/index.js` (the library), `dist/cli.js`
+(the `variant` binary) and `dist/vitest.js` (the Vitest adapter, also built as
+`dist/vitest.cjs` for configs loaded with `require`).
 
 The request path for most commands: `cli/context.ts:createContext()` loads the
 config, detects the package manager, runtime and framework, builds the task DAG,

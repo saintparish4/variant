@@ -11,7 +11,7 @@
  * throwing.
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export interface ImpactPrediction {
@@ -108,19 +108,16 @@ async function appendRecord(
 	try {
 		await mkdir(historyDir, { recursive: true });
 		const file = path.join(historyDir, filename);
-		let lines: string[] = [];
-		try {
-			lines = (await readFile(file, "utf8"))
-				.split("\n")
-				.filter((l) => l.trim() !== "");
-		} catch {
-			// First write — no log yet.
-		}
-		lines.push(JSON.stringify(record));
+		// Appended, not rewritten: several test processes can finish at the
+		// same moment, and a read-then-write of the whole file let the last
+		// one erase the others' records.
+		await appendFile(file, `${JSON.stringify(record)}\n`);
+		const lines = (await readFile(file, "utf8"))
+			.split("\n")
+			.filter((l) => l.trim() !== "");
 		if (lines.length > MAX_IMPACT_RECORDS) {
-			lines = lines.slice(-MAX_IMPACT_RECORDS);
+			await writeFile(file, `${lines.slice(-MAX_IMPACT_RECORDS).join("\n")}\n`);
 		}
-		await writeFile(file, `${lines.join("\n")}\n`);
 		return true;
 	} catch {
 		return false;

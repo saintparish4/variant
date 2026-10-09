@@ -10,8 +10,13 @@ import {
 	inputsFor,
 	renderConfigTemplate,
 } from "../../core/scaffold/config-template.js";
+import { applySetup } from "../../core/setup/apply.js";
+import { discoverRepository } from "../../core/setup/discover.js";
+import { planSetup } from "../../core/setup/plan.js";
+import { renderApplied, renderFacts, renderPlan } from "../render/init.js";
 import { lines } from "../render/writer.js";
 import { getPrinter } from "../visuals/printer.js";
+import { confirm } from "../visuals/prompts.js";
 
 const CONFIG_FILENAME = "variant.config.ts";
 
@@ -22,7 +27,68 @@ function splitList(answer: string): string[] {
 		.filter(Boolean);
 }
 
-export async function registerInitAction(): Promise<void> {
+export interface InitActionOptions {
+	/** Show what would change and stop. */
+	dryRun?: boolean;
+	/** Apply without asking. Required when there is no terminal to ask in. */
+	yes?: boolean;
+	/** False leaves installing the package to the user. */
+	install?: boolean;
+	/** What to install in place of the published package: a tarball, a version. */
+	package?: string;
+	/** Write `variant.config.ts` for the task runner instead. */
+	tasks?: boolean;
+}
+
+/**
+ * Set variant up in a repository: find out how it installs, tests and runs
+ * CI, show the changes that wire variant in, and make them once confirmed.
+ * After this nobody has to run a variant command.
+ */
+export async function registerInitAction(
+	opts: InitActionOptions = {},
+): Promise<void> {
+	if (opts.tasks === true) return registerInitTasksAction();
+
+	const cwd = process.cwd();
+	const printer = getPrinter();
+
+	const facts = await discoverRepository(cwd);
+	renderFacts(facts);
+
+	const actions = await planSetup(cwd, facts, {
+		...(opts.package !== undefined && { packageSpec: opts.package }),
+		...(opts.install === false && { install: false }),
+	});
+	renderPlan(actions);
+	if (!actions.some((action) => action.kind !== "note")) return;
+
+	if (opts.dryRun === true) {
+		lines(printer, "", "Dry run: nothing was changed.");
+		return;
+	}
+	if (opts.yes !== true) {
+		// No terminal means nobody can read the diff and agree to it.
+		if (process.stdin.isTTY !== true) {
+			lines(
+				printer,
+				"",
+				"Nothing was changed. Run `variant init --yes` to apply these changes.",
+			);
+			return;
+		}
+		lines(printer, "");
+		if (!(await confirm("Apply these changes?"))) {
+			lines(printer, "Nothing was changed.");
+			return;
+		}
+	}
+
+	renderApplied(await applySetup(cwd, actions), actions);
+}
+
+/** `variant init --tasks`: the config the frozen task runner reads. */
+async function registerInitTasksAction(): Promise<void> {
 	const cwd = process.cwd();
 	const printer = getPrinter();
 

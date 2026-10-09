@@ -49,7 +49,7 @@ The parenthesis counts exported symbols added (`+`), removed (`-`) and changed (
 
 ### `pr report`
 
-Renders the `pr check` verdict as a report artifact:
+Describes the change and what has to be verified before it merges:
 
 ```bash
 # JSON to stdout
@@ -62,21 +62,22 @@ variant pr report --markdown
 variant pr report --markdown --output pr-report.md
 ```
 
-JSON output shape:
+The report has four parts:
 
-```json
-{
-  "generatedAt": "2026-06-08T12:00:00.000Z",
-  "check": {
-    "baseRef": "main",
-    "tsFilesChanged": 4,
-    "files": [...],
-    "verdict": "build-required"
-  }
-}
-```
+- **What changed.** Each changed file with a risk, how far it reaches (files
+  that import it, other packages among them, test files), and the rule that
+  set the risk.
+- **What to verify.** The test files to run, grouped by runner, each with the
+  import chain from the test to the changed file; and the `typecheck`,
+  `build`, `lint` and end-to-end scripts of every package the change affects,
+  as commands. Where the plan is wider than the import graph, it says why.
+- **Not verified.** Changed files that no test reaches, with the exported
+  names that changed and the files importing them.
+- **Graph resolution**, which says how much of the change variant could
+  follow. It is not a measure of safety.
 
-Every field, and the exact markdown layout, is in the [API reference](./api.md#pr-report).
+variant plans this and runs none of it. The risk rule, the JSON shape and a
+full markdown example are in [api.md](./api.md#pr-report).
 
 ## GitHub Actions integration
 

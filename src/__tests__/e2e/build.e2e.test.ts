@@ -55,7 +55,7 @@ describe("E2E: basic-monorepo", () => {
 	});
 
 	it("init command: refuses when config exists", async () => {
-		const result = await execa("node", [cli, "init"], { cwd });
+		const result = await execa("node", [cli, "init", "--tasks"], { cwd });
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toMatch(/already exists/);
 	});

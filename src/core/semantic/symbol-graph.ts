@@ -26,7 +26,7 @@ import { collectExportedSurface } from "./surface.js";
  * are reused by content hash, so without a bump an unchanged file keeps the
  * edges an older extractor produced (and silently misses the new ones).
  */
-export const SYMBOL_GRAPH_VERSION = 4;
+export const SYMBOL_GRAPH_VERSION = 5;
 
 const GRAPH_FILENAME = "symbols.json";
 
@@ -88,7 +88,10 @@ export interface BuildSymbolGraphStats {
 }
 
 export interface BuildSymbolGraphOptions {
-	/** File globs to index. Default: TS/TSX sources, excluding `.d.ts`. */
+	/**
+	 * File globs to index. Default: TypeScript sources, excluding `.d.ts`,
+	 * and the repository's own JavaScript; see `listJavaScript`.
+	 */
 	include?: string[];
 	/** Extra ignore globs on top of `DEFAULT_IGNORE`. */
 	ignore?: string[];
@@ -101,6 +104,14 @@ export interface BuildSymbolGraphOptions {
 }
 
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
+const JAVASCRIPT_INCLUDE = ["**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"];
+/** As git pathspecs, which match a bare glob at any depth. */
+const JAVASCRIPT_PATHSPECS = ["*.js", "*.jsx", "*.mjs", "*.cjs"];
+/**
+ * Past this a JavaScript file is a bundle someone committed, not a module
+ * someone wrote. Parsing one costs seconds and its imports mean nothing.
+ */
+const MAX_JAVASCRIPT_BYTES = 512 * 1024;
 /**
  * `node_modules` and `dist` are ignored at any depth: every package of a pnpm
  * workspace has its own `node_modules` (links into the store, which the glob
@@ -119,6 +130,55 @@ const DEFAULT_IGNORE = [
 	"**/*.d.cts",
 ];
 
+const JAVASCRIPT_FILE = /\.(?:[cm]?js|jsx)$/;
+
+function isJavaScript(file: string): boolean {
+	return JAVASCRIPT_FILE.test(file);
+}
+
+/**
+ * The JavaScript that is the repository's own. A glob cannot tell a module
+ * from build output, a vendored bundle or a generated client, and git can:
+ * what is tracked, or new and not ignored. Outside a repository there is
+ * only the glob to go on.
+ */
+async function listJavaScript(
+	cwd: string,
+	ignore: string[],
+	fg: typeof import("fast-glob"),
+): Promise<string[]> {
+	const { listRepositoryFiles } = await import("../vcs/git.js");
+	const tracked = await listRepositoryFiles(cwd, JAVASCRIPT_PATHSPECS);
+	if (tracked === null) {
+		return fg(JAVASCRIPT_INCLUDE, { cwd, onlyFiles: true, ignore });
+	}
+	const ignored = ignore.map(globToRegExp);
+	return tracked.filter(
+		(file) =>
+			!/\.min\.[cm]?js$/.test(file) &&
+			!ignored.some((pattern) => pattern.test(file)),
+	);
+}
+
+/** Enough of glob for the ignore list: `**`, `*`, and literal text. */
+function globToRegExp(pattern: string): RegExp {
+	const source = pattern
+		.split("**/")
+		.map((part) =>
+			part
+				.split("**")
+				.map((piece) =>
+					piece
+						.split("*")
+						.map((text) => text.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+						.join("[^/]*"),
+				)
+				.join(".*"),
+		)
+		.join("(?:.*/)?");
+	return new RegExp(`^${source}$`);
+}
+
 export function defaultGraphDir(cwd: string): string {
 	return path.join(cwd, ".variant", "graph");
 }
@@ -135,15 +195,14 @@ export async function buildSymbolGraph(
 	const include = options.include ?? DEFAULT_INCLUDE;
 	for (const p of include) assertSafePattern(p);
 
-	const files = (
-		await fg(include, {
-			cwd,
-			onlyFiles: true,
-			ignore: [...DEFAULT_IGNORE, ...(options.ignore ?? [])],
-		})
-	)
-		.map(toPosix)
-		.sort();
+	const ignore = [...DEFAULT_IGNORE, ...(options.ignore ?? [])];
+	const [typescript, javascript] = await Promise.all([
+		fg(include, { cwd, onlyFiles: true, ignore }),
+		options.include === undefined ? listJavaScript(cwd, ignore, fg) : [],
+	]);
+	const files = [
+		...new Set([...typescript, ...javascript].map(toPosix)),
+	].sort();
 
 	const previous =
 		options.previous?.version === SYMBOL_GRAPH_VERSION
@@ -170,7 +229,11 @@ export async function buildSymbolGraph(
 			const relPath = files[i];
 			if (relPath === undefined) return;
 			try {
-				contents[i] = await read(path.join(cwd, relPath));
+				const content = await read(path.join(cwd, relPath));
+				if (isJavaScript(relPath) && content.length > MAX_JAVASCRIPT_BYTES) {
+					continue;
+				}
+				contents[i] = content;
 			} catch (err) {
 				// Deleted after the glob listed it: gone, as if never listed.
 				if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
@@ -201,7 +264,10 @@ export async function buildSymbolGraph(
 
 		if (tsm === undefined || project === undefined) {
 			tsm = await import("ts-morph");
-			project = new tsm.Project({ useInMemoryFileSystem: true });
+			project = new tsm.Project({
+				useInMemoryFileSystem: true,
+				compilerOptions: { allowJs: true },
+			});
 		}
 		const sourceFile = project.createSourceFile(relPath, content, {
 			overwrite: true,

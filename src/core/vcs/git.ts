@@ -237,6 +237,27 @@ export async function resolveCommit(
 	return sha === undefined || sha === "" ? null : sha;
 }
 
+/**
+ * Files matching `patterns` that belong to the repository: tracked, or new
+ * and not ignored. Relative to `cwd`, and null outside a repository.
+ */
+export async function listRepositoryFiles(
+	cwd: string,
+	patterns: readonly string[],
+): Promise<string[] | null> {
+	return toFileList(
+		await git(cwd, [
+			"ls-files",
+			"-z",
+			"--cached",
+			"--others",
+			"--exclude-standard",
+			"--",
+			...patterns,
+		]),
+	);
+}
+
 /** Files differing between `ref` and the working tree. */
 export async function listChangedFiles(
 	cwd: string,
@@ -257,4 +278,52 @@ export async function listChangedFilesSinceMergeBase(
 ): Promise<string[] | null> {
 	if (isOptionLike(ref)) return null;
 	return listDiff(cwd, `${ref}...HEAD`);
+}
+
+/**
+ * The commit two refs share, or null when they share none in this clone: a
+ * shallow clone can hold both tips without it.
+ */
+export async function mergeBase(
+	cwd: string,
+	a: string,
+	b: string,
+): Promise<string | null> {
+	if (isOptionLike(a) || isOptionLike(b)) return null;
+	const sha = (await git(cwd, ["merge-base", a, b]))?.trim();
+	return sha === undefined || sha === "" ? null : sha;
+}
+
+/** Tried in order when the remote does not say which branch is its default. */
+const DEFAULT_BRANCH_GUESSES = [
+	"origin/main",
+	"origin/master",
+	"main",
+	"master",
+];
+
+/**
+ * The branch work lands on: what the remote calls its default, or failing
+ * that the first conventional name that exists. Null when none does.
+ */
+export async function defaultBranchRef(cwd: string): Promise<string | null> {
+	const head = (
+		await git(cwd, [
+			"symbolic-ref",
+			"--quiet",
+			"--short",
+			"refs/remotes/origin/HEAD",
+		])
+	)?.trim();
+	if (head !== undefined && head !== "") return head;
+	for (const guess of DEFAULT_BRANCH_GUESSES) {
+		if ((await resolveCommit(cwd, guess)) !== null) return guess;
+	}
+	return null;
+}
+
+/** The top of the working tree `cwd` is in, or null outside a repository. */
+export async function repositoryRoot(cwd: string): Promise<string | null> {
+	const top = (await git(cwd, ["rev-parse", "--show-toplevel"]))?.trim();
+	return top === undefined || top === "" ? null : top;
 }

@@ -149,6 +149,25 @@ export function parseTestRun(
 	return { ran: [...ran].sort(), failed: [...failed].sort() };
 }
 
+/**
+ * A run from results a caller already holds: a runner plugin has each test
+ * file's outcome in memory and no report file to parse.
+ */
+export function testRunFrom(
+	cwd: string,
+	results: Iterable<{ file: string; failed: boolean }>,
+	realpath: (target: string) => string = realpathOrSelf,
+): TestRun {
+	const ran = new Set<string>();
+	const failed = new Set<string>();
+	for (const result of results) {
+		const file = toRelativePosix(cwd, result.file, realpath);
+		ran.add(file);
+		if (result.failed) failed.add(file);
+	}
+	return { ran: [...ran].sort(), failed: [...failed].sort() };
+}
+
 /** Failing test files from a Jest/Vitest JSON report. */
 export function parseFailedTests(
 	cwd: string,
@@ -233,6 +252,33 @@ export async function verifyImpact(
 	reportPaths: string | readonly string[],
 	options: VerifyOptions = {},
 ): Promise<VerifyResult | null> {
+	// A workspace that runs each package's suite on its own writes one report
+	// per package for a single run. A file failing in any of them failed.
+	const paths = typeof reportPaths === "string" ? [reportPaths] : reportPaths;
+	return verifyRun(
+		cwd,
+		async () => {
+			const reports = await Promise.all(
+				paths.map((reportPath) => readReport(cwd, reportPath)),
+			);
+			return reports.map((raw) => parseTestRun(cwd, raw));
+		},
+		options,
+	);
+}
+
+/**
+ * Reconcile results the caller already has. `runs` may be a function, called
+ * only once a prediction is found: reading a report that turns out to be
+ * unreadable should not fail a run there was nothing to reconcile against.
+ *
+ * Returns null when no prediction can be matched.
+ */
+export async function verifyRun(
+	cwd: string,
+	runs: TestRun | readonly TestRun[] | (() => Promise<readonly TestRun[]>),
+	options: VerifyOptions = {},
+): Promise<VerifyResult | null> {
 	const historyDir = defaultHistoryDir(cwd);
 	const predictions =
 		options.predictions ?? (await readImpactPredictions(historyDir));
@@ -240,15 +286,16 @@ export async function verifyImpact(
 	const match = selectPrediction(predictions, options.headSha);
 	if (match === null) return null;
 
-	// A workspace that runs each package's suite on its own writes one report
-	// per package for a single run. A file failing in any of them failed.
-	const paths = typeof reportPaths === "string" ? [reportPaths] : reportPaths;
-	const reports = await Promise.all(
-		paths.map((reportPath) => readReport(cwd, reportPath)),
-	);
-	const runs = reports.map((raw) => parseTestRun(cwd, raw));
-	const failedTests = [...new Set(runs.flatMap((run) => run.failed))].sort();
-	const ran = new Set(runs.flatMap((run) => run.ran));
+	const resolved: readonly TestRun[] =
+		typeof runs === "function"
+			? await runs()
+			: Array.isArray(runs)
+				? (runs as readonly TestRun[])
+				: [runs as TestRun];
+	const failedTests = [
+		...new Set(resolved.flatMap((run) => run.failed)),
+	].sort();
+	const ran = new Set(resolved.flatMap((run) => run.ran));
 	const selected = new Set(match.prediction.affectedTests);
 	const predictedRan = match.prediction.selectAll
 		? ran.size

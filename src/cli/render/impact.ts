@@ -15,6 +15,32 @@ const count = (value: number): string => value.toLocaleString("en-US");
 export const NO_PREDICTION_MESSAGE =
 	"impact verify: no logged prediction to reconcile against. Run `variant impact` before the test run, or pass --head-sha for a specific commit.";
 
+/** A full commit id is noise beside the words that say what it is. */
+function shortRef(ref: string): string {
+	return /^[0-9a-f]{40}$/.test(ref) ? ref.slice(0, 12) : ref;
+}
+
+/**
+ * A detected base that does not exist. Reported, not raised: see
+ * `NoBaseCommitError`.
+ */
+export function renderNoBaseCommit(
+	reason: string,
+	json: boolean,
+	printer: Printer = getPrinter(),
+): void {
+	lines(
+		printer,
+		json
+			? JSON.stringify(
+					{ prediction: null, code: "NO_BASE_COMMIT", reason },
+					null,
+					2,
+				)
+			: `impact: ${reason}; no prediction was made.`,
+	);
+}
+
 export function renderImpactJson(
 	report: ImpactReport,
 	printer: Printer = getPrinter(),
@@ -39,7 +65,7 @@ export function renderImpact(
 	lines(
 		printer,
 		"",
-		`Base ref: ${report.baseRef}`,
+		`Base ref: ${shortRef(report.baseRef)}${report.baseLabel === report.baseRef ? "" : ` (${report.baseLabel})`}`,
 		`Workspace: ${report.packagesFound === 0 ? "no workspace packages found" : plural(report.packagesFound, "package")}`,
 		"",
 		`You changed ${plural(radius.changed.length, "file")}.`,

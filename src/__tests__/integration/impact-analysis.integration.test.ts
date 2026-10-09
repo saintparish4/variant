@@ -13,6 +13,7 @@ import {
 	readImpactPredictions,
 } from "../../core/history/impact-log.js";
 import { predictImpact } from "../../core/impact/predict.js";
+import { changeBaseDeps } from "../../core/vcs/change-base.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
@@ -216,8 +217,6 @@ describe("predictImpact", () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {
 			"src/app.ts": FIXTURE["src/app.ts"],
-			// JavaScript is not indexed, so this is not a test variant can see.
-			"src/app.test.js": 'import { boot } from "./app.js";\nboot();',
 			"src/auth.ts":
 				"export function login(name: string, strict: boolean): string { return name; }",
 		});
@@ -302,7 +301,7 @@ describe("predictImpact", () => {
 
 	// The shape that selected nothing on a real repository: TypeScript source
 	// whose only tests are `*.test.mjs` run by Node's own test runner.
-	it("says so when a package's tests are JavaScript it cannot select", async () => {
+	it("selects a package's JavaScript tests", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {
 			"apps/factory/package.json": JSON.stringify({ name: "factory" }),
@@ -316,22 +315,88 @@ describe("predictImpact", () => {
 		});
 
 		const report = await predictImpact(dir, {
-			changedFiles: [
-				"apps/factory/src/models.ts",
-				"apps/factory/tests/models.test.mjs",
-			],
+			changedFiles: ["apps/factory/src/models.ts"],
 			readBefore: async () => 'export const model = (): string => "a";',
 		});
 
 		const { tests } = report.result;
-		expect(tests.affectedTests).toEqual([]);
-		expect(tests.javascriptTests).toBe(1);
-		expect(tests.unselectedTests).toEqual([
-			"apps/factory/tests/models.test.mjs",
+		expect(tests.affectedTests).toEqual(["apps/factory/tests/models.test.mjs"]);
+		expect(tests.totalTests).toBe(2);
+		expect(tests.unreached).toEqual([]);
+		expect(tests.javascriptTests).toBe(0);
+		expect(tests.resolution).toBe("high");
+	});
+
+	it("follows imports between JavaScript files, extension or not", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"src/price.js": "export const total = (a, b) => a + b + 0;\n",
+			"src/cart.mjs":
+				'import { total } from "./price.js";\nexport const cart = () => total(1, 2);\n',
+			"src/cart.test.js": 'import { cart } from "./cart.mjs";\ncart();\n',
+			"src/other.test.js": "export {};\n",
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["src/price.js"],
+			readBefore: async () => "export const total = (a, b) => a + b;\n",
+		});
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "src/price.js", classification: "internal" },
 		]);
-		expect(tests.unreached).toEqual(["apps/factory/src/models.ts"]);
-		expect(tests.resolution).toBe("low");
-		expect(tests.repositoryNotes).toHaveLength(1);
+		expect(report.result.tests.affectedTests).toEqual(["src/cart.test.js"]);
+	});
+
+	// `module.exports` has no export list to compare, so nothing proves an
+	// importer unaffected.
+	it("treats a changed CommonJS module as reaching everything that requires it", async () => {
+		const dir = createTempWorkspace("impact");
+		writeFiles(dir, {
+			"lib/config.cjs": "module.exports = { retries: 3 };\n",
+			"lib/client.js":
+				'const config = require("./config.cjs");\nexport const retries = config.retries;\n',
+			"lib/client.test.js":
+				'import { retries } from "./client.js";\nretries;\n',
+		});
+
+		const report = await predictImpact(dir, {
+			changedFiles: ["lib/config.cjs"],
+			readBefore: async () => "module.exports = { retries: 2 };\n",
+		});
+
+		expect(report.result.radius.changed).toMatchObject([
+			{ filePath: "lib/config.cjs", classification: "breaking", ungated: true },
+		]);
+		expect(report.result.radius.affectedFiles).toContain("lib/client.js");
+		expect(report.result.tests.affectedTests).toEqual(["lib/client.test.js"]);
+	});
+
+	// Build output and vendored bundles are JavaScript too. Git knows which
+	// JavaScript is the repository's own.
+	it("leaves out JavaScript that git ignores", async () => {
+		const dir = createGitWorkspace("impact", {
+			".gitignore": "build/\n",
+			// Committed build output and bundles are still not source.
+			"packages/a/dist/a.test.js": "export {};\n",
+			"vendor/lib.min.js": "export {};\n",
+			"vendor/lib.test.min.js": "export {};\n",
+			"src/app.ts": "export const app = 1;\n",
+			"src/app.test.ts":
+				'import { app } from "./app";\nexport const t = app;\n',
+		});
+		writeFiles(dir, {
+			"build/app.test.js": "export {};\n",
+			"src/new.test.js": "export {};\n",
+			"src/app.ts": "export const app = 2;\n",
+		});
+
+		const report = await predictImpact(dir, { base: "HEAD" });
+
+		// The new, not yet committed test counts; the ignored build output
+		// does not.
+		expect(report.result.tests.totalTests).toBe(2);
+		expect(report.result.tests.affectedTests).toEqual(["src/app.test.ts"]);
 	});
 
 	it("follows a subpath import declared in the package's own package.json", async () => {
@@ -494,7 +559,115 @@ describe("predictImpact", () => {
 	});
 });
 
+// With no --base, a branch is measured from where it left the default branch:
+// everything it changed, not only its last commit.
+describe("impact with no base named", () => {
+	const noCi = { env: {} };
+
+	function branchWithTwoCommits(): string {
+		const dir = createGitWorkspace("impact", {
+			...FIXTURE,
+			"src/auth.ts": AUTH_BEFORE,
+			"src/other.ts": "export const other = 1;",
+			"src/other.test.ts":
+				'import { other } from "./other.js";\nexport const t = other;',
+		});
+		git(dir, "checkout", "-q", "-b", "feature");
+		writeFiles(dir, {
+			"src/auth.ts":
+				"export function login(name: string): string { return name.trim(); }",
+		});
+		git(dir, "commit", "-q", "-am", "first");
+		writeFiles(dir, { "src/other.ts": "export const other = 2;" });
+		git(dir, "commit", "-q", "-am", "second");
+		return dir;
+	}
+
+	it("measures a branch from its merge base with the default branch", async () => {
+		const dir = branchWithTwoCommits();
+
+		const report = await predictImpact(dir, {
+			changeBaseDeps: { ...changeBaseDeps(dir), ...noCi },
+		});
+
+		expect(report.baseSource).toBe("default-branch");
+		expect(report.baseLabel).toBe("merge base with main");
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/auth.ts", "src/other.ts"]);
+		expect(report.result.tests.affectedTests).toEqual([
+			"src/app.test.ts",
+			"src/other.test.ts",
+		]);
+	});
+
+	it("measures the last commit on the default branch itself", async () => {
+		const dir = branchWithTwoCommits();
+		git(dir, "checkout", "-q", "main");
+		git(dir, "merge", "-q", "--ff-only", "feature");
+
+		const report = await predictImpact(dir, {
+			changeBaseDeps: { ...changeBaseDeps(dir), ...noCi },
+		});
+
+		expect(report.baseSource).toBe("previous-commit");
+		expect(
+			report.result.radius.changed.map((change) => change.filePath),
+		).toEqual(["src/other.ts"]);
+	});
+
+	it("records the pushed commit of a pull request, not the one checked out", async () => {
+		const dir = branchWithTwoCommits();
+		const pushed = "c".repeat(40);
+
+		const report = await predictImpact(dir, {
+			changeBaseDeps: {
+				...changeBaseDeps(dir),
+				env: {
+					GITHUB_ACTIONS: "true",
+					GITHUB_EVENT_NAME: "pull_request",
+					GITHUB_BASE_REF: "main",
+					GITHUB_EVENT_PATH: "/event.json",
+				},
+				// A local `main` stands in for the remote-tracking branch.
+				resolveCommit: (ref) =>
+					changeBaseDeps(dir).resolveCommit(ref.replace("origin/", "")),
+				mergeBase: (a, b) =>
+					changeBaseDeps(dir).mergeBase(a, b.replace("origin/", "")),
+				readEvent: async () => ({ pull_request: { head: { sha: pushed } } }),
+			},
+		});
+
+		const records = await readImpactPredictions(defaultHistoryDir(dir));
+		expect(records.at(-1)?.headSha).toBe(pushed);
+		// A caller that reconciles later needs to know which prediction is its own.
+		expect(report.headSha).toBe(pushed);
+	});
+});
+
 describe("impact command", () => {
+	it("reports a push with no previous commit and does not fail", async () => {
+		const dir = createGitWorkspace("impact", {
+			"src/a.ts": "export const a = 1;",
+		});
+		const output = captureGlobalOutput();
+		const saved = { ...process.env };
+		Object.assign(process.env, {
+			GITHUB_ACTIONS: "true",
+			GITHUB_EVENT_NAME: "push",
+			GITHUB_EVENT_PATH: "",
+			VARIANT_BASE: "",
+		});
+		try {
+			await withCwd(dir, () => registerImpactAction({}));
+		} finally {
+			process.env = saved;
+		}
+
+		expect(output.stdout()).toContain("no prediction was made");
+		expect(await readImpactPredictions(defaultHistoryDir(dir))).toEqual([]);
+	});
+
 	it("prints the run/skip block with the report-only disclaimer", async () => {
 		const dir = createTempWorkspace("impact");
 		writeFiles(dir, {

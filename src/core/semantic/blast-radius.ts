@@ -91,6 +91,12 @@ export interface BlastRadius {
 }
 
 const TS_FILE = /\.(?:ts|tsx|mts|cts)$/;
+const JS_FILE = /\.(?:[cm]?js|jsx)$/;
+/**
+ * `module.exports = …`, `exports.name = …` and the like. Such a module has
+ * no export list to compare between two versions.
+ */
+const COMMONJS_EXPORT = /\bmodule\.exports\b|\bexports\.[A-Za-z_$]|\bexports\[/;
 /** What a JavaScript or TypeScript module can load with `import` or `require`. */
 const MODULE_FILE = /\.(?:[cm]?[jt]sx?|json)$/;
 
@@ -129,8 +135,34 @@ function isTypeScriptSource(file: string): boolean {
 	return TS_FILE.test(file) && !DECLARATION_FILE.test(file);
 }
 
+/** What the index covers: TypeScript, and the repository's own JavaScript. */
+function isSource(file: string): boolean {
+	return isTypeScriptSource(file) || JS_FILE.test(file);
+}
+
 function isAnalyzable(file: string): boolean {
-	return isTypeScriptSource(file) && !isOutsideWorkspace(file);
+	return isSource(file) && !isOutsideWorkspace(file);
+}
+
+/**
+ * A changed CommonJS module reaches every file that requires it. What it
+ * exports is whatever was assigned, so the differ sees no exported names in
+ * either version and would call any change to it internal.
+ */
+function widenCommonJs(
+	impact: FileImpact,
+	before: string | null,
+	after: string | null,
+): FileImpact {
+	if (!JS_FILE.test(impact.filePath)) return impact;
+	if (impact.classification === "non-impacting") return impact;
+	if (!COMMONJS_EXPORT.test(`${before ?? ""}\n${after ?? ""}`)) return impact;
+	return {
+		...impact,
+		classification: "breaking",
+		propagates: true,
+		ungated: true,
+	};
 }
 
 function unanalyzedImpact(file: string): FileImpact {
@@ -252,12 +284,16 @@ export async function traceBlastRadius(
 		// no node to walk from, its classification would reach nothing, so it
 		// goes the way of any file the index does not cover.
 		if (after !== null && !indexed.has(file)) return unanalyzedImpact(file);
-		return toFileImpact(
-			await classify({
-				filePath: file,
-				before: before ?? "",
-				after: after ?? "",
-			}),
+		return widenCommonJs(
+			toFileImpact(
+				await classify({
+					filePath: file,
+					before: before ?? "",
+					after: after ?? "",
+				}),
+			),
+			before,
+			after,
 		);
 	});
 
@@ -371,18 +407,18 @@ export function assembleBlastRadius(
 		.map((impact) => impact.filePath);
 	const outside = unanalyzed.filter(isOutsideWorkspace);
 	const inside = unanalyzed.filter((file) => !isOutsideWorkspace(file));
-	const unindexed = inside.filter(isTypeScriptSource);
-	const notTypeScript = inside.filter((file) => !isTypeScriptSource(file));
+	const unindexed = inside.filter(isSource);
+	const notTypeScript = inside.filter((file) => !isSource(file));
 	if (notTypeScript.length > 0) {
 		const one = notTypeScript.length === 1;
 		notes.add(
-			`${notTypeScript.length} changed ${one ? "file is" : "files are"} not TypeScript and ${one ? "was" : "were"} not analyzed (${listPaths(notTypeScript)})`,
+			`${notTypeScript.length} changed ${one ? "file is" : "files are"} not TypeScript or JavaScript and ${one ? "was" : "were"} not analyzed (${listPaths(notTypeScript)})`,
 		);
 	}
 	if (unindexed.length > 0) {
 		const one = unindexed.length === 1;
 		notes.add(
-			`${unindexed.length} changed TypeScript ${one ? "file is" : "files are"} in a directory variant does not index and ${one ? "was" : "were"} not analyzed (${listPaths(unindexed)})`,
+			`${unindexed.length} changed source ${one ? "file is" : "files are"} not in variant's index (ignored by git, in a build directory, or too large) and ${one ? "was" : "were"} not analyzed (${listPaths(unindexed)})`,
 		);
 	}
 	if (outside.length > 0) {

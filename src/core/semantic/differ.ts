@@ -88,7 +88,10 @@ export function createClassifier(): ChangeClassifier {
 			const tsm = await import("ts-morph");
 			return {
 				tsm,
-				project: new tsm.Project({ useInMemoryFileSystem: true }),
+				project: new tsm.Project({
+					useInMemoryFileSystem: true,
+					compilerOptions: { allowJs: true },
+				}),
 			};
 		})();
 		const { tsm, project } = await host;
@@ -206,7 +209,16 @@ function compareSurfaces(
 	};
 }
 
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
+const SOURCE_EXTENSIONS = new Set([
+	".ts",
+	".tsx",
+	".mts",
+	".cts",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+]);
 
 function sourceExtension(filePath: string): string {
 	const dot = filePath.lastIndexOf(".");
