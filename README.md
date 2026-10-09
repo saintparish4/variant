@@ -8,61 +8,69 @@
 
 ## What is variant?
 
-variant tells you which tests a change in a TypeScript monorepo actually needs.
-It reads the diff at the level of the syntax tree, not the line, classifies
-each changed file by what it does to the file's exported surface, and follows
-every test file's imports across workspace packages to see which ones reach the
-change.
+variant answers one question about a change to a TypeScript repository: what
+has to be verified before this is safe to merge?
+
+It reads the diff at the level of the syntax tree, not the line, follows every
+import across workspace packages, and says, on the pull request:
+
+- how risky each changed file is, and why;
+- which test files reach the change, with the import chain from each test to
+  the file that changed;
+- which typecheck, build and lint commands apply to the packages it affects;
+- which changed files no test reaches at all.
+
+You set it up once. After that nobody types a variant command: your own test
+command and your pull requests are the interface.
 
 ```bash
-npx @blzsky/variant impact --base origin/main
+npx @blzsky/variant init
 ```
 
-<p align="center">
-  <img alt="Running `variant impact --base main` after changing formatPrice's signature and documenting slugify: price.ts is breaking, slug.ts is non-impacting, 2 of 4 test files run" src="./docs/assets/impact.gif" width="840">
-</p>
+`init` finds out how the repository installs, tests and runs CI, shows every
+change it would make as a diff, and makes them when you agree. It adds one
+line to your Vitest config and one workflow that keeps a comment on each pull
+request.
 
-In that repository, `shop` and `blog` both depend on `utils`. A tool that works
-from the package graph would run all four test files. variant follows the
-imports: only `shop` reaches the changed `price.ts`, and a doc comment on
-`slug.ts` selects nothing.
+It does not skip tests. Your full suite runs as it always did; in CI variant
+predicts beside it which test files the change needs, then checks that
+prediction against what failed and prints one line:
 
-It does not skip anything. Every prediction is logged, and
-`variant impact verify` checks it against the test run you did anyway,
-counting each failure the prediction would have missed. That count, the
-false-skip rate, is what has to be measured before skipping is worth turning
-on, and it is the point of the project right now.
+```
+variant: predicted 8 of 55 test files (high). 2 failed, all predicted.
+```
 
-The same analysis powers `pr check`, which rolls a branch's changes into one
-build verdict for a pull request comment, and `workspace check`, which fails CI
-when a package imports something it never declared.
+Leaving tests out is something variant has to earn in each repository, from
+that record, and is not built yet.
 
-> **Status**: `0.x`, report-only. `impact`, `impact verify`, `diff`,
-> `pr check`, `pr report` and `workspace check` work today and are where
-> development happens. Test skipping is **not implemented**, deliberately, and
-> will not be until the false-skip rate is measured on real repositories; see
-> [Help measure it](#help-measure-it). The task runner underneath (`build`,
-> `run`, `insight`) works but is frozen. Any minor release can break, and every
-> break is in the [CHANGELOG](./CHANGELOG.md).
+> **Status**: `0.x`. What is described here is on the default branch and
+> **not in a published release yet**: npm still serves 0.2.1, which has
+> `impact`, `pr check`, `pr report` and `workspace check`, an `init` that
+> only writes a task-runner config, and no adapter. Until the next release,
+> the commands on this page do something else there. The adapter is for Vitest; a Jest repository gets the pull
+> request report only. Test skipping is **not implemented**, deliberately.
+> The task runner underneath (`build`, `run`, `insight`) works but is frozen.
+> Any minor release can break, and every break is in the
+> [CHANGELOG](./CHANGELOG.md).
 
 ## Install
 
-variant needs Node 20 or newer and a git repository with at least one commit
-before the one you are checking. There is nothing to configure.
+variant needs Node 20 or newer and a git repository.
 
 ```bash
-# run it once
-npx @blzsky/variant impact --base origin/main
-
-# keep it in a project
-npm install -D @blzsky/variant    # or pnpm add -D / yarn add -D
+npx @blzsky/variant init            # shows the changes, asks, then applies
+npx @blzsky/variant init --dry-run  # only look
 ```
+
+`init` installs `@blzsky/variant` as a dev dependency with your package
+manager (npm, pnpm, Yarn or Bun), adds the
+[Vitest adapter](./docs/vitest-adapter.md) to your test config, ignores
+`.variant/`, gives your test workflow's checkout the history a prediction
+needs, and writes `.github/workflows/variant.yml`. Anything it cannot edit
+with confidence it leaves alone and tells you the lines to add.
 
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.
-
-variant keeps its index and history in `.variant/`, in the directory it runs
-in. Add `.variant/` to `.gitignore`.
 
 ### Upgrade
 
@@ -70,26 +78,43 @@ in. Add `.variant/` to `.gitignore`.
 npm install -D @blzsky/variant@latest
 ```
 
-Because variant is `0.x`, pin a version in CI (`npx --yes @blzsky/variant@0.2.1`)
-and read the CHANGELOG before moving to a new minor version.
+Because variant is `0.x`, read the CHANGELOG before moving to a new minor
+version.
 
 ## Usage
 
+After `init` there is nothing to run. What you see:
+
+- **On every pull request**, one comment, kept up to date: the risk of each
+  changed file, the tests to run and why, the checks, and what is not
+  verified. [An example](./docs/api.md#pr-report).
+- **In every CI test run**, one line saying what was predicted and whether a
+  failure fell outside it.
+
+The first runs after setup select every test, because the setup itself changes
+the lockfile and the test config. Narrowed predictions start with the next
+pull request.
+
+The commands underneath are still there when you want them:
+
 ```bash
-variant impact --base origin/main          # which tests does this branch need?
-npx vitest run --reporter=json --outputFile=report.json
-variant impact verify report.json          # did the prediction miss a failure?
-variant pr check --base origin/main        # one build verdict for the branch
+variant pr report --markdown               # the pull request comment, locally
+variant impact                             # which tests does this change need?
 variant workspace check                    # undeclared dependencies (exits 1)
 ```
+
+<p align="center">
+  <img alt="Running `variant impact --base main` after changing formatPrice's signature and documenting slugify: price.ts is breaking, slug.ts is non-impacting, 2 of 4 test files run" src="./docs/assets/impact.gif" width="840">
+</p>
 
 | Command | What it does |
 |---|---|
 | `impact` | Predict which test files a change requires, and how much of the import graph resolved. Report-only. |
 | `impact verify <report...>` | Reconcile the last prediction against one or more Vitest or Jest JSON reports and report false skips |
 | `diff <file>` | Classify one file's change and list the exported symbols that changed |
+| `init` | Set a repository up: the dependency, the adapter, the workflow. Once. |
 | `pr check` | Classify every TypeScript change on the branch and roll them into one build verdict |
-| `pr report` | The `pr check` verdict as JSON, or as markdown for a PR comment |
+| `pr report` | What the branch changes and what has to be verified, as JSON or as markdown for a PR comment |
 | `workspace check` | Fail when a package imports a dependency it does not declare |
 
 Run `variant <command> --help` for its flags, or see the
@@ -106,7 +131,9 @@ setup file selects every test.
 
 ### In CI
 
-Check out with `fetch-depth: 0` and pass `--base origin/<branch>`. A shallow
+`init` writes what CI needs. To wire the commands in by hand: check out
+with `fetch-depth: 0`; the base is detected on GitHub Actions, and elsewhere
+pass `--base origin/<branch>`. A shallow
 clone has no base commit to compare against, and `actions/checkout` creates no
 local branch for the target; variant stops with `GIT_REF_ERROR` rather than
 guess.

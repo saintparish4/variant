@@ -1,7 +1,29 @@
 import { defineConfig } from "vitest/config";
 
+/**
+ * variant's own adapter, on variant's own suite. Loaded from the build, by a
+ * path the compiler does not follow: a fresh checkout runs tests before it
+ * has a `dist/`, and must not fail to start over it. Without a build the
+ * suite simply runs unobserved.
+ */
+async function reporters(): Promise<unknown[] | undefined> {
+	if (!process.env["CI"]) return undefined;
+	try {
+		const built = new URL("./dist/vitest.js", import.meta.url).href;
+		const adapter = (await import(built)) as {
+			variantReporters: () => unknown[];
+		};
+		return adapter.variantReporters();
+	} catch {
+		return undefined;
+	}
+}
+
+const observed = await reporters();
+
 export default defineConfig({
 	test: {
+		...(observed !== undefined && { reporters: observed as never }),
 		passWithNoTests: true,
 		// variant reads the pull request or push it is running in from these.
 		// Left set, every test that builds its own repository would be measured

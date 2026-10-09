@@ -16,6 +16,8 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Changed
 
+- **variant's own suite runs its adapter in CI**, loaded from the build when
+  there is one, and CI checks out full history for it.
 - **The `pr report` markdown has a new layout**, and no longer shows the
   build verdict or the `Generated` and `Base ref` lines. Its first line is
   still `## Variant PR Report`. The JSON keeps `check` as it was, with
