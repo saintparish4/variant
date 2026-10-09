@@ -234,15 +234,15 @@ describe("planSetup and applySetup", () => {
 		await applySetup(dir, actions, { run: async () => {} });
 
 		expect(facts.vitestWithoutConfig).toEqual(["packages/a"]);
-		expect(read(dir, "packages/a/vitest.config.ts")).toBe(
+		expect(read(dir, "packages/a/vitest.config.mts")).toBe(
 			'import { variantReporters } from "@blzsky/variant/vitest";\n\nexport default {\n\ttest: {\n\t\treporters: variantReporters(),\n\t},\n};\n',
 		);
-		expect(existsSync(path.join(dir, "packages/b/vitest.config.ts"))).toBe(
+		expect(existsSync(path.join(dir, "packages/b/vitest.config.mts"))).toBe(
 			false,
 		);
 		const again = await discoverRepository(dir);
 		expect(again.vitestWithoutConfig).toEqual([]);
-		expect(again.vitestConfigs).toEqual(["packages/a/vitest.config.ts"]);
+		expect(again.vitestConfigs).toEqual(["packages/a/vitest.config.mts"]);
 	});
 
 	// pyra's api: Vitest is a dependency, and the only script that runs it
@@ -278,7 +278,9 @@ describe("planSetup and applySetup", () => {
 			"apps/api/vitest.integration.config.ts",
 		]);
 		expect(facts.vitestWithoutConfig).toEqual(["apps/unit"]);
-		expect(existsSync(path.join(dir, "apps/api/vitest.config.ts"))).toBe(false);
+		expect(existsSync(path.join(dir, "apps/api/vitest.config.mts"))).toBe(
+			false,
+		);
 		expect(read(dir, "apps/api/vitest.integration.config.ts")).toContain(
 			"reporters: variantReporters()",
 		);
@@ -300,7 +302,7 @@ describe("planSetup and applySetup", () => {
 		expect(
 			actions.some(
 				(action) =>
-					action.kind === "write" && action.file === "vitest.config.ts",
+					action.kind === "write" && action.file.startsWith("vitest.config."),
 			),
 		).toBe(false);
 		expect(

@@ -40,6 +40,7 @@ export interface PlanOptions {
 }
 
 export const PACKAGE_NAME = "@blzsky/variant";
+const NEW_CONFIG = "vitest.config.mts";
 export const PULL_REQUEST_WORKFLOW = ".github/workflows/variant.yml";
 
 const ADD_DEV: Record<PackageManagerName, string[]> = {
@@ -147,7 +148,10 @@ export async function planSetup(
 		}
 	}
 	for (const dir of facts.vitestWithoutConfig) {
-		const file = dir === "" ? "vitest.config.ts" : `${dir}/vitest.config.ts`;
+		// `.mts`, so it is an ES module whatever the package says: as `.ts` in
+		// a package without `"type": "module"` Vite loads it as CommonJS and
+		// warns about the `import` in it on every run.
+		const file = dir === "" ? NEW_CONFIG : `${dir}/${NEW_CONFIG}`;
 		actions.push({
 			kind: "write",
 			file,

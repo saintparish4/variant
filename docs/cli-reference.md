@@ -405,7 +405,7 @@ when you agree:
   (npm, pnpm, Yarn or Bun);
 - adds the [Vitest adapter](./vitest-adapter.md) to your Vitest config: the
   root config if there is one, otherwise each workspace package's. A package
-  that runs Vitest with no config gets a new `vitest.config.ts` that sets the
+  that runs Vitest with no config gets a new `vitest.config.mts` that sets the
   reporters and nothing else;
 - adds `.variant/` to `.gitignore`;
 - adds `fetch-depth: 0` to the checkout in any workflow that runs your tests,

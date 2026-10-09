@@ -39,6 +39,7 @@ const CONFIG =
  * without one. Kept as text here on purpose: this is the file a user ends up
  * with, and the test is that a real run accepts it.
  */
+const CREATED_FILE = "vitest.config.mts";
 const CREATED_CONFIG =
 	'import { variantReporters } from "@blzsky/variant/vitest";\n\nexport default {\n\ttest: {\n\t\treporters: variantReporters(),\n\t},\n};\n';
 
@@ -54,17 +55,14 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 }
 
 /** The user's own test command: Vitest, with nothing of variant's on it. */
-function runTests(cwd: string, env: Record<string, string>) {
+function runTests(
+	cwd: string,
+	env: Record<string, string>,
+	configFile = "vitest.config.ts",
+) {
 	return execa(
 		"node",
-		[
-			vitestBin,
-			"run",
-			"--root",
-			cwd,
-			"--config",
-			path.join(cwd, "vitest.config.ts"),
-		],
+		[vitestBin, "run", "--root", cwd, "--config", path.join(cwd, configFile)],
 		{ cwd: repo, reject: false, env: { NO_COLOR: "1", ...env } },
 	);
 }
@@ -77,12 +75,13 @@ function runTests(cwd: string, env: Record<string, string>) {
 async function repoWithFailingChange(
 	manifest: Record<string, unknown>,
 	config: string = CONFIG,
+	configFile = "vitest.config.ts",
 ): Promise<string> {
 	const cwd = mkdtempSync(path.join(tmpdir(), "variant-e2e-adapter-"));
 	write(cwd, {
 		".gitignore": ".variant/\nnode_modules\n",
 		"package.json": JSON.stringify(manifest),
-		"vitest.config.ts": config,
+		[configFile]: config,
 		"src/math.ts":
 			"export function add(a: number, b: number): number { return a + b; }\n",
 		"src/math.test.ts":
@@ -188,7 +187,11 @@ describe("E2E: the Vitest adapter in the config `init` creates", () => {
 	let cwd: string;
 
 	beforeAll(async () => {
-		cwd = await repoWithFailingChange({ name: "app" }, CREATED_CONFIG);
+		cwd = await repoWithFailingChange(
+			{ name: "app" },
+			CREATED_CONFIG,
+			CREATED_FILE,
+		);
 	});
 
 	afterAll(() => {
@@ -200,8 +203,13 @@ describe("E2E: the Vitest adapter in the config `init` creates", () => {
 	});
 
 	it("runs the suite as before and adds the variant line", async () => {
-		const result = await runTests(cwd, { CI: "true" });
+		const result = await runTests(cwd, { CI: "true" }, CREATED_FILE);
 
+		// As `.ts` in a package without `"type": "module"`, Vite warned on
+		// every run that the file was ESM loaded as CommonJS.
+		expect(`${result.stdout}${result.stderr}`).not.toContain(
+			"loaded as CommonJS",
+		);
 		expect(result.exitCode).toBe(1);
 		expect(result.stdout).toContain("1 failed | 1 passed");
 		expect(result.stdout).toContain(
@@ -210,11 +218,11 @@ describe("E2E: the Vitest adapter in the config `init` creates", () => {
 	});
 
 	it("keeps Vitest's GitHub Actions annotations", async () => {
-		const result = await runTests(cwd, {
-			CI: "true",
-			GITHUB_ACTIONS: "true",
-			VARIANT_SHADOW: "0",
-		});
+		const result = await runTests(
+			cwd,
+			{ CI: "true", GITHUB_ACTIONS: "true", VARIANT_SHADOW: "0" },
+			CREATED_FILE,
+		);
 
 		expect(result.stdout).toContain("::error");
 	});
