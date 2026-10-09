@@ -422,6 +422,36 @@ describe("init command", () => {
 		expect(read(dir, "packages/a/vitest.config.ts")).toBe(VITEST_CONFIG);
 	});
 
+	// `npx @blzsky/variant@canary init` once added plain `@blzsky/variant`,
+	// which is the latest release: a different, older program.
+	it("installs the version that is running, not whatever the registry calls latest", async () => {
+		const dir = pnpmWorkspace();
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () =>
+			registerInitAction({ dryRun: true, version: "0.3.0-canary.0" }),
+		);
+
+		expect(output.stdout()).toContain(
+			"pnpm add --save-dev --workspace-root @blzsky/variant@0.3.0-canary.0",
+		);
+	});
+
+	it("installs what --package names over its own version", async () => {
+		const dir = pnpmWorkspace();
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () =>
+			registerInitAction({
+				dryRun: true,
+				version: "0.3.0-canary.0",
+				package: "./variant.tgz",
+			}),
+		);
+
+		expect(output.stdout()).toContain("--workspace-root ./variant.tgz");
+	});
+
 	it("applies the changes with --yes, leaving the install to the user with --no-install", async () => {
 		const dir = pnpmWorkspace();
 		const output = captureGlobalOutput();

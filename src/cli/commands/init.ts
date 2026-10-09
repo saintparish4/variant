@@ -12,7 +12,7 @@ import {
 } from "../../core/scaffold/config-template.js";
 import { applySetup } from "../../core/setup/apply.js";
 import { discoverRepository } from "../../core/setup/discover.js";
-import { planSetup } from "../../core/setup/plan.js";
+import { PACKAGE_NAME, planSetup } from "../../core/setup/plan.js";
 import { renderApplied, renderFacts, renderPlan } from "../render/init.js";
 import { lines } from "../render/writer.js";
 import { getPrinter } from "../visuals/printer.js";
@@ -38,6 +38,12 @@ export interface InitActionOptions {
 	package?: string;
 	/** Write `variant.config.ts` for the task runner instead. */
 	tasks?: boolean;
+	/**
+	 * The version of variant that is running. It is what gets installed:
+	 * under a registry tag such as `canary`, the bare package name would
+	 * resolve to `latest`, which is another program.
+	 */
+	version?: string;
 }
 
 /**
@@ -56,8 +62,13 @@ export async function registerInitAction(
 	const facts = await discoverRepository(cwd);
 	renderFacts(facts);
 
+	const packageSpec =
+		opts.package ??
+		(opts.version === undefined
+			? undefined
+			: `${PACKAGE_NAME}@${opts.version}`);
 	const actions = await planSetup(cwd, facts, {
-		...(opts.package !== undefined && { packageSpec: opts.package }),
+		...(packageSpec !== undefined && { packageSpec }),
 		...(opts.install === false && { install: false }),
 	});
 	renderPlan(actions);
