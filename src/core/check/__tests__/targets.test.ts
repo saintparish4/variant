@@ -55,6 +55,26 @@ describe("selectTargets", () => {
 		]);
 	});
 
+	// Named to the engine as a glob, a brace expands before it can be escaped.
+	it("leaves out a file whose name holds a brace, and says why", () => {
+		const result = selectTargets(
+			input({
+				changed: ["src/{legacy}/price.ts", "src/[id]/price.ts"],
+				hunks: new Map([
+					["src/{legacy}/price.ts", changedLines(1, 1)],
+					["src/[id]/price.ts", changedLines(1, 1)],
+				]),
+			}),
+		);
+
+		expect(result.targets.map((target) => target.file)).toEqual([
+			"src/[id]/price.ts",
+		]);
+		expect(result.excluded).toEqual([
+			{ file: "src/{legacy}/price.ts", reason: "unnamable" },
+		]);
+	});
+
 	// pyra: "I just wrote a new module" left it untracked, and check mutated
 	// nothing of it.
 	it("mutates a new file git does not track yet, all of it", () => {
@@ -139,5 +159,26 @@ describe("mutateEntries", () => {
 				},
 			]),
 		).toEqual(["src/a.ts:2-2", "src/a.ts:8-12"]);
+	});
+
+	// Next.js routes: `[id]`, `[...slug]`, `[[...slug]]`, `(group)`.
+	it("escapes glob characters in the path, each as a class of one", () => {
+		expect(
+			mutateEntries([
+				{
+					file: "src/app/(shop)/[id]/[[...slug]]/page.tsx",
+					ranges: [{ start: 3, end: 4 }],
+					untracked: false,
+				},
+				{
+					file: "src/a*b?.ts",
+					ranges: [{ start: 1, end: 1 }],
+					untracked: true,
+				},
+			]),
+		).toEqual([
+			"src/app/[(]shop[)]/[[]id[]]/[[][[]...slug[]][]]/page.tsx:3-4",
+			"src/a[*]b[?].ts:1-1",
+		]);
 	});
 });

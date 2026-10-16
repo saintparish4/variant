@@ -288,6 +288,44 @@ describe.each([
 		TIMEOUT,
 	);
 
+	// dearly: the engine reads a file it is given as a glob, so `[id]`, a
+	// Next.js dynamic route, was a character class, and naming it with the
+	// changed lines failed the whole run.
+	it(
+		"mutates a changed file under a Next.js dynamic route directory",
+		async () => {
+			const dir = demoRepository(demo);
+			const route = path.join(dir, "src", "letters", "[id]");
+			mkdirSync(route, { recursive: true });
+			writeFileSync(
+				path.join(route, "limit.ts"),
+				"export const overLimit = (n: number): boolean => n > 10;\n",
+			);
+			writeFileSync(
+				path.join(route, "limit.test.ts"),
+				[
+					`${demo.header}import { overLimit } from "./limit";`,
+					"",
+					'it("flags a large count", () => {',
+					'\tif (!overLimit(20)) throw new Error("expected 20 to be over");',
+					"});",
+					"",
+				].join("\n"),
+			);
+			git(dir, "add", "src/letters");
+
+			const result = await check(dir);
+
+			const inRoute = result.mutants.filter(
+				(m) => m.file === "src/letters/[id]/limit.ts",
+			);
+			expect(inRoute.length).toBeGreaterThan(0);
+			// `n >= 10`: the test checks 20 only.
+			expect(inRoute.some((m) => m.outcome === "undetected")).toBe(true);
+		},
+		TIMEOUT,
+	);
+
 	// Filtering a mutant's tests by name alone still has the runner load and
 	// set up every test file to find them: on dearly, 7 s a mutant where the
 	// covering files take 0.3 s.

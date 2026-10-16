@@ -15,6 +15,7 @@ const EXCLUSION: Readonly<Record<ExclusionReason, string>> = {
 	outside: "outside this directory",
 	"deleted-lines-only": "only lines removed, which cannot be mutated",
 	"formatting-only": "only formatting or comments changed",
+	unnamable: "its name holds a brace, which the engine cannot be given",
 };
 
 /** The rest are in `--json`; a project with no .gitignore can list thousands. */

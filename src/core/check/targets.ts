@@ -12,7 +12,8 @@ export type ExclusionReason =
 	| "not-typescript"
 	| "outside"
 	| "deleted-lines-only"
-	| "formatting-only";
+	| "formatting-only"
+	| "unnamable";
 
 export interface Exclusion {
 	file: string;
@@ -46,6 +47,13 @@ export interface Targets {
 }
 
 const TYPESCRIPT = /\.(?:ts|tsx|mts|cts)$/;
+/**
+ * The engine reads a file it is given as a glob, and expands braces before
+ * anything can escape them: a path with one cannot be named to it.
+ */
+const BRACE = /[{}]/;
+/** Glob characters, each escaped as a class of one, which reads literally. */
+const GLOB_CHARACTER = /[[\]()*?]/g;
 const DECLARATION = /\.d\.(?:ts|mts|cts)$/;
 /** Installed packages: untracked in a project without a .gitignore, never source. */
 const INSTALLED = /(^|\/)node_modules\//;
@@ -59,6 +67,7 @@ export function exclusionBeforeDiff(
 	if (!TYPESCRIPT.test(file)) return "not-typescript";
 	if (DECLARATION.test(file)) return "declaration";
 	if (isTestFile(file)) return "test";
+	if (BRACE.test(file)) return "unnamable";
 	return null;
 }
 
@@ -101,9 +110,16 @@ export function selectTargets(input: TargetInput): Targets {
 	return { targets, excluded, deletedLines };
 }
 
-/** Stryker's `mutate` entries: `path:start-end`, one per changed range. */
+/**
+ * Stryker's `mutate` entries: `path:start-end`, one per changed range. The
+ * path is a glob there, and a glob character in it fails the whole run with
+ * a range: `[id]`, a Next.js dynamic route, is a character class. A class of
+ * one character reads literally, and a backslash would not survive: Stryker
+ * turns it into a path separator.
+ */
 export function mutateEntries(targets: readonly CheckTarget[]): string[] {
-	return targets.flatMap((target) =>
-		target.ranges.map((range) => `${target.file}:${range.start}-${range.end}`),
-	);
+	return targets.flatMap((target) => {
+		const file = target.file.replace(GLOB_CHARACTER, "[$&]");
+		return target.ranges.map((range) => `${file}:${range.start}-${range.end}`);
+	});
 }
