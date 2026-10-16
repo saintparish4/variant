@@ -36,6 +36,13 @@ export default defineConfig({
 			GITHUB_STEP_SUMMARY: "",
 			VARIANT_BASE: "",
 			VARIANT_SHADOW: "",
+			// Git for Windows ships `core.autocrlf=true` system-wide, and the
+			// repositories tests build have no .gitattributes: every `git add`
+			// warned "LF will be replaced by CRLF". Pinned off, through git's
+			// environment config, for every git a test starts.
+			GIT_CONFIG_COUNT: "1",
+			GIT_CONFIG_KEY_0: "core.autocrlf",
+			GIT_CONFIG_VALUE_0: "false",
 		},
 		// Deliberately not `enabled: true`. Thresholds are global, so a
 		// single-file run would fail four of them while measuring nothing

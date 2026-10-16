@@ -407,9 +407,33 @@ function startRun(
 		}
 	};
 
+	// The run's files, written before the host starts. Settles either way.
+	const prepared: Promise<boolean> = (async () => {
+		try {
+			await mkdir(root, { recursive: true });
+			// Ignores itself and everything beside it, so a run killed outright
+			// never shows up in `git status`.
+			await writeFile(path.join(root, ".gitignore"), "*\n");
+			await sweep(root);
+			await writeFile(path.join(root, `${runId}.owner`), String(process.pid));
+			await writeFile(path.join(root, `${runId}.json`), "{}\n");
+			return true;
+		} catch (error) {
+			channel.push({
+				kind: "error",
+				message: `Could not prepare ${CHECK_TMP}: ${error instanceof Error ? error.message : String(error)}`,
+				output: "",
+			});
+			return false;
+		}
+	})();
+
 	const stop = (): Promise<void> => {
 		stopped ??= (async () => {
 			stopping = true;
+			// A stop while the files were still being written once cleaned up
+			// first, and the writes landed after it: `.variant/` stayed.
+			await prepared;
 			if (child !== undefined) {
 				killTree(child);
 				await exited(child);
@@ -421,23 +445,11 @@ function startRun(
 	};
 
 	void (async () => {
-		try {
-			await mkdir(root, { recursive: true });
-			// Ignores itself and everything beside it, so a run killed outright
-			// never shows up in `git status`.
-			await writeFile(path.join(root, ".gitignore"), "*\n");
-			await sweep(root);
-			await writeFile(path.join(root, `${runId}.owner`), String(process.pid));
-			await writeFile(path.join(root, `${runId}.json`), "{}\n");
-		} catch (error) {
-			channel.push({
-				kind: "error",
-				message: `Could not prepare ${CHECK_TMP}: ${error instanceof Error ? error.message : String(error)}`,
-				output: "",
-			});
+		if (!(await prepared)) {
 			channel.close();
 			return;
 		}
+		// Stopped while preparing: never start a host nothing will end.
 		if (stopping) return;
 
 		const host: HostRequest = {
