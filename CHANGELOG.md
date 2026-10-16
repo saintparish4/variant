@@ -14,6 +14,30 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Fixed
+
+- **A named runner config selects every test.** `vitest.integration.config.ts`,
+  `playwright.e2e.config.ts` and the like, which a script passes with
+  `--config`, were read as ordinary code: a change to one alone selected none
+  of the tests it configures, and the pull-request report rated it `high`
+  ("no test reaches it"). They now count as configuration, as
+  `vitest.config.ts` already did.
+- **`init` leaves a Vitest config with a spread alone.** In
+  `test: { ...shared }` the spread can set `reporters`, and the line `init`
+  added beside it either lost to it, so the adapter never loaded, or replaced
+  the reporters it brought. A `test` block added to a config spread from a base
+  replaced the base's. Such a config now gets the lines to add by hand.
+- **`init` no longer says "variant is configured" when it left a Vitest
+  config alone.** The adapter is in no such config, so its test runs are not
+  checked; `init` now closes with "Test runs are not checked yet", as it does
+  for a Vite config it leaves alone.
+
+## [0.3.0-canary.0] - 2026-10-08
+
+A canary: published under the `canary` tag, not `latest`. Install it by name,
+`@blzsky/variant@canary`; `npm install @blzsky/variant` still gets 0.2.1. It
+exists so the new setup can be tried on real repositories before 0.3.0.
+
 ### Changed
 
 - **variant's own suite runs its adapter in CI**, loaded from the build when
@@ -76,6 +100,9 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ### Added
 
+- **`init` installs the version of variant that is running.** Run through a
+  registry tag (`npx @blzsky/variant@canary init`), the bare package name
+  would have installed `latest`, an older program.
 - **JavaScript is indexed.** `.js`, `.jsx`, `.mjs` and `.cjs` files that are
   the repository's own (tracked by git, or new and not ignored) are read
   like TypeScript: their imports are followed, their tests are counted and
@@ -541,7 +568,8 @@ ship in minor releases and are recorded here.
 - The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
   config. Quoted-argv parsing is covered by the executor's unit tests.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.2.1...HEAD
+[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.3.0-canary.0...HEAD
+[0.3.0-canary.0]: https://github.com/saintparish4/variant/compare/variant@0.2.1...variant@0.3.0-canary.0
 [0.2.1]: https://github.com/saintparish4/variant/compare/variant@0.2.0...variant@0.2.1
 [0.2.0]: https://github.com/saintparish4/variant/compare/variant@0.1.0...variant@0.2.0
 [0.1.0]: https://github.com/saintparish4/variant/releases/tag/variant@0.1.0

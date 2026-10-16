@@ -389,6 +389,21 @@ describe("planSetup and applySetup", () => {
 			),
 		).toBe(true);
 	});
+
+	// The adapter is in no config afterwards, so no test run is checked.
+	it("does not call itself configured when it left the only config alone", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "app" }),
+			"vitest.config.ts":
+				'const reporters = ["default"];\nexport default { test: { reporters } };\n',
+		});
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () => registerInitAction({ yes: true, install: false }));
+
+		expect(output.stdout()).not.toContain("variant is configured");
+		expect(output.stdout()).toContain("Test runs are not checked yet");
+	});
 });
 
 describe("init command", () => {
@@ -420,6 +435,36 @@ describe("init command", () => {
 
 		expect(output.stdout()).toContain("Run `variant init --yes`");
 		expect(read(dir, "packages/a/vitest.config.ts")).toBe(VITEST_CONFIG);
+	});
+
+	// `npx @blzsky/variant@canary init` once added plain `@blzsky/variant`,
+	// which is the latest release: a different, older program.
+	it("installs the version that is running, not whatever the registry calls latest", async () => {
+		const dir = pnpmWorkspace();
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () =>
+			registerInitAction({ dryRun: true, version: "0.3.0-canary.0" }),
+		);
+
+		expect(output.stdout()).toContain(
+			"pnpm add --save-dev --workspace-root @blzsky/variant@0.3.0-canary.0",
+		);
+	});
+
+	it("installs what --package names over its own version", async () => {
+		const dir = pnpmWorkspace();
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () =>
+			registerInitAction({
+				dryRun: true,
+				version: "0.3.0-canary.0",
+				package: "./variant.tgz",
+			}),
+		);
+
+		expect(output.stdout()).toContain("--workspace-root ./variant.tgz");
 	});
 
 	it("applies the changes with --yes, leaving the install to the user with --no-install", async () => {

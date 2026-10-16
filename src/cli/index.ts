@@ -227,7 +227,7 @@ program
 	.option("--no-install", "do not install @blzsky/variant; print the command")
 	.option(
 		"--package <spec>",
-		"install this in place of @blzsky/variant (a tarball path or a version)",
+		"install this in place of the running version (a tarball path or a spec)",
 	)
 	.option("--tasks", "write variant.config.ts for the task runner instead")
 	.action(
@@ -240,6 +240,7 @@ program
 		}) => {
 			const { registerInitAction } = await import("./commands/init.js");
 			await registerInitAction({
+				version: _pkg.version,
 				...(opts.dryRun === true && { dryRun: true }),
 				...(opts.yes === true && { yes: true }),
 				...(opts.install === false && { install: false }),

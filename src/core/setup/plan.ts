@@ -140,6 +140,7 @@ export async function planSetup(
 		} else if (edit.kind === "manual") {
 			actions.push({
 				kind: "note",
+				gap: true,
 				lines: [
 					`${file} was left alone: ${edit.reason}.`,
 					...manualInstructions(file),

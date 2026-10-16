@@ -401,8 +401,8 @@ Sets variant up in a repository, once. It finds out how the repository
 installs, tests and runs CI, shows every change it would make, and makes them
 when you agree:
 
-- installs `@blzsky/variant` as a dev dependency with your package manager
-  (npm, pnpm, Yarn or Bun);
+- installs `@blzsky/variant`, at the version you ran `init` from, as a dev
+  dependency with your package manager (npm, pnpm, Yarn or Bun);
 - adds the [Vitest adapter](./vitest-adapter.md) to your Vitest config: the
   root config if there is one, otherwise each workspace package's. A package
   that runs Vitest with no config gets a new `vitest.config.mts` that sets the
@@ -430,7 +430,7 @@ Running it again changes nothing that is already in place.
 | `--dry-run` | Show what was found and what would change, and stop |
 | `-y`, `--yes` | Apply without asking. Needed when there is no terminal to ask in |
 | `--no-install` | Do not run the package manager; print the command instead |
-| `--package <spec>` | Install this in place of `@blzsky/variant`: a tarball path or a version |
+| `--package <spec>` | Install this in place of the version of variant that is running: a tarball path, or a package spec |
 | `--tasks` | Write `variant.config.ts` for the task runner instead (see below) |
 
 `init --tasks` writes `variant.config.ts` to the current directory, for `build`

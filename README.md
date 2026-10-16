@@ -43,12 +43,13 @@ variant: predicted 8 of 55 test files (high). 2 failed, all predicted.
 Leaving tests out is something variant has to earn in each repository, from
 that record, and is not built yet.
 
-> **Status**: `0.x`. What is described here is on the default branch and
-> **not in a published release yet**: npm still serves 0.2.1, which has
-> `impact`, `pr check`, `pr report` and `workspace check`, an `init` that
-> only writes a task-runner config, and no adapter. Until the next release,
-> the commands on this page do something else there. The adapter is for Vitest; a Jest repository gets the pull
-> request report only. Test skipping is **not implemented**, deliberately.
+> **Status**: `0.x`. What is described here is published as a canary,
+> `0.3.0-canary.0`, under the `canary` tag: write `@blzsky/variant@canary`
+> wherever this page says `@blzsky/variant`. Without the tag npm serves
+> 0.2.1, which has `impact`, `pr check`, `pr report` and `workspace check`,
+> an `init` that only writes a task-runner config, and no adapter. The
+> adapter is for Vitest; a Jest repository gets the pull request report
+> only. Test skipping is **not implemented**, deliberately.
 > The task runner underneath (`build`, `run`, `insight`) works but is frozen.
 > Any minor release can break, and every break is in the
 > [CHANGELOG](./CHANGELOG.md).

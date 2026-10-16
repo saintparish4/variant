@@ -184,6 +184,14 @@ describe("computeTestImpact", () => {
 
 	it.each([
 		["a TypeScript runner config", "vitest.config.ts", "breaking"],
+		// A script points the runner at it with `--config`; the tests it runs
+		// never import it.
+		[
+			"a named Vitest config",
+			"apps/api/vitest.integration.config.ts",
+			"breaking",
+		],
+		["a named Playwright config", "playwright.e2e.config.ts", "internal"],
 		["a Jest config", "packages/web/jest.config.ts", "internal"],
 		// `next/jest` loads it to configure the transform every test is
 		// compiled with, and no test imports it.
@@ -213,6 +221,23 @@ describe("computeTestImpact", () => {
 					{ ...unanalyzed("src/setup.ts"), classification: "internal" },
 				],
 				affectedFiles: ["src/setup.ts"],
+				confidence: 1,
+			},
+			GRAPH,
+		);
+		expect(impact.selectAll).toBe(false);
+	});
+
+	it("a source file whose name ends in config does not select-all", () => {
+		const impact = computeTestImpact(
+			{
+				changed: [
+					{
+						...unanalyzed("src/vitest.config-loader.ts"),
+						classification: "internal",
+					},
+				],
+				affectedFiles: ["src/vitest.config-loader.ts"],
 				confidence: 1,
 			},
 			GRAPH,

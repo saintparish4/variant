@@ -1,0 +1,70 @@
+# Written by `variant init`. It keeps one comment on each pull request
+# saying what the change affects. It is yours to edit.
+
+name: variant
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# A newer push makes the report for an older one pointless.
+concurrency:
+  group: variant-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # variant compares against the commit the branch started from.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # variant is the package itself, so it reports with its own build
+      # rather than an installed copy.
+      - run: pnpm build
+
+      - name: Describe the pull request
+        run: node dist/cli.js pr report --markdown --output pr-report.md
+
+      - name: Post or update the comment
+        # Pull requests from forks get a read-only token and cannot comment.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require("node:fs");
+            const body = fs.readFileSync("pr-report.md", "utf8");
+            // The first line of every report; it marks the comment to update.
+            const marker = "## Variant PR Report";
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.startsWith(marker),
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
