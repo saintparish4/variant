@@ -260,6 +260,34 @@ describe.each([
 		TIMEOUT,
 	);
 
+	// pyra: a test file importing a module that did not exist yet produced no
+	// tests, and the baseline read as passing without it.
+	it.each([
+		[
+			"imports a module that does not exist",
+			'import { missing } from "./not-written-yet";\n\nit("uses it", () => missing());\n',
+		],
+		["holds no test", 'import "./discount";\n'],
+	])(
+		"counts a test file that %s as a failing baseline",
+		async (_, body) => {
+			const dir = demoRepository(demo);
+			writeFileSync(
+				path.join(dir, "src", "broken.test.ts"),
+				`${demo.header}${body}`,
+			);
+			git(dir, "add", "src/broken.test.ts");
+
+			const error = await check(dir).catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(BaselineFailedError);
+			expect((error as BaselineFailedError).failingTests).toEqual([
+				expect.objectContaining({ name: "src/broken.test.ts (did not load)" }),
+			]);
+		},
+		TIMEOUT,
+	);
+
 	it(
 		"stops at --max-mutants, says so, and picks the same mutants every time",
 		async () => {
@@ -410,34 +438,6 @@ describe.each([
 });
 
 describe("variant check with Vitest only", () => {
-	// pyra: a test file importing a module that did not exist yet produced no
-	// tests, and the baseline read as passing without it.
-	it(
-		"counts a test file that fails to load as a failing baseline",
-		async () => {
-			const dir = demoRepository();
-			writeFileSync(
-				path.join(dir, "src", "broken.test.ts"),
-				[
-					'import { it } from "vitest";',
-					'import { missing } from "./not-written-yet";',
-					"",
-					'it("uses it", () => missing());',
-					"",
-				].join("\n"),
-			);
-			git(dir, "add", "src/broken.test.ts");
-
-			const error = await check(dir).catch((caught: unknown) => caught);
-
-			expect(error).toBeInstanceOf(BaselineFailedError);
-			expect((error as BaselineFailedError).failingTests).toEqual([
-				expect.objectContaining({ name: "src/broken.test.ts (did not load)" }),
-			]);
-		},
-		TIMEOUT,
-	);
-
 	// pyra: when no mutated code ran in the baseline, Stryker read the empty
 	// coverage as "coverage analysis off", ran every mutation against every
 	// test and called code no test imports "undetected".
