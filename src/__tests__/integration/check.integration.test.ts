@@ -548,4 +548,26 @@ describe("variant check with Jest only", () => {
 		},
 		TIMEOUT,
 	);
+
+	// An absolute rootDir names the real package from inside the copy: Jest
+	// would run the real, unmutated files, and write snapshots beside them.
+	it(
+		"refuses a Jest config that looks for tests outside the package, before running any test",
+		async () => {
+			const dir = demoRepository(JEST);
+			writeFileSync(
+				path.join(dir, "jest.config.js"),
+				`module.exports = { rootDir: ${JSON.stringify(dir)} };\n`,
+			);
+
+			const error = await check(dir).catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(CheckRunnerError);
+			expect((error as CheckRunnerError).message).toMatch(
+				/outside the package \(`rootDir`\)/,
+			);
+			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
+		},
+		TIMEOUT,
+	);
 });

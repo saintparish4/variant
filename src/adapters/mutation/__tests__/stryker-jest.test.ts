@@ -9,7 +9,7 @@ import type {
 } from "../stryker-jest.js";
 import {
 	coverageMissing,
-	prepareEnvironments,
+	prepareJest,
 	unsupportedSetup,
 	withLoadFailures,
 	withMeasuredNothing,
@@ -39,7 +39,7 @@ describe("the test environment Stryker is given", () => {
 	it("is the path Jest itself resolves", async () => {
 		const runner: WithJestConfig = { jestConfig: { rootDir: "/repo" } };
 
-		await prepareEnvironments(
+		await prepareJest(
 			runner,
 			"/repo",
 			projectJest(async (options) => ({
@@ -57,7 +57,7 @@ describe("the test environment Stryker is given", () => {
 
 	it("is resolved from cwd where the config names no root", async () => {
 		const seen: unknown[] = [];
-		await prepareEnvironments(
+		await prepareJest(
 			{ jestConfig: {} },
 			"/repo",
 			projectJest(async (options) => {
@@ -72,7 +72,7 @@ describe("the test environment Stryker is given", () => {
 	it("is left to Stryker where Jest cannot resolve it", async () => {
 		const runner: WithJestConfig = { jestConfig: { testEnvironment: "x" } };
 
-		await prepareEnvironments(
+		await prepareJest(
 			runner,
 			"/repo",
 			projectJest(async () => {
@@ -88,7 +88,7 @@ describe("the test environment Stryker is given", () => {
 	it("records coverage in Jest's own environments wherever they load", async () => {
 		const node = { default: NodeEnvironment, TestEnvironment: NodeEnvironment };
 
-		await prepareEnvironments(
+		await prepareJest(
 			{ jestConfig: { rootDir: "/repo" } },
 			"/repo",
 			projectJest(async () => ({ options: {} }), {
@@ -130,10 +130,68 @@ describe("a Jest baseline's coverage", () => {
 });
 
 describe("a Jest setup check does not run", () => {
+	const repo = path.resolve("/repo");
+
 	it("is a config with projects", () => {
-		expect(unsupportedSetup({ projects: ["<rootDir>/a"] })).toMatch(/projects/);
-		expect(unsupportedSetup({ projects: [] })).toBeUndefined();
-		expect(unsupportedSetup({})).toBeUndefined();
+		expect(unsupportedSetup({ projects: ["<rootDir>/a"] }, repo)).toMatch(
+			/projects/,
+		);
+		expect(unsupportedSetup({ projects: [] }, repo)).toBeUndefined();
+		expect(unsupportedSetup({}, repo)).toBeUndefined();
+	});
+
+	// check runs the tests in a copy of the package: tests found outside it
+	// would run the real files, and write snapshots beside them.
+	it("is a config whose rootDir is outside the package", () => {
+		expect(unsupportedSetup({ rootDir: path.dirname(repo) }, repo)).toMatch(
+			/outside the package \(`rootDir`\)/,
+		);
+		expect(
+			unsupportedSetup({ rootDir: path.join(repo, "src") }, repo),
+		).toBeUndefined();
+	});
+
+	it("is a config with a root outside the package", () => {
+		expect(
+			unsupportedSetup({ rootDir: repo, roots: ["<rootDir>/../shared"] }, repo),
+		).toMatch(/outside the package \(`roots`\)/);
+		expect(
+			unsupportedSetup(
+				{ rootDir: repo, roots: ["<rootDir>/src", path.join(repo, "test")] },
+				repo,
+			),
+		).toBeUndefined();
+	});
+
+	it("is read from Jest's own reading of the config, a preset's roots included", () => {
+		expect(
+			unsupportedSetup({ rootDir: repo, preset: "shared" }, repo, {
+				rootDir: repo,
+				roots: [path.resolve("/elsewhere")],
+			}),
+		).toMatch(/`roots`/);
+	});
+
+	it("does not take a directory named like a parent for one", () => {
+		expect(
+			unsupportedSetup({ rootDir: repo, roots: ["<rootDir>/..cache"] }, repo),
+		).toBeUndefined();
+	});
+
+	it("is found before the environments are touched", async () => {
+		const outside = path.dirname(repo);
+		const runner: WithJestConfig = { jestConfig: { rootDir: outside } };
+
+		const reason = await prepareJest(
+			runner,
+			repo,
+			projectJest(async () => ({
+				options: { rootDir: outside, testEnvironment: "/store/env.js" },
+			})),
+		);
+
+		expect(reason).toMatch(/`rootDir`/);
+		expect(runner.jestConfig).toEqual({ rootDir: outside });
 	});
 });
 

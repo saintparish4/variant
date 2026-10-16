@@ -20,9 +20,11 @@
  * - A test file that fails to load counts as a failing baseline test.
  *   Stryker reports it as an error of its own, which read as variant failing
  *   rather than as the tests failing.
- * - A config that runs several projects is refused before any test runs.
+ * - A config that runs several projects, or looks for tests outside the
+ *   package, is refused before any test runs.
  */
 
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { Injector, PluginContext } from "@stryker-mutator/api/plugin";
@@ -72,6 +74,13 @@ export interface WithJestConfig {
 	jestTestAdapter?: TestAdapter;
 }
 
+/** What this reads of Jest's own reading of a config. */
+export interface NormalizedOptions {
+	rootDir?: unknown;
+	roots?: unknown;
+	testEnvironment?: unknown;
+}
+
 /** What this uses of the project's own Jest, the same in Jest 29 and 30. */
 export interface ProjectJest {
 	normalize: (
@@ -79,7 +88,7 @@ export interface ProjectJest {
 		argv: Record<string, never>,
 		configPath: null,
 		projectIndex: number,
-	) => Promise<{ options: { testEnvironment?: unknown } }>;
+	) => Promise<{ options: NormalizedOptions }>;
 	/** An environment's path, as Jest resolves a name it is given. */
 	resolveEnvironment: (rootDir: string, name: string) => string;
 	/** A module by its absolute path. */
@@ -116,15 +125,15 @@ export function projectJest(cwd: string): ProjectJest {
 }
 
 /**
- * The environment the config names, as the path Jest itself would load:
- * from the project first, then from Jest's install, a preset's included.
- * Undefined when it cannot tell, which leaves Stryker's own lookup.
+ * Jest's own reading of the config: a preset applied, paths absolute, and
+ * the environment as the path Jest itself would load (from the project
+ * first, then from Jest's install). Undefined when Jest cannot read it here.
  */
-export async function resolvedEnvironment(
+async function normalizedOptions(
 	config: JestConfig,
 	cwd: string,
 	jest: ProjectJest,
-): Promise<string | undefined> {
+): Promise<NormalizedOptions | undefined> {
 	try {
 		// A copy, as Jest is given it: Stryker passes the config on as JSON.
 		const copy = JSON.parse(JSON.stringify(config)) as JestConfig;
@@ -134,9 +143,7 @@ export async function resolvedEnvironment(
 			null,
 			0,
 		);
-		return typeof options.testEnvironment === "string"
-			? options.testEnvironment
-			: undefined;
+		return options;
 	} catch {
 		return undefined;
 	}
@@ -175,37 +182,101 @@ function recordCoverageIn(
 }
 
 /**
- * Gives Stryker the environment by path, which its lookup cannot miss, and
- * makes Jest's own environments record coverage wherever a test file names
- * them.
+ * Readies Stryker's Jest runner in the copy at `cwd`, and returns why the
+ * tests cannot run there, if they cannot. Otherwise it gives Stryker the
+ * environment by path, which its lookup cannot miss, and makes Jest's own
+ * environments record coverage wherever a test file names them.
  */
-export async function prepareEnvironments(
+export async function prepareJest(
 	runner: WithJestConfig,
 	cwd: string,
 	loadJest: () => ProjectJest = () => projectJest(cwd),
-): Promise<void> {
+): Promise<string | undefined> {
 	const config = runner.jestConfig;
-	if (config === undefined) return;
-	let jest: ProjectJest;
+	if (config === undefined) return undefined;
+	let jest: ProjectJest | undefined;
 	try {
 		jest = loadJest();
 	} catch {
-		return;
+		jest = undefined;
 	}
-	const environment = await resolvedEnvironment(config, cwd, jest);
-	if (environment !== undefined) {
-		runner.jestConfig = { ...config, testEnvironment: environment };
+	const options =
+		jest === undefined ? undefined : await normalizedOptions(config, cwd, jest);
+	const reason = unsupportedSetup(config, cwd, options);
+	if (reason !== undefined || jest === undefined) return reason;
+	if (typeof options?.testEnvironment === "string") {
+		runner.jestConfig = { ...config, testEnvironment: options.testEnvironment };
 	}
 	const rootDir =
 		typeof config["rootDir"] === "string" ? config["rootDir"] : cwd;
 	for (const name of OWN_ENVIRONMENTS) recordCoverageIn(jest, rootDir, name);
+	return undefined;
 }
 
-/** Why these tests cannot be run as they are configured, if they cannot. */
-export function unsupportedSetup(config: JestConfig): string | undefined {
+function realOrResolved(file: string): string {
+	try {
+		return realpathSync(file);
+	} catch {
+		return path.resolve(file);
+	}
+}
+
+function isWithin(directory: string, file: string): boolean {
+	const relative = path.relative(directory, file);
+	return (
+		relative === "" ||
+		(!path.isAbsolute(relative) &&
+			relative !== ".." &&
+			!relative.startsWith(`..${path.sep}`))
+	);
+}
+
+const ROOT_DIR = "<rootDir>";
+
+/**
+ * The option that has Jest look for tests outside `cwd`, if one does. Jest's
+ * own reading has both resolved; in the config as Stryker read it, `rootDir`
+ * is absolute and a root may still begin with `<rootDir>`.
+ */
+function searchedOutside(
+	options: NormalizedOptions,
+	cwd: string,
+): "rootDir" | "roots" | undefined {
+	const base = realOrResolved(cwd);
+	const rootDir =
+		typeof options.rootDir === "string"
+			? path.resolve(cwd, options.rootDir)
+			: cwd;
+	if (!isWithin(base, realOrResolved(rootDir))) return "rootDir";
+	const roots = Array.isArray(options.roots) ? options.roots : [];
+	const outside = roots.some((root) => {
+		if (typeof root !== "string") return false;
+		const relative = root.startsWith(ROOT_DIR)
+			? `.${root.slice(ROOT_DIR.length)}`
+			: root;
+		return !isWithin(base, realOrResolved(path.resolve(rootDir, relative)));
+	});
+	return outside ? "roots" : undefined;
+}
+
+/**
+ * Why these tests cannot be run as they are configured, if they cannot.
+ * `normalized` is Jest's own reading of `config`, where Jest could read it.
+ */
+export function unsupportedSetup(
+	config: JestConfig,
+	cwd: string,
+	normalized?: NormalizedOptions,
+): string | undefined {
 	const projects = config["projects"];
 	if (Array.isArray(projects) && projects.length > 0) {
 		return "the Jest config runs several projects (`projects`). Run it from one project's directory, with that project's config.";
+	}
+	// The tests run in a copy of the package. Found outside it, they would
+	// test files nothing mutated, and write snapshots in the real tree.
+	const option = searchedOutside(normalized ?? config, cwd);
+	if (option !== undefined) {
+		return `the Jest config looks for tests outside the package (\`${option}\`). check runs the tests in a copy of the package, so use a config whose rootDir and roots stay inside it.`;
 	}
 	return undefined;
 }
@@ -341,9 +412,8 @@ function createJestRunner(injector: Injector<PluginContext>): TestRunner {
 		capabilities: () => runner.capabilities(),
 		init: async () => {
 			await runner.init?.();
-			const reason = unsupportedSetup(runner.jestConfig ?? {});
+			const reason = await prepareJest(runner, process.cwd());
 			if (reason !== undefined) throw new Error(`${UNSUPPORTED}${reason}`);
-			await prepareEnvironments(runner, process.cwd());
 		},
 		dryRun: async (options) => {
 			const result = await baseline(options);
