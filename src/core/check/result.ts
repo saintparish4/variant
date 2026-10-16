@@ -49,6 +49,8 @@ export interface MutantOutcome {
 	testsRun?: number;
 	/** The function, method or class it is in. */
 	symbol?: string;
+	/** Runs when its module loads, so every test was run against it. */
+	static?: true;
 }
 
 export interface AnalyzedFile {
@@ -74,7 +76,7 @@ export interface CheckResult {
 	files: AnalyzedFile[];
 	excluded: Exclusion[];
 	deletedLines: number;
-	baseline?: { tests: number; files: number };
+	baseline?: { tests: number; files: number; skipped: number };
 	vitestConfig?: string;
 	mutants: MutantOutcome[];
 	counts: Record<Outcome, number> & { attempted: number };
@@ -192,6 +194,7 @@ export function assembleCheckResult(input: AssembleInput): CheckResult {
 				}),
 			}),
 			...(symbol !== undefined && { symbol }),
+			...(mutant.static && { static: true as const }),
 		};
 	});
 	mutants.sort(
@@ -263,6 +266,7 @@ export function assembleCheckResult(input: AssembleInput): CheckResult {
 			baseline: {
 				tests: input.baselineTests.length,
 				files: new Set(input.baselineTests.map((test) => test.file)).size,
+				skipped: input.baselineTests.filter((test) => test.skipped).length,
 			},
 		}),
 		...(input.vitestConfig !== undefined && {

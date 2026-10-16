@@ -56,7 +56,7 @@ function result(overrides: Partial<CheckResult> = {}): CheckResult {
 		],
 		excluded: [{ file: "src/discount.test.ts", reason: "test" }],
 		deletedLines: 0,
-		baseline: { tests: 2, files: 1 },
+		baseline: { tests: 2, files: 1, skipped: 0 },
 		mutants,
 		counts,
 		notes: [],
@@ -100,7 +100,9 @@ describe("renderCheck", () => {
 				"    Changing >= to > went undetected. Review the behavior at total = 100.",
 			].join("\n"),
 		);
-		expect(out).toContain("2 mutations tried: 1 detected, 1 undetected.");
+		expect(out).toContain(
+			"2 mutations run against the tests: 1 detected, 1 undetected.",
+		);
 		expect(out).toMatch(
 			/Scope: the tests passed unmutated first \(2 tests in 1 file/,
 		);
@@ -202,6 +204,70 @@ describe("renderCheck", () => {
 		expect(out).toContain("src/draft-9.ts");
 		expect(out).not.toContain("src/draft-10.ts");
 		expect(out).toContain("… and 15 more (all of them in --json)");
+	});
+
+	// pyra: "291 mutations tried" read as --max-mutants 50 being ignored; 277
+	// of them were in code no test executed, which costs no test run.
+	it("counts mutations run against the tests apart from those in unreached code", () => {
+		const capture = captureOutput();
+
+		renderCheck(
+			result({
+				mutants: [
+					mutant(),
+					mutant({ id: "1", outcome: "undetected", explanation: "x" }),
+					mutant({ id: "2", outcome: "no-coverage" }),
+					mutant({ id: "3", outcome: "no-coverage" }),
+				],
+			}),
+			capture.printer,
+		);
+
+		const out = capture.stdout();
+		expect(out).toContain(
+			"2 mutations run against the tests: 1 detected, 1 undetected.",
+		);
+		expect(out).toContain(
+			"2 more in code no test executed; those run no tests and do not count toward --max-mutants.",
+		);
+	});
+
+	// pyra: the same untested code read "undetected" in one run and "no test
+	// reached" in another. Code that runs when its module loads is run
+	// against every test, so "undetected" is right, but it has to say why.
+	it("says when an undetected mutation is in code that runs as its module loads", () => {
+		const capture = captureOutput();
+
+		renderCheck(
+			result({
+				mutants: [
+					mutant({ outcome: "undetected", explanation: "x", static: true }),
+				],
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"    This runs when its module loads, so every test ran against it.",
+		);
+	});
+
+	it("says how many baseline tests were skipped, which can leave code unreached", () => {
+		const capture = captureOutput();
+
+		renderCheck(
+			result({
+				baseline: { tests: 5, files: 2, skipped: 3 },
+				mutants: [mutant({ outcome: "no-coverage" })],
+			}),
+			capture.printer,
+		);
+
+		const out = capture.stdout();
+		expect(out).toContain("(5 tests in 2 files, 3 of them skipped,");
+		expect(out).toContain(
+			"3 tests were skipped; code only they would reach reads as reached by no test.",
+		);
 	});
 
 	it("says when nothing changed that could be mutated", () => {

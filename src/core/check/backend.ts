@@ -52,6 +52,8 @@ export interface BaselineTest {
 	name: string;
 	/** Relative to cwd, POSIX separators. */
 	file: string;
+	/** Skipped in the baseline (`skip`, `skipIf`), so it noticed nothing. */
+	skipped: boolean;
 }
 
 export type BackendEvent =

@@ -45,6 +45,7 @@ export interface RawTest {
 	id: string;
 	name: string;
 	fileName?: string;
+	skipped?: boolean;
 }
 
 export type HostMessage =

@@ -39,7 +39,7 @@ it was.
 
 ## Install
 
-variant needs Node 22 or newer, a git repository, and Vitest 4.1.
+variant needs Node 22 or newer, a git repository, and Vitest (4.1 is tested; 5.0 has been tried).
 
 ```bash
 npm install -D @blzsky/variant@canary

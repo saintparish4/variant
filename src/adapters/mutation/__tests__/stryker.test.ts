@@ -111,6 +111,15 @@ describe("toBaselineTest", () => {
 	});
 });
 
+describe("toBaselineTest skipped", () => {
+	it("keeps whether a baseline test was skipped", () => {
+		expect(
+			toBaselineTest([cwd], { id: "t", name: "t", skipped: true }).skipped,
+		).toBe(true);
+		expect(toBaselineTest([cwd], { id: "t", name: "t" }).skipped).toBe(false);
+	});
+});
+
 describe("parseFailingTests", () => {
 	// The format Stryker 10 logs with `logLevel: "error"`, as captured.
 	it("reads the failing baseline tests Stryker logs", () => {

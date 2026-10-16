@@ -37,7 +37,14 @@ function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
 		],
 		excluded: [],
 		deletedLines: 0,
-		baselineTests: [{ id: "t1", name: "q accepts 150", file: "src/q.test.ts" }],
+		baselineTests: [
+			{
+				id: "t1",
+				name: "q accepts 150",
+				file: "src/q.test.ts",
+				skipped: false,
+			},
+		],
 		plan,
 		selection: selectMutants(plan, 50),
 		tested: new Map([
@@ -49,6 +56,26 @@ function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
 		...overrides,
 	};
 }
+
+describe("baseline and static mutants", () => {
+	it("counts skipped baseline tests and keeps which mutants are static", () => {
+		const staticMutant = { ...planned("0", "total > 100"), static: true };
+		const result = assembleCheckResult(
+			input({
+				baselineTests: [
+					{ id: "a", name: "a", file: "src/q.test.ts", skipped: false },
+					{ id: "b", name: "b", file: "src/q.test.ts", skipped: true },
+				],
+				plan: [staticMutant],
+				selection: selectMutants([staticMutant], 50),
+				tested: new Map([["0", tested("0", "Survived")]]),
+			}),
+		);
+
+		expect(result.baseline).toEqual({ tests: 2, files: 1, skipped: 1 });
+		expect(result.mutants[0]?.static).toBe(true);
+	});
+});
 
 describe("sliceSource", () => {
 	it("quotes the text between two 1-based positions, the end excluded", () => {

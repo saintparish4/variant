@@ -45,9 +45,16 @@ function oneLine(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }
 
+/** Mutations run against tests: code no test executed runs none. */
+function ranAgainstTests(result: CheckResult): number {
+	return result.counts.attempted - result.counts["no-coverage"];
+}
+
 function stopped(result: CheckResult): string {
-	const tried = result.counts.attempted;
-	const planned = result.mutants.length;
+	const tried = ranAgainstTests(result);
+	const planned = result.mutants.filter(
+		(mutant) => mutant.outcome !== "no-coverage",
+	).length;
 	switch (result.stopReason) {
 		case "limit":
 			return `stopped at --max-mutants after ${plural(tried, "mutation")}; ${result.counts["not-run"].toLocaleString("en-US")} more were not run`;
@@ -125,6 +132,11 @@ export function renderCheck(
 				`    ${colors.red(`- ${oneLine(mutant.original)}`)}`,
 				`    ${colors.green(`+ ${oneLine(mutant.replacement)}`)}`,
 				`    ${mutant.explanation ?? ""}`,
+				...(mutant.static === true
+					? [
+							"    This runs when its module loads, so every test ran against it.",
+						]
+					: []),
 			);
 		}
 	}
@@ -136,6 +148,11 @@ export function renderCheck(
 			"",
 			colors.bold(colors.yellow(`No test reached: ${unreached.length}`)),
 			"  No test executed this code in the test process, so none could notice a change to it.",
+			...((result.baseline?.skipped ?? 0) > 0
+				? [
+						`  ${plural(result.baseline?.skipped ?? 0, "test")} were skipped; code only they would reach reads as reached by no test.`,
+					]
+				: []),
 		);
 		for (const mutant of unreached) {
 			lines(
@@ -189,22 +206,26 @@ export function renderCheck(
 			"That is evidence these tests check these lines, not proof the change is correct.",
 		);
 	} else if (counts.attempted > 0) {
-		const parts = [
-			`${counts.detected.toLocaleString("en-US")} detected`,
-			`${counts.undetected.toLocaleString("en-US")} undetected`,
-			...(counts["no-coverage"] > 0
-				? [
-						`${counts["no-coverage"].toLocaleString("en-US")} reached by no test`,
-					]
-				: []),
-			...(inconclusive.length > 0
-				? [`${inconclusive.length.toLocaleString("en-US")} inconclusive`]
-				: []),
-		];
-		lines(
-			printer,
-			`${plural(counts.attempted, "mutation")} tried: ${parts.join(", ")}.`,
-		);
+		const ran = ranAgainstTests(result);
+		if (ran > 0) {
+			const parts = [
+				`${counts.detected.toLocaleString("en-US")} detected`,
+				`${counts.undetected.toLocaleString("en-US")} undetected`,
+				...(inconclusive.length > 0
+					? [`${inconclusive.length.toLocaleString("en-US")} inconclusive`]
+					: []),
+			];
+			lines(
+				printer,
+				`${plural(ran, "mutation")} run against the tests: ${parts.join(", ")}.`,
+			);
+		}
+		if (counts["no-coverage"] > 0) {
+			lines(
+				printer,
+				`${counts["no-coverage"].toLocaleString("en-US")} ${ran > 0 ? "more " : ""}in code no test executed; those run no tests and do not count toward --max-mutants.`,
+			);
+		}
 	}
 	renderFooter(result, printer);
 }
@@ -217,7 +238,7 @@ function renderFooter(result: CheckResult, printer: Printer): void {
 				? "the Vitest config here"
 				: result.vitestConfig;
 		scope.push(
-			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}, from ${config}); each mutation then ran against the tests that executed its code`,
+			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${result.baseline.skipped.toLocaleString("en-US")} of them skipped` : ""}, from ${config}); each mutation then ran against the tests that executed its code`,
 		);
 	}
 	if (result.status !== "nothing-to-mutate") {

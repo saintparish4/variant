@@ -33,7 +33,7 @@ function planned(id: string, covered = true): PlannedMutant {
 
 const baseline: BackendEvent = {
 	kind: "baseline",
-	tests: [{ id: "t", name: "t", file: "src/q.test.ts" }],
+	tests: [{ id: "t", name: "t", file: "src/q.test.ts", skipped: false }],
 };
 
 /**

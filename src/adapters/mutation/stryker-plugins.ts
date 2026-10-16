@@ -48,6 +48,7 @@ class VariantReporter implements Reporter {
 				id: test.id,
 				name: test.name,
 				...(test.fileName !== undefined && { fileName: test.fileName }),
+				...(test.status === TestStatus.Skipped && { skipped: true }),
 			})),
 		});
 	}

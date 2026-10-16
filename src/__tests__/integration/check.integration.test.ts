@@ -147,7 +147,7 @@ describe("variant check", () => {
 			const result = await check(dir);
 
 			expect(result.base.ref).toBe("HEAD");
-			expect(result.baseline).toEqual({ tests: 2, files: 1 });
+			expect(result.baseline).toEqual({ tests: 2, files: 1, skipped: 0 });
 			const undetected = result.mutants.filter(
 				(m) => m.outcome === "undetected",
 			);

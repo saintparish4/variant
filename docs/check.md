@@ -12,7 +12,8 @@ and what it cannot tell you.
 | | Supported and tested | Not supported |
 |---|---|---|
 | Node | 22, 24 | 20 and older |
-| Test runner | Vitest 4.1, one config, threads pool (the default) | Jest, Vitest browser mode |
+| Test runner | Vitest 4.1 (tested in CI) and 5.0 (tried on 5.0.3, not in CI yet), one config, threads pool (the default) | Jest, Vitest browser mode |
+| TypeScript | 5, 6 and 7 (on 7, a tsconfig `extends` outside the package is not adjusted for the copy) | |
 | Code | TypeScript source (`.ts`, `.tsx`, `.mts`, `.cts`) | JavaScript, declaration files |
 | Layout | Run from the package directory | A workspace root (it stops and says so) |
 | OS | Linux, macOS, Windows | |
@@ -48,7 +49,7 @@ Undetected: 1
     + total > 100
     Changing >= to > went undetected. Review the behavior at total = 100.
 
-4 mutations tried: 3 detected, 1 undetected.
+4 mutations run against the tests: 3 detected, 1 undetected.
 
 Scope: the tests passed unmutated first (2 tests in 1 file, from the Vitest config here); each mutation then ran against the tests that executed its code; only comparisons, boolean conditions and arithmetic were mutated, and mutations are not type-checked.
 Time: 3.6 s
@@ -59,7 +60,7 @@ Time: 3.6 s
 | Flag | Default | What it does |
 |---|---|---|
 | `--base <ref>` | detected | What to compare the working tree against |
-| `--max-mutants <n>` | 50 | Mutations to run at most. The first *n* in a fixed order, so the same change reads the same twice |
+| `--max-mutants <n>` | 50 | Mutations to run against the tests at most: the first *n* in a fixed order, so the same change reads the same twice. Mutations in code no test executes run no tests and are always listed |
 | `--budget <time>` | `5m` | Stop after this long, the first test run included: `300`, `90s` or `5m` |
 | `--vitest-config <file>` | Vitest's own lookup | The config to run the tests with |
 | `--fail-on-survivors` | off | Exit 1 when a mutation went undetected or no test reached it, or the run is incomplete |

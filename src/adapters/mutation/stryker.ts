@@ -144,6 +144,7 @@ export function toBaselineTest(
 			raw.fileName === undefined
 				? (raw.id.split("#")[0] ?? "")
 				: relativeFile(roots, raw.fileName),
+		skipped: raw.skipped === true,
 	};
 }
 

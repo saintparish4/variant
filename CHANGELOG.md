@@ -35,7 +35,7 @@ exists so `variant check` can be tried on real projects before 0.3.0.
   - A file whose change is only formatting or comments is not mutated.
   - A test file that fails to load fails the baseline, and a Jest package is
     told it is not supported before anything starts.
-  - Works with Vitest 4.1 and 5, and with TypeScript 7.
+  - Tested on Vitest 4.1; tried once on Vitest 5.0.3. Runs on TypeScript 7.
   - The tests must pass unmutated first, or nothing is interpreted
     (`BASELINE_FAILED`). Timeouts and errors are inconclusive, and code no test
     executed is reported apart from mutations the tests missed.
