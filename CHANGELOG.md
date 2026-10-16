@@ -14,6 +14,30 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Added
+
+- **`variant check`: would your tests notice if the code you just changed
+  were wrong?** It mutates the lines a change touches (comparisons, boolean
+  conditions and arithmetic), runs the Vitest suite against each mutation, and
+  lists the mutations no test noticed, each with the source change and what
+  to review: `Changing >= to > went undetected. Review the behavior at total =
+  100.` It needs no history and no config.
+  - The change is detected: uncommitted (staged and unstaged) edits against
+    HEAD; a clean branch from where it left the default branch; in CI the pull
+    request's merge base or the push's previous commit. With none of these it
+    asks for `--base` rather than guessing.
+  - The tests must pass unmutated first, or nothing is interpreted
+    (`BASELINE_FAILED`). Timeouts and errors are inconclusive, and code no test
+    executed is reported apart from mutations the tests missed.
+  - Bounded by `--max-mutants` (default 50, the same mutants every run) and
+    `--budget` (default 5 minutes, baseline included). A run either stops or
+    is interrupted, and either way it reports `Incomplete`, never a clean
+    result.
+  - Runs in a copy of the project, so the working tree, the index and
+    untracked files are left exactly as they were.
+  - Advisory: exits 0 unless `--fail-on-survivors` is given. `--json` for CI.
+  - Built on StrykerJS 10 and its Vitest runner, which are now dependencies.
+
 ### Removed
 
 - **Breaking: Node 20 is no longer supported; variant needs Node 22 or newer.**

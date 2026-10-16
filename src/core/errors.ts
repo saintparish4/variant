@@ -109,6 +109,72 @@ export class NoTestFilesError extends VariantError {
 	}
 }
 
+/**
+ * `variant check` found nothing that says what the change is: a clean tree on
+ * the default branch, or no default branch at all. Guessing the previous
+ * commit would check something the developer may not mean.
+ */
+export class NoChangeBaseError extends VariantError {
+	constructor(message: string) {
+		super("NO_CHANGE_BASE", message);
+		this.hint =
+			"Pass --base <ref> to say what to compare against, for example `--base HEAD~1` or `--base origin/main`.";
+	}
+}
+
+export interface FailingTest {
+	name: string;
+	message: string;
+}
+
+/**
+ * Tests that fail with no mutation in place. Every later failure would be
+ * indistinguishable from one a mutation caused, so nothing is interpreted.
+ */
+export class BaselineFailedError extends VariantError {
+	constructor(
+		public failingTests: readonly FailingTest[],
+		public output: string,
+	) {
+		super(
+			"BASELINE_FAILED",
+			failingTests.length === 0
+				? "The tests fail before any mutation, so no result could be trusted"
+				: `${failingTests.length} test${failingTests.length === 1 ? "" : "s"} fail before any mutation, so no result could be trusted`,
+		);
+		this.hint =
+			"Make the tests pass first. If `vitest run` already passes outside variant, the copy variant runs them in is the cause: a path outside this directory (such as a tsconfig `extends`), git used by a test, or an absolute path.";
+	}
+}
+
+/** The mutation-testing engine could not run, or stopped on an error of its own. */
+export class CheckBackendError extends VariantError {
+	constructor(
+		message: string,
+		public output: string,
+	) {
+		super("CHECK_BACKEND", message);
+		this.hint =
+			"The engine's last output is shown above. If the tests pass with `vitest run`, please report this with that output.";
+	}
+}
+
+/**
+ * Run from a workspace root, a package imported by name resolves through
+ * `node_modules` to its real source rather than to the copy being mutated, so
+ * its mutants would read "no test reached this" when tests do.
+ */
+export class CheckWorkspaceRootError extends VariantError {
+	constructor() {
+		super(
+			"CHECK_WORKSPACE_ROOT",
+			"`variant check` runs from a package directory, not a workspace root",
+		);
+		this.hint =
+			"cd into the package whose code changed and run `variant check` there.";
+	}
+}
+
 export class CliUsageError extends VariantError {
 	constructor(message: string) {
 		super("CLI_USAGE", message);

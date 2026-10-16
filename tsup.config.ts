@@ -6,6 +6,10 @@ export default defineConfig([
 			index: "src/index.ts",
 			cli: "src/cli/index.ts",
 			vitest: "src/reporters/vitest.ts",
+			// `variant check` runs Stryker in a process of its own, and Stryker
+			// loads the reporter by path; both are found beside the CLI.
+			"stryker-host": "src/adapters/mutation/stryker-host.ts",
+			"stryker-reporter": "src/adapters/mutation/stryker-reporter.ts",
 		},
 		format: ["esm"],
 		dts: true,

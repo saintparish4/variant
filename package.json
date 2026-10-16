@@ -76,6 +76,9 @@
     "url": "https://github.com/saintparish4/variant/issues"
   },
   "dependencies": {
+    "@stryker-mutator/api": "10.0.0",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
     "commander": "^14.0.3",
     "execa": "^9.6.1",
     "fast-glob": "^3.3.3",

@@ -322,6 +322,68 @@ export async function defaultBranchRef(cwd: string): Promise<string | null> {
 	return null;
 }
 
+/**
+ * Whether a tracked file under `cwd` differs from HEAD, staged or not. Null
+ * outside a repository. Untracked files do not count: they are not part of
+ * what `git diff HEAD` compares.
+ */
+export async function hasTrackedChanges(cwd: string): Promise<boolean | null> {
+	const stdout = await git(cwd, [
+		"status",
+		"--porcelain",
+		"-z",
+		"--untracked-files=no",
+		"--",
+		".",
+	]);
+	return stdout === null ? null : stdout.length > 0;
+}
+
+/** Files under `cwd` that git does not track and does not ignore. */
+export async function listUntrackedFiles(
+	cwd: string,
+): Promise<string[] | null> {
+	return toFileList(
+		await git(cwd, [
+			"ls-files",
+			"-z",
+			"--others",
+			"--exclude-standard",
+			"--",
+			".",
+		]),
+	);
+}
+
+/**
+ * The zero-context diff of one file between `ref` and the working tree: its
+ * hunk headers are the changed line ranges. Null when git fails.
+ *
+ * Each flag shuts out a setting that would change what the headers say:
+ * `diff.external` and textconv drivers rewrite the text, `diff.relative`
+ * drops files, and rename detection would compare a renamed file with its
+ * old name's contents.
+ */
+export async function readZeroContextDiff(
+	cwd: string,
+	ref: string,
+	relPath: string,
+): Promise<string | null> {
+	if (isOptionLike(ref)) return null;
+	return git(cwd, [
+		"diff",
+		"-U0",
+		"--no-color",
+		"--no-ext-diff",
+		"--no-textconv",
+		"--no-relative",
+		"--no-renames",
+		ref,
+		"--",
+		toPosix(relPath),
+	]);
+}
+
 /** The top of the working tree `cwd` is in, or null outside a repository. */
 export async function repositoryRoot(cwd: string): Promise<string | null> {
 	const top = (await git(cwd, ["rev-parse", "--show-toplevel"]))?.trim();

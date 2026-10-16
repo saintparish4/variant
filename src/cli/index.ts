@@ -61,6 +61,49 @@ const program = new Command()
 		);
 	});
 
+program
+	.command("check")
+	.description(
+		"Mutate the lines you changed and report the mutations your tests did not notice",
+	)
+	.option(
+		"--base <ref>",
+		"git ref to compare against (default: HEAD for uncommitted changes, else detected)",
+	)
+	.option("--max-mutants <n>", "mutations to run at most (default: 50)")
+	.option(
+		"--budget <time>",
+		"stop after this long, baseline included: 300, 90s or 5m (default: 5m)",
+	)
+	.option("--vitest-config <file>", "the Vitest config to run the tests with")
+	.option(
+		"--fail-on-survivors",
+		"exit 1 when a mutation went undetected or unreached, or the run is incomplete",
+	)
+	.option("--json", "output the result as JSON")
+	.action(
+		async (opts: {
+			base?: string;
+			maxMutants?: string;
+			budget?: string;
+			vitestConfig?: string;
+			failOnSurvivors?: boolean;
+			json?: boolean;
+		}) => {
+			const { registerCheckAction } = await import("./commands/check.js");
+			await registerCheckAction({
+				...(opts.base !== undefined && { base: opts.base }),
+				...(opts.maxMutants !== undefined && { maxMutants: opts.maxMutants }),
+				...(opts.budget !== undefined && { budget: opts.budget }),
+				...(opts.vitestConfig !== undefined && {
+					vitestConfig: opts.vitestConfig,
+				}),
+				...(opts.failOnSurvivors === true && { failOnSurvivors: true }),
+				...(opts.json === true && { json: true }),
+			});
+		},
+	);
+
 const impactCmd = program
 	.command("impact")
 	.description(
