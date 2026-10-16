@@ -38,7 +38,7 @@ const TIMEOUT = 120_000;
 // reporter, through tsx.
 const backend = createStrykerBackend({
 	hostPath: path.join(ADAPTER, "stryker-host.ts"),
-	reporterPath: path.join(ADAPTER, "stryker-reporter.ts"),
+	pluginsPath: path.join(ADAPTER, "stryker-plugins.ts"),
 	execArgv: ["--import", import.meta.resolve("tsx")],
 });
 
@@ -205,6 +205,34 @@ describe("variant check", () => {
 				expect.objectContaining({
 					name: "qualifiesForDiscount rejects a small order",
 				}),
+			]);
+		},
+		TIMEOUT,
+	);
+
+	// pyra: a test file importing a module that did not exist yet produced no
+	// tests, and the baseline read as passing without it.
+	it(
+		"counts a test file that fails to load as a failing baseline",
+		async () => {
+			const dir = demoRepository();
+			writeFileSync(
+				path.join(dir, "src", "broken.test.ts"),
+				[
+					'import { it } from "vitest";',
+					'import { missing } from "./not-written-yet";',
+					"",
+					'it("uses it", () => missing());',
+					"",
+				].join("\n"),
+			);
+			git(dir, "add", "src/broken.test.ts");
+
+			const error = await check(dir).catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(BaselineFailedError);
+			expect((error as BaselineFailedError).failingTests).toEqual([
+				expect.objectContaining({ name: "src/broken.test.ts (did not load)" }),
 			]);
 		},
 		TIMEOUT,

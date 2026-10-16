@@ -44,8 +44,8 @@ const EXCLUDED = new Set(EXCLUDED_MUTATORS);
 export interface StrykerBackendOptions {
 	/** The host script; defaults to the built `stryker-host.js` beside this file. */
 	hostPath?: string;
-	/** The reporter plugin; defaults to the built `stryker-reporter.js`. */
-	reporterPath?: string;
+	/** variant's plugins; defaults to the built `stryker-plugins.js`. */
+	pluginsPath?: string;
 	/** Node flags for the host, e.g. a TypeScript loader in tests. */
 	execArgv?: string[];
 }
@@ -421,7 +421,7 @@ function startRun(
 			baselineTimeoutMinutes: request.baselineTimeoutMinutes,
 			tempDirName: toPosix(path.join(CHECK_TMP, runId)),
 			configFile: toPosix(path.join(CHECK_TMP, `${runId}.json`)),
-			reporter: options.reporterPath ?? builtSibling("stryker-reporter.js"),
+			plugins: options.pluginsPath ?? builtSibling("stryker-plugins.js"),
 		};
 		const spawned = fork(
 			options.hostPath ?? builtSibling("stryker-host.js"),

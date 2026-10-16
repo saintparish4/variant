@@ -13,8 +13,8 @@ export interface HostRequest {
 	tempDirName: string;
 	/** An empty config, so a Stryker config in the project is never merged in. */
 	configFile: string;
-	/** Absolute path of the reporter plugin module. */
-	reporter: string;
+	/** Absolute path of variant's plugin module (reporter and runner). */
+	plugins: string;
 }
 
 export interface RawPosition {

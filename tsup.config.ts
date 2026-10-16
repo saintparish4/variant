@@ -9,7 +9,7 @@ export default defineConfig([
 			// `variant check` runs Stryker in a process of its own, and Stryker
 			// loads the reporter by path; both are found beside the CLI.
 			"stryker-host": "src/adapters/mutation/stryker-host.ts",
-			"stryker-reporter": "src/adapters/mutation/stryker-reporter.ts",
+			"stryker-plugins": "src/adapters/mutation/stryker-plugins.ts",
 		},
 		format: ["esm"],
 		dts: true,

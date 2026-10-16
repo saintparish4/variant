@@ -61,7 +61,9 @@ async function run(request: HostRequest): Promise<void> {
 				tsconfigFile: `${request.tempDirName}.no-tsconfig.json`,
 			}),
 			configFile: request.configFile,
-			testRunner: "vitest",
+			// Stryker's Vitest runner, made to count a test file that fails to
+			// load: see stryker-plugins.ts.
+			testRunner: "variant-vitest",
 			vitest: {
 				// The whole configured suite in the baseline, so each mutant's
 				// tests come from measured coverage, not from Vitest's guess at
@@ -74,7 +76,7 @@ async function run(request: HostRequest): Promise<void> {
 			mutate: request.mutate,
 			mutator: { excludedMutations: EXCLUDED_MUTATORS },
 			plugins: [vitestRunner],
-			appendPlugins: [request.reporter],
+			appendPlugins: [request.plugins],
 			reporters: ["variant"],
 			tempDirName: request.tempDirName,
 			cleanTempDir: "always",
