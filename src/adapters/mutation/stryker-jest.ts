@@ -22,9 +22,13 @@
  *   rather than as the tests failing.
  * - A config that runs several projects, or looks for tests outside the
  *   package, is refused before any test runs.
+ * - A mutant runs only the test files holding the tests that reach it.
+ *   Stryker filters those tests by name alone, and Jest still loaded and set
+ *   up every test file to find them: 7 s a mutant on dearly, where its
+ *   covering files take 0.3 s.
  */
 
-import { realpathSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { Injector, PluginContext } from "@stryker-mutator/api/plugin";
@@ -68,10 +72,18 @@ interface TestAdapter {
 	run: (settings: unknown) => Promise<{ results: JestResults }>;
 }
 
+interface JestWrapper {
+	runCLI: (
+		argv: Record<string, unknown>,
+		projects: string[],
+	) => Promise<unknown>;
+}
+
 /** Stryker's Jest runner keeps what this reads in plain fields. */
 export interface WithJestConfig {
 	jestConfig?: JestConfig;
 	jestTestAdapter?: TestAdapter;
+	jestWrapper?: JestWrapper;
 }
 
 /** What this reads of Jest's own reading of a config. */
@@ -375,6 +387,112 @@ export function withLoadFailures(
 	return { status: DryRunStatus.Complete, tests };
 }
 
+/**
+ * Each test's files, by the id Stryker filters a mutant's tests on: Jest's
+ * full name, which tests in two files can share.
+ */
+export function testFiles(tests: readonly TestResult[]): Map<string, string[]> {
+	const files = new Map<string, string[]>();
+	for (const test of tests) {
+		if (test.fileName === undefined) continue;
+		const known = files.get(test.id) ?? [];
+		if (!known.includes(test.fileName)) known.push(test.fileName);
+		files.set(test.id, known);
+	}
+	return files;
+}
+
+/**
+ * The test files holding the tests in `filter`, or undefined to run them
+ * all: Stryker gives no filter for a mutant reached as a module loads, and a
+ * test this cannot place could be in any file. The name filter still applies
+ * inside the files, so exactly the tests it let through before run.
+ */
+export function filesToRun(
+	filter: readonly string[] | undefined,
+	files: ReadonlyMap<string, readonly string[]> | undefined,
+): string[] | undefined {
+	if (filter === undefined || filter.length === 0 || files === undefined) {
+		return undefined;
+	}
+	const found = new Set<string>();
+	for (const id of filter) {
+		const holding = files.get(id);
+		if (holding === undefined) return undefined;
+		for (const file of holding) found.add(file);
+	}
+	return [...found];
+}
+
+/**
+ * Where the baseline leaves each test's files for the other workers: a
+ * mutant can run in any of them, and only one ran the baseline. It is inside
+ * the run's Jest cache directory, which variant sets and removes with the
+ * run.
+ */
+function testFilesPath(config: JestConfig | undefined): string | undefined {
+	const directory = config?.["cacheDirectory"];
+	return typeof directory === "string"
+		? path.join(directory, "variant-test-files.json")
+		: undefined;
+}
+
+export function shareTestFiles(
+	files: ReadonlyMap<string, readonly string[]>,
+	config: JestConfig | undefined,
+): void {
+	const file = testFilesPath(config);
+	if (file === undefined) return;
+	try {
+		mkdirSync(path.dirname(file), { recursive: true });
+		writeFileSync(file, JSON.stringify([...files]));
+	} catch {
+		// Every mutant then runs every test file, as Stryker would.
+	}
+}
+
+export function sharedTestFiles(
+	config: JestConfig | undefined,
+): Map<string, string[]> | undefined {
+	const file = testFilesPath(config);
+	if (file === undefined) return undefined;
+	try {
+		const entries: unknown = JSON.parse(readFileSync(file, "utf8"));
+		return Array.isArray(entries)
+			? new Map(entries as [string, string[]][])
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Has Jest run only the files `only()` names, by path, while it names some.
+ * Everything else Stryker asks Jest for is kept.
+ */
+export function runOnly(
+	runner: WithJestConfig,
+	only: () => readonly string[] | undefined,
+): void {
+	const wrapper = runner.jestWrapper;
+	if (wrapper === undefined || typeof wrapper.runCLI !== "function") return;
+	const runCLI = wrapper.runCLI.bind(wrapper);
+	wrapper.runCLI = (argv, projects) => {
+		const files = only();
+		return runCLI(
+			files === undefined
+				? argv
+				: {
+						...argv,
+						_: [...files],
+						runTestsByPath: true,
+						findRelatedTests: false,
+					},
+			projects,
+		);
+	};
+}
+
 /** Keeps what each run of the tests returned, for the runner to read after. */
 function recordResults(runner: WithJestConfig): () => JestResults | undefined {
 	let last: JestResults | undefined;
@@ -402,6 +520,9 @@ function createJestRunner(injector: Injector<PluginContext>): TestRunner {
 	const runner = injector.injectFunction(jest.factory) as TestRunner &
 		WithJestConfig;
 	const lastResults = recordResults(runner);
+	let only: string[] | undefined;
+	runOnly(runner, () => only);
+	let files: Map<string, string[]> | undefined;
 	const baseline = async (options: DryRunOptions): Promise<DryRunResult> =>
 		withLoadFailures(
 			await runner.dryRun(options),
@@ -416,13 +537,25 @@ function createJestRunner(injector: Injector<PluginContext>): TestRunner {
 			if (reason !== undefined) throw new Error(`${UNSUPPORTED}${reason}`);
 		},
 		dryRun: async (options) => {
-			const result = await baseline(options);
-			if (coverageMissing(result)) {
-				return baseline({ ...options, coverageAnalysis: "off" });
+			const first = await baseline(options);
+			const result = coverageMissing(first)
+				? await baseline({ ...options, coverageAnalysis: "off" })
+				: withMeasuredNothing(first, options.coverageAnalysis);
+			if (result.status === DryRunStatus.Complete) {
+				files = testFiles(result.tests);
+				shareTestFiles(files, runner.jestConfig);
 			}
-			return withMeasuredNothing(result, options.coverageAnalysis);
+			return result;
 		},
-		mutantRun: (options) => runner.mutantRun(options),
+		mutantRun: async (options) => {
+			files ??= sharedTestFiles(runner.jestConfig);
+			only = filesToRun(options.testFilter, files);
+			try {
+				return await runner.mutantRun(options);
+			} finally {
+				only = undefined;
+			}
+		},
 		dispose: async () => runner.dispose?.(),
 	};
 }

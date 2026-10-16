@@ -1,7 +1,12 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import type { DryRunResult } from "@stryker-mutator/api/test-runner";
+import type {
+	DryRunResult,
+	TestResult,
+} from "@stryker-mutator/api/test-runner";
 import { DryRunStatus, TestStatus } from "@stryker-mutator/api/test-runner";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type {
 	JestResults,
 	ProjectJest,
@@ -9,7 +14,12 @@ import type {
 } from "../stryker-jest.js";
 import {
 	coverageMissing,
+	filesToRun,
 	prepareJest,
+	runOnly,
+	sharedTestFiles,
+	shareTestFiles,
+	testFiles,
 	unsupportedSetup,
 	withLoadFailures,
 	withMeasuredNothing,
@@ -268,5 +278,94 @@ describe("a Jest baseline with files that did not load", () => {
 		const complete: DryRunResult = { status: DryRunStatus.Complete, tests: [] };
 
 		expect(withLoadFailures(complete, results, cwd)).toBe(complete);
+	});
+});
+
+const directories: string[] = [];
+
+afterEach(() => {
+	for (const directory of directories.splice(0)) {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
+
+describe("the test files a mutant runs", () => {
+	const passed = (id: string, fileName: string): TestResult => ({
+		id,
+		name: id,
+		status: TestStatus.Success,
+		timeSpentMs: 1,
+		fileName,
+	});
+	const files = testFiles([
+		passed("q accepts 150", "/repo/a.test.ts"),
+		passed("q rejects 50", "/repo/a.test.ts"),
+		// The same full name in two files: Stryker cannot tell them apart.
+		passed("setup works", "/repo/a.test.ts"),
+		passed("setup works", "/repo/b.test.ts"),
+		passed("other", "/repo/c.test.ts"),
+	]);
+
+	it("are the files holding the tests that reach it, each once", () => {
+		expect(filesToRun(["q accepts 150", "q rejects 50"], files)).toEqual([
+			"/repo/a.test.ts",
+		]);
+		expect(filesToRun(["setup works"], files)).toEqual([
+			"/repo/a.test.ts",
+			"/repo/b.test.ts",
+		]);
+	});
+
+	it("are every file where there is no filter or a test cannot be placed", () => {
+		// No filter: a mutant reached as a module loads.
+		expect(filesToRun(undefined, files)).toBeUndefined();
+		expect(filesToRun([], files)).toBeUndefined();
+		expect(filesToRun(["q accepts 150", "unknown"], files)).toBeUndefined();
+		// A worker that found no baseline to read.
+		expect(filesToRun(["q accepts 150"], undefined)).toBeUndefined();
+	});
+
+	it("reach the workers that did not run the baseline", () => {
+		const cacheDirectory = path.join(
+			mkdtempSync(path.join(tmpdir(), "variant-jest-")),
+			"jest-cache",
+		);
+		directories.push(path.dirname(cacheDirectory));
+
+		shareTestFiles(files, { cacheDirectory });
+
+		expect(sharedTestFiles({ cacheDirectory })).toEqual(files);
+		expect(sharedTestFiles({})).toBeUndefined();
+		expect(
+			sharedTestFiles({ cacheDirectory: path.join(cacheDirectory, "none") }),
+		).toBeUndefined();
+	});
+
+	it("are given to Jest by path, with the rest of what Stryker asked for", async () => {
+		const seen: Record<string, unknown>[] = [];
+		const runner: WithJestConfig = {
+			jestWrapper: {
+				runCLI: async (argv) => {
+					seen.push(argv);
+					return {};
+				},
+			},
+		};
+		let only: string[] | undefined = ["/repo/a.test.ts"];
+		runOnly(runner, () => only);
+		const asked = {
+			_: [],
+			findRelatedTests: false,
+			testNamePattern: "(q accepts 150)",
+		};
+
+		await runner.jestWrapper?.runCLI(asked, ["/repo"]);
+		only = undefined;
+		await runner.jestWrapper?.runCLI(asked, ["/repo"]);
+
+		expect(seen).toEqual([
+			{ ...asked, _: ["/repo/a.test.ts"], runTestsByPath: true },
+			asked,
+		]);
 	});
 });

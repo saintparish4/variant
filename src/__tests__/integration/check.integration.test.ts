@@ -288,6 +288,36 @@ describe.each([
 		TIMEOUT,
 	);
 
+	// Filtering a mutant's tests by name alone still has the runner load and
+	// set up every test file to find them: on dearly, 7 s a mutant where the
+	// covering files take 0.3 s.
+	it(
+		"runs each mutation against only the test files whose tests reach it",
+		async () => {
+			const dir = demoRepository(demo);
+			const log = path.join(createTempWorkspace("check-log"), "loads.log");
+			writeFileSync(
+				path.join(dir, "src", "other.test.ts"),
+				[
+					`import { appendFileSync } from "node:fs";\n${demo.header}`,
+					`appendFileSync(${JSON.stringify(log)}, "loaded\\n");`,
+					"",
+					'it("checks something else", () => {});',
+					"",
+				].join("\n"),
+			);
+			git(dir, "add", "src/other.test.ts");
+
+			const result = await check(dir);
+
+			expect(result.counts.undetected).toBe(1);
+			expect(result.mutants.length).toBeGreaterThan(1);
+			// Once, in the baseline; no mutated line runs in it.
+			expect(readFileSync(log, "utf8")).toBe("loaded\n");
+		},
+		TIMEOUT,
+	);
+
 	// pyra: when no mutated code ran in the baseline, Stryker read the empty
 	// coverage as "coverage analysis off", ran every mutation against every
 	// test and called code no test imports "undetected".
