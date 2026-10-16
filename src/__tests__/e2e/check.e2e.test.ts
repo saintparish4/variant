@@ -32,6 +32,35 @@ function variant(cwd: string, ...args: string[]) {
 	});
 }
 
+/** Process ids of this build's Stryker host still running. */
+async function hostsStillRunning(): Promise<string[]> {
+	const host = path.join(repo, "dist", "stryker-host.js");
+	if (process.platform === "win32") {
+		const { stdout } = await execa(
+			"powershell",
+			[
+				"-NoProfile",
+				"-Command",
+				"Get-CimInstance Win32_Process | Select-Object ProcessId, CommandLine | ConvertTo-Json",
+			],
+			{ reject: false },
+		);
+		const rows = JSON.parse(stdout || "[]") as
+			| { ProcessId: number; CommandLine: string | null }[]
+			| { ProcessId: number; CommandLine: string | null };
+		return (Array.isArray(rows) ? rows : [rows])
+			.filter((row) => row.CommandLine?.includes(host) === true)
+			.map((row) => String(row.ProcessId));
+	}
+	const { stdout } = await execa("ps", ["-eo", "pid=,args="], {
+		reject: false,
+	});
+	return stdout
+		.split("\n")
+		.filter((line) => line.includes(host))
+		.map((line) => line.trim().split(/\s+/)[0] ?? "");
+}
+
 describe("E2E: would the tests notice?", () => {
 	let cwd: string;
 
@@ -53,13 +82,19 @@ describe("E2E: would the tests notice?", () => {
 	});
 
 	afterAll(() => {
-		// Windows releases a killed process tree's handles late.
-		rmSync(cwd, {
-			recursive: true,
-			force: true,
-			maxRetries: 10,
-			retryDelay: 200,
-		});
+		// Windows holds directory handles for a while after the processes using
+		// them exit; the shared test helper tolerates the same. That a process
+		// of ours is still running is asserted in the test itself.
+		try {
+			rmSync(cwd, {
+				recursive: true,
+				force: true,
+				maxRetries: 20,
+				retryDelay: 500,
+			});
+		} catch (error) {
+			if (process.platform !== "win32") throw error;
+		}
 	});
 
 	it("names the boundary the tests miss, then sees it caught once a test checks it", async () => {
@@ -92,5 +127,10 @@ describe("E2E: would the tests notice?", () => {
 		expect(caught.exitCode).toBe(0);
 		expect(caught.stdout).toContain("were detected by the tests that ran.");
 		expect(caught.stdout).not.toContain("Undetected");
+
+		// The engine runs in a host process with workers under it; none may
+		// outlive the command. Matched by this build's host, so the
+		// integration tests' hosts running beside this one do not count.
+		expect(await hostsStillRunning()).toEqual([]);
 	}, 120_000);
 });
