@@ -43,7 +43,7 @@ import { parseZeroContextDiff } from "./hunks.js";
 import type { CheckResult, StopReason } from "./result.js";
 import { assembleCheckResult } from "./result.js";
 import type { CheckRunner, RunnerVerdict } from "./runner.js";
-import { detectRunner } from "./runner.js";
+import { detectRunner, withConfigInside } from "./runner.js";
 import type { Selection } from "./selection.js";
 import { selectMutants } from "./selection.js";
 import type { SymbolLookup } from "./symbols.js";
@@ -223,7 +223,10 @@ export async function runCheck(
 	const base = await deps.resolveBase(options.base);
 	await deps.assertBase(base.ref);
 	if (await deps.isWorkspaceRoot()) throw new CheckWorkspaceRootError();
-	const runner = options.runner ?? (await detectedRunner(deps));
+	const runner =
+		options.runner === undefined
+			? await detectedRunner(deps)
+			: withConfigInside(cwd, options.runner);
 
 	const [changed, untracked] = await Promise.all([
 		deps.listChangedFiles(base.ref),

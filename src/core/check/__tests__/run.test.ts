@@ -1,9 +1,11 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	BaselineFailedError,
 	CheckBackendError,
 	CheckRunnerError,
 	CheckWorkspaceRootError,
+	CliUsageError,
 } from "../../errors.js";
 import type {
 	BackendEvent,
@@ -353,6 +355,51 @@ describe("runCheck", () => {
 			kind: "vitest",
 			configFile: "vitest.unit.config.ts",
 		});
+	});
+
+	// The tests run in a copy of the package. A config named outside it, or
+	// by an absolute path, would run them against the real files instead:
+	// for Jest, whose root follows its config, snapshots included.
+	it.each([
+		["outside the package", "../vitest.config.ts"],
+		[
+			"by an absolute path elsewhere",
+			path.join(path.sep, "elsewhere", "vitest.config.ts"),
+		],
+	])("refuses a config %s", async (_, configFile) => {
+		const { backend, state } = fakeBackend([]);
+
+		const error = await runCheck(
+			"/repo",
+			{ ...options, runner: { kind: "vitest", configFile } },
+			deps(backend),
+		).catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(CliUsageError);
+		expect((error as CliUsageError).message).toMatch(/--vitest-config/);
+		expect(state.request).toBeUndefined();
+	});
+
+	it("names a config inside the package relative to it", async () => {
+		const { backend, state } = fakeBackend([
+			baseline,
+			{ kind: "plan", mutants: [], coverageMeasured: true },
+			{ kind: "finished" },
+		]);
+
+		await runCheck(
+			"/repo",
+			{
+				...options,
+				runner: {
+					kind: "vitest",
+					configFile: path.join(path.resolve("/repo"), "config", "vitest.ts"),
+				},
+			},
+			deps(backend),
+		);
+
+		expect(state.request?.runner.configFile).toBe("config/vitest.ts");
 	});
 
 	it("passes on what the engine noted about the run", async () => {

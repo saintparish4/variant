@@ -5,6 +5,9 @@
  * and then said only that no tests ran.
  */
 
+import path from "node:path";
+import { CliUsageError } from "../errors.js";
+
 /** The test runners `variant check` drives. */
 export type RunnerKind = "vitest" | "jest";
 
@@ -18,6 +21,34 @@ export interface CheckRunner {
 	kind: RunnerKind;
 	/** The config to run them with, relative to cwd; absent for the runner's own lookup. */
 	configFile?: string;
+}
+
+/**
+ * The runner with its config named relative to cwd, which is where the copy
+ * the tests run in has it. Named outside cwd, or by an absolute path, it
+ * would be the real package's config, and the runner would test the real
+ * files: Jest's root follows its config, snapshots and all.
+ */
+export function withConfigInside(
+	cwd: string,
+	runner: CheckRunner,
+): CheckRunner {
+	if (runner.configFile === undefined) return runner;
+	const relative = path.relative(cwd, path.resolve(cwd, runner.configFile));
+	if (
+		relative === "" ||
+		relative === ".." ||
+		relative.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relative)
+	) {
+		const error = new CliUsageError(
+			`--${runner.kind}-config must name a file inside this package, and ${runner.configFile} is not`,
+		);
+		error.hint =
+			"variant check runs the tests in a copy of this package; a config outside it would run them against the real files.";
+		throw error;
+	}
+	return { kind: runner.kind, configFile: relative.split(path.sep).join("/") };
 }
 
 export type RunnerVerdict =
