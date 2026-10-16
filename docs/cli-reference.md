@@ -18,7 +18,7 @@ run `npx @blzsky/variant <command>`. `npx variant` fetches an unrelated package.
 - [What gets analyzed](#what-gets-analyzed)
 - Change intelligence: [`impact`](#impact) · [`impact verify`](#impact-verify) · [`diff`](#diff) · [`pr check`](#pr-check) · [`pr report`](#pr-report) · [`workspace check`](#workspace-check)
 - Task orchestration: [`build`](#build) · [`run`](#run) · [`insight`](#insight)
-- Setup and diagnostics: [`init`](#init) · [`doctor`](#doctor) · [`check`](#check) · [`env`](#env)
+- Setup and diagnostics: [`init`](#init) · [`doctor`](#doctor) · [`env`](#env)
 - [Files variant writes](#files-variant-writes)
 
 ## Global options
@@ -445,26 +445,17 @@ task without asking. If a config already exists, it writes nothing.
 variant doctor
 ```
 
-Checks the Node version (≥ 20), that a config validates, and the cache size (a
-warning above 500 MB). Exits 1 if any check fails. A missing config is a
+Checks the Node version (≥ 20), that a config validates, that its task graph
+has no cycle, and the cache size (a warning above 500 MB). Exits 1 if any check fails. A missing config is a
 warning, not a failure: only `build` and `run` read one.
 
 ```
 [✓] Node v22.4.0 meets requirement ≥20
 [✓] Config found: variant.config.ts
 [✓] Config is valid
+[✓] Task graph is valid
 [✓] Cache directory is 0 MB
 ```
-
-### `check`
-
-```
-variant check
-```
-
-Validates the config and the task graph (unknown `dependsOn` targets, cycles)
-without running anything. Prints `Config and graph are valid.` or exits 1 with
-the error.
 
 ### `env`
 

@@ -12,6 +12,8 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ResolvedVariantConfig } from "../../types/index.js";
 import { findVariantConfigPath, loadConfig } from "../config/loader.js";
+import { buildGraph } from "../graph/planner.js";
+import { validateTaskGraph } from "../graph/validation.js";
 
 export type DiagnosticLevel = "ok" | "warn" | "error";
 
@@ -118,6 +120,16 @@ async function checkConfig(cwd: string): Promise<Diagnostic[]> {
 	}
 
 	diagnostics.push({ level: "ok", label: "Config is valid" });
+	try {
+		validateTaskGraph(config.tasks, buildGraph(config));
+		diagnostics.push({ level: "ok", label: "Task graph is valid" });
+	} catch (err) {
+		diagnostics.push({
+			level: "error",
+			label: "Task graph is invalid",
+			detail: err instanceof Error ? err.message : String(err),
+		});
+	}
 	diagnostics.push(await checkCacheSize(cwd, config.cache.directory));
 
 	return diagnostics;

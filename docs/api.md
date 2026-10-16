@@ -65,8 +65,7 @@ export default defineConfig({
 ```
 
 Validation happens when the CLI loads the file, not in `defineConfig`. An
-unknown `dependsOn` target, for example, is reported by `variant check` or
-`variant doctor`.
+unknown `dependsOn` target, for example, is reported by `variant doctor`.
 
 ### Config types
 

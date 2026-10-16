@@ -41,10 +41,10 @@ describe("E2E: basic-monorepo", () => {
 		expect(result.stdout).toMatch(/utils/);
 	});
 
-	it("check command: validates config successfully", async () => {
-		const result = await execa("node", [cli, "check"], { cwd });
+	it("doctor command: validates config and task graph", async () => {
+		const result = await execa("node", [cli, "doctor"], { cwd });
 		expect(result.exitCode).toBe(0);
-		expect(result.stdout).toMatch(/valid/i);
+		expect(result.stdout).toMatch(/Task graph is valid/);
 	});
 
 	it("env command: prints detected environment", async () => {

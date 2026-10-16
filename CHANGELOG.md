@@ -14,6 +14,13 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking: `variant check` no longer validates the task graph.** The name
+  now belongs to a new command (see Added). `variant doctor` does what it did:
+  an unknown `dependsOn` fails config validation, and `doctor` now also reports
+  a dependency cycle anywhere in the graph as `Task graph is invalid`, exit 1.
+
 ### Fixed
 
 - **A named runner config selects every test.** `vitest.integration.config.ts`,

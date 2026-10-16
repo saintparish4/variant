@@ -84,7 +84,7 @@ src/
 │   ├── graph/
 │   │   ├── dag.ts            # TaskGraph: addTask, addDependency, toLevels
 │   │   ├── planner.ts        # buildGraph(): config -> TaskGraph
-│   │   ├── validation.ts     # validateTaskGraph(), behind `variant check`
+│   │   ├── validation.ts     # validateTaskGraph(), behind `variant doctor`
 │   │   ├── package-graph.ts  # Workspace discovery and cross-package tasks
 │   │   ├── import-graph.ts   # File-level import graph over the symbol index
 │   │   ├── import-paths.ts   # The import chain from a file to a changed one

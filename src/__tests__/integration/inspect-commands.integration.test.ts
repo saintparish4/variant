@@ -1,18 +1,16 @@
 /**
- * Boundary: the read-only commands (`check`, `doctor`, `env`, `insight`,
+ * Boundary: the read-only commands (`doctor`, `env`, `insight`,
  * `init`) meeting real config discovery, validation, and environment
  * detection.
  */
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { registerCheckAction } from "../../cli/commands/check.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { registerDoctorAction } from "../../cli/commands/doctor.js";
 import { registerEnvAction } from "../../cli/commands/env.js";
 import { registerInitAction } from "../../cli/commands/init.js";
 import { registerInsightAction } from "../../cli/commands/insight.js";
-import { ConfigError } from "../../core/errors.js";
 import {
 	captureGlobalOutput,
 	cleanupTempWorkspaces,
@@ -28,41 +26,16 @@ function writeConfig(dir: string, config: Record<string, unknown>): void {
 	});
 }
 
+// Unset until a command sets it, so a test asserting 0 must not depend on
+// which test ran before it.
+beforeEach(() => {
+	process.exitCode = 0;
+});
+
 afterEach(() => {
 	cleanupTempWorkspaces();
 	restoreGlobalPrinter();
 	process.exitCode = 0;
-});
-
-describe("check command", () => {
-	it("accepts a valid config and task graph", async () => {
-		const dir = createTempWorkspace("check");
-		writeConfig(dir, { tasks: { build: {}, lint: {} } });
-		const output = captureGlobalOutput();
-
-		await withCwd(dir, () => registerCheckAction());
-
-		expect(output.stdout()).toMatch(/valid/i);
-	});
-
-	it("accepts dependsOn references that resolve", async () => {
-		const dir = createTempWorkspace("check");
-		writeConfig(dir, { tasks: { lint: {}, build: { dependsOn: ["lint"] } } });
-		const output = captureGlobalOutput();
-
-		await withCwd(dir, () => registerCheckAction());
-
-		expect(output.stdout()).toMatch(/valid/i);
-	});
-
-	it("rejects a dependsOn reference to an unknown task", async () => {
-		const dir = createTempWorkspace("check");
-		writeConfig(dir, { tasks: { build: { dependsOn: ["nonexistent"] } } });
-
-		await expect(
-			withCwd(dir, () => registerCheckAction()),
-		).rejects.toBeInstanceOf(ConfigError);
-	});
 });
 
 describe("doctor command", () => {
@@ -99,6 +72,25 @@ describe("doctor command", () => {
 		await withCwd(dir, () => registerDoctorAction());
 
 		expect(output.stdout()).toMatch(/Config validation failed/i);
+		expect(process.exitCode).toBe(1);
+	});
+
+	// The schema rejects an unknown task; only the graph can see a cycle, and
+	// one in a branch no run has touched yet should fail here, not later.
+	it("flags a dependency cycle anywhere in the task graph", async () => {
+		const dir = createTempWorkspace("doctor");
+		writeConfig(dir, {
+			tasks: {
+				lint: {},
+				build: { dependsOn: ["test"] },
+				test: { dependsOn: ["build"] },
+			},
+		});
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () => registerDoctorAction());
+
+		expect(output.stdout()).toMatch(/Task graph is invalid/i);
 		expect(process.exitCode).toBe(1);
 	});
 });

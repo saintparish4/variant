@@ -276,14 +276,6 @@ program
 		await registerEnvAction();
 	});
 
-program
-	.command("check")
-	.description("Validate config and task graph (no execution)")
-	.action(async () => {
-		const { registerCheckAction } = await import("./commands/check.js");
-		await registerCheckAction();
-	});
-
 // A reader that stops early (`variant impact --json | head`) closes the pipe
 // while variant is still writing, and the next write fails: EPIPE, or EOF on
 // Windows. That is the reader's choice, not a failure, but Node's default is
