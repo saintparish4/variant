@@ -19,6 +19,17 @@ const EXCLUSION: Readonly<Record<ExclusionReason, string>> = {
 /** The rest are in `--json`; a project with no .gitignore can list thousands. */
 const MAX_EXCLUDED = 10;
 
+/**
+ * This package's TypeScript first, which is what a reader checks the
+ * judgement on; then files that are not TypeScript; files outside the
+ * package last. Stable within each group.
+ */
+function exclusionRank(reason: ExclusionReason): number {
+	if (reason === "outside") return 2;
+	if (reason === "not-typescript") return 1;
+	return 0;
+}
+
 const INCONCLUSIVE: Readonly<
 	Partial<Record<MutantOutcome["outcome"], string>>
 > = {
@@ -96,7 +107,10 @@ export function renderCheck(
 	}
 	if (result.excluded.length > 0) {
 		lines(printer, "", "Not mutated:");
-		for (const exclusion of result.excluded.slice(0, MAX_EXCLUDED)) {
+		const ordered = [...result.excluded].sort(
+			(a, b) => exclusionRank(a.reason) - exclusionRank(b.reason),
+		);
+		for (const exclusion of ordered.slice(0, MAX_EXCLUDED)) {
 			lines(printer, `  ${exclusion.file}  ${EXCLUSION[exclusion.reason]}`);
 		}
 		const more = result.excluded.length - MAX_EXCLUDED;

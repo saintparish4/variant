@@ -296,6 +296,36 @@ describe("renderCheck", () => {
 		expect(out).not.toContain("the tests that executed its code");
 	});
 
+	// pyra: ten files outside the package filled the list, and the six local
+	// files judged formatting-only were hidden behind "… and 9 more".
+	it("lists this package's own files before files outside it or not TypeScript", () => {
+		const capture = captureOutput();
+		const outside = Array.from({ length: 12 }, (_, i) => ({
+			file: `../db/src/file-${i}.ts`,
+			reason: "outside" as const,
+		}));
+
+		renderCheck(
+			result({
+				excluded: [
+					...outside,
+					{ file: "package.json", reason: "not-typescript" },
+					{ file: "scripts/checkSpec.ts", reason: "formatting-only" },
+				],
+			}),
+			capture.printer,
+		);
+
+		const out = capture.stdout();
+		expect(out.indexOf("scripts/checkSpec.ts")).toBeGreaterThan(-1);
+		expect(out.indexOf("scripts/checkSpec.ts")).toBeLessThan(
+			out.indexOf("../db/src/file-0.ts"),
+		);
+		expect(out.indexOf("package.json")).toBeLessThan(
+			out.indexOf("../db/src/file-0.ts"),
+		);
+	});
+
 	it("says when nothing changed that could be mutated", () => {
 		const capture = captureOutput();
 
