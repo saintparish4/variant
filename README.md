@@ -33,7 +33,7 @@ have not committed yet, staged or not, and leaves your working tree exactly as
 it was.
 
 > **Status**: `0.x`. `variant check` is published as a canary,
-> `0.3.0-canary.1`, under the `canary` tag: install `@blzsky/variant@canary`.
+> `0.3.0-canary.2`, under the `canary` tag: install `@blzsky/variant@canary`.
 > Without the tag npm serves 0.2.1, which has no `check`. Any minor release
 > can break, and every break is in the [CHANGELOG](./CHANGELOG.md).
 

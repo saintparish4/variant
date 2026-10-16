@@ -14,6 +14,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+## [0.3.0-canary.2] - 2026-10-16
+
+A canary, under the `canary` tag like 0.3.0-canary.1: `latest` stays 0.2.1.
+It brings `variant check` to Jest packages.
+
 ### Added
 
 - **`variant check` runs Jest packages.** It used to refuse them with
@@ -665,7 +670,8 @@ ship in minor releases and are recorded here.
 - The `echoQuoted` smoke task and the stale phase-gate comments in the dogfood
   config. Quoted-argv parsing is covered by the executor's unit tests.
 
-[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.3.0-canary.1...HEAD
+[Unreleased]: https://github.com/saintparish4/variant/compare/variant@0.3.0-canary.2...HEAD
+[0.3.0-canary.2]: https://github.com/saintparish4/variant/compare/variant@0.3.0-canary.1...variant@0.3.0-canary.2
 [0.3.0-canary.1]: https://github.com/saintparish4/variant/compare/variant@0.3.0-canary.0...variant@0.3.0-canary.1
 [0.3.0-canary.0]: https://github.com/saintparish4/variant/compare/variant@0.2.1...variant@0.3.0-canary.0
 [0.2.1]: https://github.com/saintparish4/variant/compare/variant@0.2.0...variant@0.2.1
