@@ -16,6 +16,7 @@ run `npx @blzsky/variant <command>`. `npx variant` fetches an unrelated package.
 - [Exit codes and errors](#exit-codes-and-errors)
 - [Refs and diffs](#refs-and-diffs)
 - [What gets analyzed](#what-gets-analyzed)
+- Would your tests notice: [`check`](#check)
 - Change intelligence: [`impact`](#impact) · [`impact verify`](#impact-verify) · [`diff`](#diff) · [`pr check`](#pr-check) · [`pr report`](#pr-report) · [`workspace check`](#workspace-check)
 - Task orchestration: [`build`](#build) · [`run`](#run) · [`insight`](#insight)
 - Setup and diagnostics: [`init`](#init) · [`doctor`](#doctor) · [`env`](#env)
@@ -76,6 +77,10 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `IMPACT_REPORT_ERROR` | `impact verify` was given a path with no file, or a file that is not a Vitest or Jest JSON report |
 | `NO_BASE_COMMIT` | Raised inside `impact` when a detected base does not exist (a branch's first push). `impact` reports it and exits 0; with `--json` it prints `{ "prediction": null, "code": "NO_BASE_COMMIT", "reason": … }` |
 | `NO_TEST_FILES` | `impact` found no test file to predict over (`*.test.*`, `*.spec.*`, or under `__tests__/`, in TypeScript or JavaScript) |
+| `NO_CHANGE_BASE` | `check` found nothing that says what the change is: a clean tree on the default branch. Pass `--base` |
+| `BASELINE_FAILED` | `check`: a test fails with no mutation in place, so no result could be trusted. The failing tests are listed |
+| `CHECK_WORKSPACE_ROOT` | `check` was run from a workspace root; run it from the package directory |
+| `CHECK_BACKEND` | `check`: Stryker or Vitest could not run, or stopped on an error of its own. Its last output is shown |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
@@ -164,6 +169,32 @@ The [limitations](./impact-and-workspace.md#limitations) section explains what
 static analysis cannot see.
 
 ---
+
+## Would your tests notice
+
+### `check`
+
+```
+variant check [--base <ref>] [--max-mutants <n>] [--budget <time>]
+              [--vitest-config <file>] [--fail-on-survivors] [--json]
+```
+
+Mutates the changed lines of TypeScript source files (comparisons, boolean
+conditions, arithmetic), runs the Vitest suite against each mutation, and
+reports the ones no test noticed, with the change and what to review. Run it
+from the package directory. See [`check`](./check.md) for how the base is
+chosen, how to read a result, CI, and limitations.
+
+| Flag | Default | |
+|---|---|---|
+| `--base <ref>` | detected | HEAD with uncommitted changes; a clean branch's merge base with the default branch; on GitHub Actions the pull request's merge base or the push's previous commit |
+| `--max-mutants <n>` | 50 | The first *n* mutations in a fixed order |
+| `--budget <time>` | `5m` | Wall-clock limit, the first test run included: `300`, `90s`, `5m` |
+| `--vitest-config <file>` | Vitest's lookup | The config to run the tests with |
+| `--fail-on-survivors` | off | Exit 1 on an undetected or unreached mutation, or an incomplete run |
+| `--json` | off | The result as JSON, with `allDetected` |
+
+Exits 0 whatever it finds, unless `--fail-on-survivors`; its errors exit 1.
 
 ## Change intelligence
 
@@ -484,6 +515,7 @@ Everything lives under `.variant/` at the project root; add it to
 | `.variant/history/impact.jsonl` | `impact` | One line per prediction, newest 1000 kept. [Record shape](./api.md#history-files). |
 | `.variant/history/reconciliation.jsonl` | `impact verify` | One line of counts per reconciliation, newest 1000 kept. |
 | `.variant/cache/cache.json` | `build`, `run` | Task input hashes and timings. The directory is `cache.directory` in the config. |
+| `.variant/check-tmp/` | `check` | The copy the tests run in, while `check` runs. Removed afterwards, and ignored by git meanwhile. |
 
 `init` writes `variant.config.ts`, and `pr report --output` writes the file you
 name. Nothing else is written.

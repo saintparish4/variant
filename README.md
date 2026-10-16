@@ -8,55 +8,153 @@
 
 ## What is variant?
 
-variant answers one question about a change to a TypeScript repository: what
-has to be verified before this is safe to merge?
+variant answers one question about the code you just changed:
 
-It reads the diff at the level of the syntax tree, not the line, follows every
-import across workspace packages, and says, on the pull request:
+> **Your tests pass. Would they notice if this code were wrong?**
 
-- how risky each changed file is, and why;
-- which test files reach the change, with the import chain from each test to
-  the file that changed;
-- which typecheck, build and lint commands apply to the packages it affects;
-- which changed files no test reaches at all.
-
-You set it up once. After that nobody types a variant command: your own test
-command and your pull requests are the interface.
-
-```bash
-npx @blzsky/variant init
-```
-
-`init` finds out how the repository installs, tests and runs CI, shows every
-change it would make as a diff, and makes them when you agree. It adds one
-line to your Vitest config and one workflow that keeps a comment on each pull
-request.
-
-It does not skip tests. Your full suite runs as it always did; in CI variant
-predicts beside it which test files the change needs, then checks that
-prediction against what failed and prints one line:
+`variant check` makes small, deliberate mistakes in the lines you changed, one
+at a time, runs your tests against each, and lists the mistakes nobody
+noticed:
 
 ```
-variant: predicted 8 of 55 test files (high). 2 failed, all predicted.
+Undetected: 1
+  src/discount.ts:3:9  in qualifiesForDiscount
+    - total >= 100
+    + total > 100
+    Changing >= to > went undetected. Review the behavior at total = 100.
 ```
 
-Leaving tests out is something variant has to earn in each repository, from
-that record, and is not built yet.
+The tests checked 50 and 150 and passed with either operator. Add a test at
+100, run it again, and the same mistake is caught. Each finding is a concrete
+change to your code, not a score.
 
-> **Status**: `0.x`. What is described here is published as a canary,
-> `0.3.0-canary.0`, under the `canary` tag: write `@blzsky/variant@canary`
-> wherever this page says `@blzsky/variant`. Without the tag npm serves
-> 0.2.1, which has `impact`, `pr check`, `pr report` and `workspace check`,
-> an `init` that only writes a task-runner config, and no adapter. The
-> adapter is for Vitest; a Jest repository gets the pull request report
-> only. Test skipping is **not implemented**, deliberately.
-> The task runner underneath (`build`, `run`, `insight`) works but is frozen.
-> Any minor release can break, and every break is in the
+It works on the first run, with no history and no config. It looks at what you
+have not committed yet, staged or not, and leaves your working tree exactly as
+it was.
+
+> **Status**: `0.x`, and `variant check` is **not published yet**: it is in
+> this repository and arrives in the next release. Until then,
+> run it from a build of this repository (see [Install](#install)). npm serves
+> 0.2.1, and `@blzsky/variant@canary` serves 0.3.0-canary.0; neither has
+> `check`. Any minor release can break, and every break is in the
 > [CHANGELOG](./CHANGELOG.md).
 
 ## Install
 
-variant needs Node 22 or newer and a git repository.
+variant needs Node 22 or newer, a git repository, and Vitest 4.1.
+
+Once it is released:
+
+```bash
+npm install -D @blzsky/variant
+```
+
+Until then, from a clone of this repository:
+
+```bash
+pnpm install && pnpm build
+node /path/to/variant/dist/cli.js check     # run inside your project
+```
+
+The package is `@blzsky/variant`; the binary it installs is `variant`.
+`npx variant` fetches an unrelated package, so always use the scope with `npx`.
+
+### Upgrade
+
+```bash
+npm install -D @blzsky/variant@latest
+```
+
+Because variant is `0.x`, read the CHANGELOG before moving to a new minor
+version.
+
+## Usage
+
+```bash
+npx @blzsky/variant check                    # before you commit
+npx @blzsky/variant check --base main        # everything this branch changes
+npx @blzsky/variant check --fail-on-survivors --json   # in CI
+```
+
+Run it from the package whose code changed, where its Vitest config is.
+
+- **What it compares against.** With uncommitted changes, HEAD: your staged
+  and unstaged edits. On a clean branch, the commit it left the default branch
+  at. On GitHub Actions, the pull request's merge base, or the commit a push
+  replaced. When none of these applies it stops and asks for `--base` instead
+  of guessing.
+- **What it mutates.** Comparisons (`>=` to `>`, `===` to `!==`), boolean
+  conditions (`&&` to `||`, a condition forced to `true` or `false`) and
+  arithmetic (`+` to `-`), in the changed lines of TypeScript source files.
+  Test files, declaration files and untracked files are not mutated; the
+  report lists them and why.
+- **First, the tests must pass as they are.** If one fails, variant stops: a
+  failure could not then be told apart from one a mutation caused.
+- **What it reports.** Each mutation the tests did not notice, with the exact
+  change and what to review; code no test executed, listed apart; timeouts and
+  errors as inconclusive; what was not run and why; how many tests ran; and how
+  long it took. When every mutation is detected it says so, and says that this
+  is evidence the tests check those lines, not proof the change is correct.
+- **Bounded.** At most `--max-mutants` mutations (default 50, the same ones
+  every run) within `--budget` (default 5 minutes, the first test run
+  included). A run that stops early says `Incomplete` and lists what it did
+  not run. It never reads as clean.
+- **Advisory.** It exits 0 whatever it finds. `--fail-on-survivors` exits 1
+  when a mutation went undetected or unreached, or the run is incomplete.
+
+The [`check` guide](./docs/check.md) has every flag, the CI setup, and how to
+read a result. [`examples/check-demo`](./examples/check-demo) is the example
+above, ready to run.
+
+## How it compares
+
+**Mutation testing is not new.** [StrykerJS](https://stryker-mutator.io/)
+mutates JavaScript and TypeScript and runs your tests against each mutant, has
+an incremental mode that reuses earlier results, and can be pointed at a set of
+files or lines. variant runs on Stryker; it does not replace it. What variant
+adds is the workflow around it: it works out which lines changed, mutates only
+those, keeps the run bounded, explains each surviving mutation in terms of the
+line you wrote, and leaves your working tree alone. If you already run Stryker
+over a whole project, you have the data `check` gives you, and more.
+
+**Coverage is weaker evidence.** A line counts as covered when a test runs it,
+whether or not anything checks the result. The example above is 100% covered.
+
+## Limitations
+
+- **A surviving mutation is a finding to review, not a bug.** Some mutations
+  change nothing a valid input can observe: `>=` and `>` agree everywhere a
+  value can never equal the boundary. variant does not detect those, and does
+  not promise to.
+- **Detected is not verified.** All mutations detected means the tests that ran
+  noticed these particular mistakes. It says nothing about mistakes of other
+  kinds, or about lines that were not mutated.
+- **Only three kinds of mistake.** Comparisons, conditions and arithmetic.
+  Strings, literals, removed calls and removed statements are not mutated.
+- **Deleted lines cannot be mutated.** A change that only removes code gets no
+  mutation; the report says how many lines that was.
+- **Mutations are not type-checked.** One that TypeScript would reject still
+  runs, because Vitest does not check types.
+- **Code run in another process reads as unreached.** Coverage is measured in
+  the test process, so a test that drives a CLI or a server it starts does not
+  count as executing that code.
+- **Flaky tests can count as detection.** A test that fails at random while a
+  mutation is in place is read as noticing it.
+- **One Vitest project, run from its package.** Workspace roots, Vitest browser
+  mode and Jest are not supported yet.
+
+## Pull request reports
+
+variant also explains pull requests: one comment on each that says what the
+change affects, which tests reach it and why, and what no test reaches. This is
+what `variant init` sets up. It predates `check`, and works as it did.
+
+### Setting up
+
+```bash
+npx @blzsky/variant init            # shows the changes, asks, then applies
+npx @blzsky/variant init --dry-run  # only look
+```
 
 ```bash
 npx @blzsky/variant init            # shows the changes, asks, then applies
@@ -73,16 +171,7 @@ with confidence it leaves alone and tells you the lines to add.
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.
 
-### Upgrade
-
-```bash
-npm install -D @blzsky/variant@latest
-```
-
-Because variant is `0.x`, read the CHANGELOG before moving to a new minor
-version.
-
-## Usage
+### What you see
 
 After `init` there is nothing to run. What you see:
 
@@ -130,7 +219,7 @@ follows the importers of the changed names for `pr check`'s verdict. A change
 to `package.json`, a lockfile, `tsconfig*.json`, a test runner config or a test
 setup file selects every test.
 
-### In CI
+### In CI, by hand
 
 `init` writes what CI needs. To wire the commands in by hand: check out
 with `fetch-depth: 0`; the base is detected on GitHub Actions, and elsewhere
@@ -165,32 +254,7 @@ branch names and numbers, no file paths and no source.
 and they go into the measurement that decides whether skipping ever ships. The
 [measurement log](./docs/measurement.md) has every number collected so far.
 
-## Benchmarks
-
-Measured by CI on 2026-09-28 with [`benchmarks/bench.mjs`](./benchmarks/bench.mjs),
-on a generated git repository of 300 TypeScript files with 25 changed. Each
-number is the median of the runs shown. Machine: AMD EPYC 9V74 (4 cores),
-16 GB RAM, Linux, Node 22.23.2, hyperfine 1.18.0.
-
-| | Median | Runs |
-|---|---:|---:|
-| `variant --help` (startup) | 36.7 ms | 20 |
-| `variant impact`, 25 changed files of 300 | 988 ms | 10 |
-
-- **Startup is a CI gate.** The benchmark workflow fails when the `--help`
-  median passes 200 ms, because every command is loaded only when it runs.
-- **The symbol index is cached.** `.variant/graph/symbols.json` keeps each
-  file's exports and imports keyed by content hash, so a later run re-parses
-  only the files whose content changed.
-- **Large real repositories are not measured yet.** 300 generated files say
-  how the pipeline behaves, not what it costs on your monorepo. Whether the
-  analysis pays for itself depends on how long your suite takes, and that
-  number has to come from real runs.
-
-Reproduce with `pnpm build && pnpm bench`; the methodology is in
-[`benchmarks/README.md`](./benchmarks/README.md).
-
-## How it compares
+### How the reports compare
 
 **Nx `affected`, Turborepo `--filter`.** These work at the level of projects
 and tasks: a change inside `utils` reruns the test target of `utils` and of
@@ -209,7 +273,7 @@ file runs, whichever functions it calls. The exported-surface classification
 decides `pr check`'s build verdict and whether a change selects anything, not
 which functions a test touches.
 
-## Limitations
+### What the reports cannot see
 
 Worth knowing before you trust a prediction. variant reads source statically,
 so it sees imports and nothing else. It widens the selection or lowers its
@@ -256,10 +320,36 @@ cannot see at all:
 The full list, with how each case is handled, is in
 [Impact & workspace](./docs/impact-and-workspace.md#limitations).
 
+## Benchmarks
+
+Measured by CI on 2026-09-28 with [`benchmarks/bench.mjs`](./benchmarks/bench.mjs),
+on a generated git repository of 300 TypeScript files with 25 changed. Each
+number is the median of the runs shown. Machine: AMD EPYC 9V74 (4 cores),
+16 GB RAM, Linux, Node 22.23.2, hyperfine 1.18.0.
+
+| | Median | Runs |
+|---|---:|---:|
+| `variant --help` (startup) | 36.7 ms | 20 |
+| `variant impact`, 25 changed files of 300 | 988 ms | 10 |
+
+- **Startup is a CI gate.** The benchmark workflow fails when the `--help`
+  median passes 200 ms, because every command is loaded only when it runs.
+- **The symbol index is cached.** `.variant/graph/symbols.json` keeps each
+  file's exports and imports keyed by content hash, so a later run re-parses
+  only the files whose content changed.
+- **Large real repositories are not measured yet.** 300 generated files say
+  how the pipeline behaves, not what it costs on your monorepo. Whether the
+  analysis pays for itself depends on how long your suite takes, and that
+  number has to come from real runs.
+
+Reproduce with `pnpm build && pnpm bench`; the methodology is in
+[`benchmarks/README.md`](./benchmarks/README.md).
+
 ## Documentation
 
 | | |
 |---|---|
+| [`check`](./docs/check.md) | Would your tests notice? Flags, CI, reading a result, limits |
 | [Tutorial](./docs/tutorial.md) | Every command, step by step, on a sample monorepo |
 | [Getting started](./docs/getting-started.md) | Run it on your own repository, then set up the task runner |
 | [Impact & workspace](./docs/impact-and-workspace.md) | How `impact` and `workspace check` work, and what static analysis cannot see |
