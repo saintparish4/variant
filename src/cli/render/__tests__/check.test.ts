@@ -225,10 +225,7 @@ describe("renderCheck", () => {
 
 		const out = capture.stdout();
 		expect(out).toContain(
-			"2 mutations run against the tests: 1 detected, 1 undetected.",
-		);
-		expect(out).toContain(
-			"2 more in code no test executed; those run no tests and do not count toward --max-mutants.",
+			"4 mutations: 2 run against the tests (1 detected, 1 undetected), 2 in code no test executed (those run no tests and do not count toward --max-mutants).",
 		);
 	});
 

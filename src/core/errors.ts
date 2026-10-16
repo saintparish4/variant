@@ -197,7 +197,7 @@ export class CheckRunnerError extends VariantError {
 		);
 		this.hint =
 			found.kind === "jest"
-				? "Jest support is not built yet; see docs/check.md for what is supported."
+				? "Jest support is not built yet. The pull request report (`variant pr report`) and `variant impact` do work with Jest; docs/check.md says what `check` supports."
 				: "Run it from the package that runs Vitest, or pass --vitest-config <file>.";
 	}
 }

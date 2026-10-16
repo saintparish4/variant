@@ -5,12 +5,17 @@
  * starts) when the limit, the budget or Ctrl-C says to.
  */
 
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import type { LogLevel } from "@stryker-mutator/api/core";
 import { Stryker } from "@stryker-mutator/core";
 import type { HostMessage, HostRequest } from "./protocol.js";
 import { EXCLUDED_MUTATORS } from "./protocol.js";
-import { canRewriteTsconfig, loadTypescriptAsStryker } from "./tsconfig.js";
+import {
+	canRewriteTsconfig,
+	loadTypescriptAsStryker,
+	tsconfigLeavesPackage,
+} from "./tsconfig.js";
 
 /**
  * Stryker types its log levels as a `const enum`, which a bundler compiling
@@ -49,10 +54,15 @@ async function run(request: HostRequest): Promise<void> {
 	// Pointed at a file that does not exist, Stryker's tsconfig preprocessor
 	// skips, which beats failing every run on TypeScript 7.
 	const rewriteTsconfig = await canRewriteTsconfig(loadTypescriptAsStryker);
-	if (!rewriteTsconfig) {
+	if (
+		!rewriteTsconfig &&
+		(await tsconfigLeavesPackage(process.cwd(), (file) =>
+			readFile(file, "utf8").catch(() => null),
+		).catch(() => false))
+	) {
 		send({
 			kind: "note",
-			text: "this TypeScript has no JavaScript API (TypeScript 7 does not), so a tsconfig `extends` or `references` outside this package was not adjusted for the copy the tests ran in",
+			text: "the tsconfig here points outside this package (a relative `extends` or `references`). This TypeScript has no JavaScript API (TypeScript 7 does not), so that path was not adjusted for the copy the tests ran in.",
 		});
 	}
 	try {

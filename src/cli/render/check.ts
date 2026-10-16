@@ -207,23 +207,29 @@ export function renderCheck(
 		);
 	} else if (counts.attempted > 0) {
 		const ran = ranAgainstTests(result);
-		if (ran > 0) {
-			const parts = [
-				`${counts.detected.toLocaleString("en-US")} detected`,
-				`${counts.undetected.toLocaleString("en-US")} undetected`,
-				...(inconclusive.length > 0
-					? [`${inconclusive.length.toLocaleString("en-US")} inconclusive`]
-					: []),
-			];
+		const unreachedCount = counts["no-coverage"];
+		const outcomes = [
+			`${counts.detected.toLocaleString("en-US")} detected`,
+			`${counts.undetected.toLocaleString("en-US")} undetected`,
+			...(inconclusive.length > 0
+				? [`${inconclusive.length.toLocaleString("en-US")} inconclusive`]
+				: []),
+		].join(", ");
+		const unreachedPart = `in code no test executed (${unreachedCount === 1 ? "it runs no tests and does" : "those run no tests and do"} not count toward --max-mutants)`;
+		if (unreachedCount === 0) {
 			lines(
 				printer,
-				`${plural(ran, "mutation")} run against the tests: ${parts.join(", ")}.`,
+				`${plural(ran, "mutation")} run against the tests: ${outcomes}.`,
 			);
-		}
-		if (counts["no-coverage"] > 0) {
+		} else if (ran === 0) {
 			lines(
 				printer,
-				`${counts["no-coverage"].toLocaleString("en-US")} ${ran > 0 ? "more " : ""}in code no test executed; those run no tests and do not count toward --max-mutants.`,
+				`${plural(unreachedCount, "mutation")}, all ${unreachedPart}.`,
+			);
+		} else {
+			lines(
+				printer,
+				`${plural(counts.attempted, "mutation")}: ${ran.toLocaleString("en-US")} run against the tests (${outcomes}), ${unreachedCount.toLocaleString("en-US")} ${unreachedPart}.`,
 			);
 		}
 	}
