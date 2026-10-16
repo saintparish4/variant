@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStrykerBackend } from "../../adapters/mutation/stryker.js";
 import type { CheckOptions } from "../../core/check/run.js";
 import { checkDeps, runCheck } from "../../core/check/run.js";
-import { BaselineFailedError } from "../../core/errors.js";
+import { BaselineFailedError, CheckRunnerError } from "../../core/errors.js";
 import {
 	cleanupTempWorkspaces,
 	createTempWorkspace,
@@ -288,6 +288,29 @@ describe.each([
 		TIMEOUT,
 	);
 
+	// pyra: when no mutated code ran in the baseline, Stryker read the empty
+	// coverage as "coverage analysis off", ran every mutation against every
+	// test and called code no test imports "undetected".
+	it(
+		"reports a changed file no test imports as reached by no test",
+		async () => {
+			const dir = demoRepository(demo);
+			git(dir, "commit", "-qm", "discount");
+			writeFileSync(
+				path.join(dir, "src", "shipping.ts"),
+				"export const heavy = (kg: number): boolean => kg > 20;\n",
+			);
+
+			const result = await check(dir);
+
+			expect(result.mutants.length).toBeGreaterThan(0);
+			expect(new Set(result.mutants.map((m) => m.outcome))).toEqual(
+				new Set(["no-coverage"]),
+			);
+		},
+		TIMEOUT,
+	);
+
 	it(
 		"stops at --max-mutants, says so, and picks the same mutants every time",
 		async () => {
@@ -437,26 +460,91 @@ describe.each([
 	);
 });
 
-describe("variant check with Vitest only", () => {
-	// pyra: when no mutated code ran in the baseline, Stryker read the empty
-	// coverage as "coverage analysis off", ran every mutation against every
-	// test and called code no test imports "undetected".
+describe("variant check with Jest only", () => {
+	/** Puts a `@jest-environment` comment at the top of the demo's test file. */
+	function withEnvironmentComment(dir: string, environment: string): void {
+		const file = path.join(dir, "src", "discount.test.ts");
+		writeFileSync(
+			file,
+			`/**\n * @jest-environment ${environment}\n */\n${readFileSync(file, "utf8")}`,
+		);
+	}
+
+	function withUnreachedFile(dir: string): void {
+		writeFileSync(
+			path.join(dir, "src", "shipping.ts"),
+			"export const heavy = (kg: number): boolean => kg > 20;\n",
+		);
+	}
+
+	// Next.js route tests name their environment this way. Jest then loads
+	// that environment instead of the one Stryker set, and those files
+	// reported no coverage.
 	it(
-		"reports a changed file no test imports as reached by no test",
+		"measures coverage through a test file that names its environment",
 		async () => {
-			const dir = demoRepository();
-			git(dir, "commit", "-qm", "discount");
-			writeFileSync(
-				path.join(dir, "src", "shipping.ts"),
-				"export const heavy = (kg: number): boolean => kg > 20;\n",
-			);
+			const dir = demoRepository(JEST);
+			withEnvironmentComment(dir, "node");
+			withUnreachedFile(dir);
 
 			const result = await check(dir);
 
-			expect(result.mutants.length).toBeGreaterThan(0);
-			expect(new Set(result.mutants.map((m) => m.outcome))).toEqual(
-				new Set(["no-coverage"]),
+			expect(result.coverageMeasured).toBe(true);
+			expect(result.counts.undetected).toBe(1);
+			expect(
+				result.mutants
+					.filter((m) => m.file === "src/shipping.ts")
+					.every((m) => m.outcome === "no-coverage"),
+			).toBe(true);
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"runs every mutation against every test where coverage cannot be measured, and says so",
+		async () => {
+			const dir = demoRepository(JEST);
+			// Jest's Node environment, loaded as a copy of its own: an
+			// environment variant has no way into.
+			writeFileSync(
+				path.join(dir, "env.js"),
+				[
+					'const { createRequire } = require("node:module");',
+					'const fromJest = createRequire(require.resolve("jest"));',
+					'const fromCli = createRequire(fromJest.resolve("jest-cli"));',
+					'const fromConfig = createRequire(fromCli.resolve("jest-config"));',
+					'const file = fromConfig.resolve("jest-environment-node");',
+					"delete require.cache[file];",
+					"module.exports = require(file).TestEnvironment;",
+					"",
+				].join("\n"),
 			);
+			withEnvironmentComment(dir, "./env.js");
+
+			const result = await check(dir);
+
+			expect(result.coverageMeasured).toBe(false);
+			expect(result.notes).toContainEqual(expect.stringMatching(/coverage/i));
+			expect(result.counts.undetected).toBe(1);
+			expect(result.status).toBe("complete");
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"refuses a Jest config that runs several projects, before running any test",
+		async () => {
+			const dir = demoRepository(JEST);
+			writeFileSync(
+				path.join(dir, "jest.config.js"),
+				'module.exports = { projects: [{ displayName: "unit" }] };\n',
+			);
+
+			const error = await check(dir).catch((caught: unknown) => caught);
+
+			expect(error).toBeInstanceOf(CheckRunnerError);
+			expect((error as CheckRunnerError).message).toMatch(/projects/);
+			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
 		},
 		TIMEOUT,
 	);

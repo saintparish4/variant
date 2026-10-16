@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { Stryker } from "@stryker-mutator/core";
 import type { HostMessage, HostRequest } from "./protocol.js";
+import { UNSUPPORTED } from "./protocol.js";
 import { RUNNER_PACKAGES, strykerOptions } from "./stryker-options.js";
 import {
 	canRewriteTsconfig,
@@ -62,10 +63,18 @@ async function run(request: HostRequest): Promise<void> {
 		send({ kind: "finished" });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		const unsupported = message.indexOf(UNSUPPORTED);
 		send(
-			/failed tests in the initial test run/i.test(message)
-				? { kind: "baseline-failed" }
-				: { kind: "error", message },
+			unsupported !== -1
+				? {
+						kind: "unsupported",
+						reason:
+							message.slice(unsupported + UNSUPPORTED.length).split("\n")[0] ??
+							"",
+					}
+				: /failed tests in the initial test run/i.test(message)
+					? { kind: "baseline-failed" }
+					: { kind: "error", message },
 		);
 	}
 	// Stays alive until `variant check` ends this process tree. Exiting here

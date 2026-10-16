@@ -3,16 +3,34 @@ import type { DryRunResult } from "@stryker-mutator/api/test-runner";
 import { DryRunStatus, TestStatus } from "@stryker-mutator/api/test-runner";
 import { describe, expect, it } from "vitest";
 import type {
-	JestConfigModule,
 	JestResults,
+	ProjectJest,
 	WithJestConfig,
 } from "../stryker-jest.js";
-import { withLoadFailures, withResolvedEnvironment } from "../stryker-jest.js";
+import {
+	coverageMissing,
+	prepareEnvironments,
+	unsupportedSetup,
+	withLoadFailures,
+	withMeasuredNothing,
+} from "../stryker-jest.js";
 
-function jestConfig(
-	normalize: JestConfigModule["normalize"],
-): () => JestConfigModule {
-	return () => ({ normalize });
+class NodeEnvironment {}
+
+/** A project's Jest, with its Node environment module in `modules`. */
+function projectJest(
+	normalize: ProjectJest["normalize"],
+	modules: Record<string, Record<string, unknown>> = {},
+): () => ProjectJest {
+	return () => ({
+		normalize,
+		resolveEnvironment: (_, name) => `/store/jest-environment-${name}.js`,
+		load: (file) => {
+			const found = modules[file];
+			if (found === undefined) throw new Error(`Cannot find ${file}`);
+			return found;
+		},
+	});
 }
 
 describe("the test environment Stryker is given", () => {
@@ -21,28 +39,28 @@ describe("the test environment Stryker is given", () => {
 	it("is the path Jest itself resolves", async () => {
 		const runner: WithJestConfig = { jestConfig: { rootDir: "/repo" } };
 
-		await withResolvedEnvironment(
+		await prepareEnvironments(
 			runner,
 			"/repo",
-			jestConfig(async (options) => ({
+			projectJest(async (options) => ({
 				options: {
-					testEnvironment: `/store/jest-environment-node/${String(options["rootDir"])}`,
+					testEnvironment: `/store/${String(options["rootDir"])}/env.js`,
 				},
 			})),
 		);
 
 		expect(runner.jestConfig).toEqual({
 			rootDir: "/repo",
-			testEnvironment: "/store/jest-environment-node//repo",
+			testEnvironment: "/store//repo/env.js",
 		});
 	});
 
 	it("is resolved from cwd where the config names no root", async () => {
 		const seen: unknown[] = [];
-		await withResolvedEnvironment(
+		await prepareEnvironments(
 			{ jestConfig: {} },
 			"/repo",
-			jestConfig(async (options) => {
+			projectJest(async (options) => {
 				seen.push(options["rootDir"]);
 				return { options: {} };
 			}),
@@ -54,15 +72,68 @@ describe("the test environment Stryker is given", () => {
 	it("is left to Stryker where Jest cannot resolve it", async () => {
 		const runner: WithJestConfig = { jestConfig: { testEnvironment: "x" } };
 
-		await withResolvedEnvironment(
+		await prepareEnvironments(
 			runner,
 			"/repo",
-			jestConfig(async () => {
+			projectJest(async () => {
 				throw new Error("Test environment x cannot be found");
 			}),
 		);
 
 		expect(runner.jestConfig).toEqual({ testEnvironment: "x" });
+	});
+
+	// A `@jest-environment node` comment makes Jest load Node's environment
+	// itself, not the one Stryker set, and that file reported no coverage.
+	it("records coverage in Jest's own environments wherever they load", async () => {
+		const node = { default: NodeEnvironment, TestEnvironment: NodeEnvironment };
+
+		await prepareEnvironments(
+			{ jestConfig: { rootDir: "/repo" } },
+			"/repo",
+			projectJest(async () => ({ options: {} }), {
+				"/store/jest-environment-node.js": node,
+			}),
+		);
+
+		expect(node.default).not.toBe(NodeEnvironment);
+		expect(Object.getPrototypeOf(node.default)).toBe(NodeEnvironment);
+		expect(node.TestEnvironment).toBe(node.default);
+	});
+});
+
+describe("a Jest baseline's coverage", () => {
+	it("counts no mutated code run as coverage of nothing", () => {
+		const complete: DryRunResult = { status: DryRunStatus.Complete, tests: [] };
+
+		expect(withMeasuredNothing(complete, "perTest")).toEqual({
+			...complete,
+			mutantCoverage: { static: {}, perTest: {} },
+		});
+		// Run without coverage on purpose: there is nothing to read.
+		expect(withMeasuredNothing(complete, "off")).toBe(complete);
+	});
+
+	it("knows Stryker's error for a test file that reported no coverage", () => {
+		// Stryker 10's message, as it begins.
+		const missing: DryRunResult = {
+			status: DryRunStatus.Error,
+			errorMessage:
+				"\nMissing coverage results for:\n  * src/route.test.ts\n\nYou probably configured a test environment in jest that is not reporting code coverage to Stryker.",
+		};
+
+		expect(coverageMissing(missing)).toBe(true);
+		expect(
+			coverageMissing({ status: DryRunStatus.Error, errorMessage: "boom" }),
+		).toBe(false);
+	});
+});
+
+describe("a Jest setup check does not run", () => {
+	it("is a config with projects", () => {
+		expect(unsupportedSetup({ projects: ["<rootDir>/a"] })).toMatch(/projects/);
+		expect(unsupportedSetup({ projects: [] })).toBeUndefined();
+		expect(unsupportedSetup({})).toBeUndefined();
 	});
 });
 

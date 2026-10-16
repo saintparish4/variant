@@ -401,6 +401,8 @@ export async function runCheck(
 			failure.output,
 			runner.kind,
 		);
+	} else if (failure?.kind === "unsupported") {
+		throw new CheckRunnerError(failure.reason);
 	} else if (failure?.kind === "error") {
 		throw new CheckBackendError(failure.message, failure.output, runner.kind);
 	} else if (stopReason === undefined && plan === undefined) {

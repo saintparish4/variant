@@ -70,6 +70,9 @@ const KILL_WAIT_MS = 5_000;
 const OUTPUT_SETTLE_MS = 250;
 export const CHECK_TMP = path.join(".variant", "check-tmp");
 
+const JEST_WITHOUT_COVERAGE =
+	"Jest could not record coverage for some test files: they run in a test environment variant cannot record coverage in, such as a custom one a `@jest-environment` comment names.";
+
 // ------------------------------------------------------------ translation
 
 function toPosix(file: string): string {
@@ -503,12 +506,18 @@ function startRun(
 					dropped.add(mutant.id);
 					return false;
 				});
+				const coverageMeasured =
+					kept.length === 0 ||
+					kept.some((mutant) => mutant.coveredBy !== undefined);
+				// variant's Jest runner gives coverage of nothing as coverage, so
+				// none at all means it ran the baseline again without it.
+				if (!coverageMeasured && request.runner.kind === "jest") {
+					channel.push({ kind: "note", text: JEST_WITHOUT_COVERAGE });
+				}
 				channel.push({
 					kind: "plan",
 					mutants: kept.map((mutant) => toPlannedMutant(roots, mutant)),
-					coverageMeasured:
-						kept.length === 0 ||
-						kept.some((mutant) => mutant.coveredBy !== undefined),
+					coverageMeasured,
 				});
 			} else if (message.kind === "tested") {
 				if (dropped.has(message.mutant.id)) return;
@@ -546,6 +555,8 @@ function startRun(
 					failingTests: parseFailingTests(text),
 					output: text,
 				});
+			} else if (terminal?.kind === "unsupported") {
+				channel.push({ kind: "unsupported", reason: terminal.reason });
 			} else if (terminal?.kind === "error") {
 				channel.push({
 					kind: "error",

@@ -57,7 +57,16 @@ export type HostMessage =
 	| { kind: "finished" }
 	| { kind: "note"; text: string }
 	| { kind: "baseline-failed" }
+	/** A setup check does not run, found before any test ran. */
+	| { kind: "unsupported"; reason: string }
 	| { kind: "error"; message: string };
+
+/**
+ * Begins the error a plugin throws for a setup check does not run. Stryker
+ * passes a worker's error on with its message intact, and a worker has no
+ * channel of its own to variant.
+ */
+export const UNSUPPORTED = "variant check cannot run these tests: ";
 
 /**
  * Appended to a test file's name when the runner adds it as a failed test

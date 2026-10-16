@@ -208,15 +208,22 @@ export class CheckWorkspaceRootError extends VariantError {
 	}
 }
 
-/** No runner `check` can run the package's tests with. */
+/**
+ * No runner `check` can run the package's tests with, or a setup it does not
+ * run, which `reason` names.
+ */
 export class CheckRunnerError extends VariantError {
-	constructor() {
+	constructor(reason?: string) {
 		super(
 			"CHECK_RUNNER",
-			"No test runner here: no Vitest or Jest dependency, script or config in this package",
+			reason === undefined
+				? "No test runner here: no Vitest or Jest dependency, script or config in this package"
+				: `variant check cannot run these tests: ${reason}`,
 		);
 		this.hint =
-			"Run it from the package whose tests cover the change, or name the runner with --runner vitest or --runner jest.";
+			reason === undefined
+				? "Run it from the package whose tests cover the change, or name the runner with --runner vitest or --runner jest."
+				: "docs/check.md lists the setups check runs.";
 	}
 }
 

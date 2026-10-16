@@ -73,6 +73,8 @@ export type BackendEvent =
 	/** Something about the run the report should say. */
 	| { kind: "note"; text: string }
 	| { kind: "baseline-failed"; failingTests: FailingTest[]; output: string }
+	/** The tests are set up in a way the engine cannot run; nothing ran. */
+	| { kind: "unsupported"; reason: string }
 	| { kind: "error"; message: string; output: string };
 
 export interface BackendRequest {

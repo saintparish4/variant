@@ -1,7 +1,7 @@
 /**
  * @module
  * Stryker's own Jest runner, loaded by path in each test-runner worker, with
- * two things changed:
+ * these things changed:
  *
  * - The test environment is resolved the way Jest resolves it. Stryker swaps
  *   the environment for one that records coverage, which loads the project's
@@ -9,9 +9,18 @@
  *   is not there: it is one of Jest's own dependencies, and Jest finds it from
  *   its own install. Left to Stryker, the baseline failed in every pnpm
  *   package.
+ * - Jest's own environments record coverage wherever they load. A test file
+ *   can name its environment in a `@jest-environment` comment, and Jest then
+ *   loads that one instead of the one Stryker set; the baseline failed with
+ *   "Missing coverage results" (Next.js route tests, on dearly).
+ * - Where coverage still cannot be measured, the baseline runs again without
+ *   it, and every mutation runs against every test.
+ * - Coverage of nothing is coverage: with no mutated code run, Stryker read
+ *   the empty result as coverage analysis turned off.
  * - A test file that fails to load counts as a failing baseline test.
  *   Stryker reports it as an error of its own, which read as variant failing
  *   rather than as the tests failing.
+ * - A config that runs several projects is refused before any test runs.
  */
 
 import { createRequire } from "node:module";
@@ -24,13 +33,17 @@ import {
 	tokens,
 } from "@stryker-mutator/api/plugin";
 import type {
+	DryRunOptions,
 	DryRunResult,
 	TestResult,
 	TestRunner,
 } from "@stryker-mutator/api/test-runner";
 import { DryRunStatus, TestStatus } from "@stryker-mutator/api/test-runner";
-import { strykerPlugins as jestPlugins } from "@stryker-mutator/jest-runner";
-import { LOAD_FAILURE_SUFFIX } from "./protocol.js";
+import {
+	strykerPlugins as jestPlugins,
+	mixinJestEnvironment,
+} from "@stryker-mutator/jest-runner";
+import { LOAD_FAILURE_SUFFIX, UNSUPPORTED } from "./protocol.js";
 
 /** A Jest config as Stryker's runner holds it: the file's, merged with Stryker's. */
 export type JestConfig = Record<string, unknown>;
@@ -59,22 +72,47 @@ export interface WithJestConfig {
 	jestTestAdapter?: TestAdapter;
 }
 
-/** The part of `jest-config` this uses, the same in Jest 29 and 30. */
-export interface JestConfigModule {
+/** What this uses of the project's own Jest, the same in Jest 29 and 30. */
+export interface ProjectJest {
 	normalize: (
 		options: JestConfig,
 		argv: Record<string, never>,
 		configPath: null,
 		projectIndex: number,
 	) => Promise<{ options: { testEnvironment?: unknown } }>;
+	/** An environment's path, as Jest resolves a name it is given. */
+	resolveEnvironment: (rootDir: string, name: string) => string;
+	/** A module by its absolute path. */
+	load: (file: string) => unknown;
 }
 
-/** `jest-config` from the project's own Jest, as Stryker finds `jest`. */
-export function projectJestConfig(cwd: string): JestConfigModule {
+/** The project's own Jest, found as Stryker finds `jest`. */
+export function projectJest(cwd: string): ProjectJest {
 	const fromProject = createRequire(path.join(cwd, "package.json"));
 	const fromJest = createRequire(fromProject.resolve("jest"));
 	const fromJestCli = createRequire(fromJest.resolve("jest-cli"));
-	return fromJestCli("jest-config") as JestConfigModule;
+	const fromJestConfig = createRequire(fromJestCli.resolve("jest-config"));
+	const jestConfig = fromJestCli("jest-config") as Pick<
+		ProjectJest,
+		"normalize"
+	>;
+	const jestResolve = fromJestConfig("jest-resolve") as {
+		resolveTestEnvironment: (options: {
+			rootDir: string;
+			testEnvironment: string;
+			requireResolveFunction: (id: string) => string;
+		}) => string;
+	};
+	return {
+		normalize: (...args) => jestConfig.normalize(...args),
+		resolveEnvironment: (rootDir, testEnvironment) =>
+			jestResolve.resolveTestEnvironment({
+				rootDir,
+				testEnvironment,
+				requireResolveFunction: (id) => fromJestConfig.resolve(id),
+			}),
+		load: (file) => fromProject(file),
+	};
 }
 
 /**
@@ -85,12 +123,12 @@ export function projectJestConfig(cwd: string): JestConfigModule {
 export async function resolvedEnvironment(
 	config: JestConfig,
 	cwd: string,
-	loadJestConfig: () => JestConfigModule = () => projectJestConfig(cwd),
+	jest: ProjectJest,
 ): Promise<string | undefined> {
 	try {
 		// A copy, as Jest is given it: Stryker passes the config on as JSON.
 		const copy = JSON.parse(JSON.stringify(config)) as JestConfig;
-		const { options } = await loadJestConfig().normalize(
+		const { options } = await jest.normalize(
 			{ ...copy, rootDir: copy["rootDir"] ?? cwd },
 			{},
 			null,
@@ -104,18 +142,101 @@ export async function resolvedEnvironment(
 	}
 }
 
-/** Gives Stryker the environment by path, which its lookup cannot miss. */
-export async function withResolvedEnvironment(
+/** The names a `@jest-environment` comment gives Jest's own environments. */
+const OWN_ENVIRONMENTS = ["node", "jsdom"];
+
+/**
+ * Wraps the environment class in place, in the module Jest will load, with
+ * Stryker's coverage recording. Jest loads environments through Node's
+ * module cache, so a test file that names this one gets the wrapped class.
+ */
+function recordCoverageIn(
+	jest: ProjectJest,
+	rootDir: string,
+	name: string,
+): void {
+	try {
+		const exports = jest.load(jest.resolveEnvironment(rootDir, name)) as Record<
+			string,
+			unknown
+		>;
+		const original = exports["default"] ?? exports["TestEnvironment"];
+		if (typeof original !== "function") return;
+		const wrapped = (mixinJestEnvironment as (environment: unknown) => unknown)(
+			original,
+		);
+		for (const key of ["default", "TestEnvironment"]) {
+			if (exports[key] === original) exports[key] = wrapped;
+		}
+	} catch {
+		// Not installed (jsdom often is not), or exported in a way this does
+		// not know: those files fall back to running without coverage.
+	}
+}
+
+/**
+ * Gives Stryker the environment by path, which its lookup cannot miss, and
+ * makes Jest's own environments record coverage wherever a test file names
+ * them.
+ */
+export async function prepareEnvironments(
 	runner: WithJestConfig,
 	cwd: string,
-	loadJestConfig?: () => JestConfigModule,
+	loadJest: () => ProjectJest = () => projectJest(cwd),
 ): Promise<void> {
 	const config = runner.jestConfig;
 	if (config === undefined) return;
-	const environment = await resolvedEnvironment(config, cwd, loadJestConfig);
+	let jest: ProjectJest;
+	try {
+		jest = loadJest();
+	} catch {
+		return;
+	}
+	const environment = await resolvedEnvironment(config, cwd, jest);
 	if (environment !== undefined) {
 		runner.jestConfig = { ...config, testEnvironment: environment };
 	}
+	const rootDir =
+		typeof config["rootDir"] === "string" ? config["rootDir"] : cwd;
+	for (const name of OWN_ENVIRONMENTS) recordCoverageIn(jest, rootDir, name);
+}
+
+/** Why these tests cannot be run as they are configured, if they cannot. */
+export function unsupportedSetup(config: JestConfig): string | undefined {
+	const projects = config["projects"];
+	if (Array.isArray(projects) && projects.length > 0) {
+		return "the Jest config runs several projects (`projects`). Run it from one project's directory, with that project's config.";
+	}
+	return undefined;
+}
+
+/**
+ * Stryker 10's Jest runner fails the baseline with this when a test file
+ * reported no coverage: its environment was not one that records it.
+ */
+const MISSING_COVERAGE = /^\s*Missing coverage results for:/;
+
+export function coverageMissing(result: DryRunResult): boolean {
+	return (
+		result.status === DryRunStatus.Error &&
+		MISSING_COVERAGE.test(result.errorMessage)
+	);
+}
+
+/**
+ * Stryker's runner verifies that every test file ran with coverage before it
+ * returns a complete baseline. No coverage then means no mutated code ran,
+ * which is coverage: of nothing.
+ */
+export function withMeasuredNothing(
+	result: DryRunResult,
+	coverageAnalysis: string,
+): DryRunResult {
+	return result.status === DryRunStatus.Complete &&
+		coverageAnalysis !== "off" &&
+		result.mutantCoverage === undefined
+		? { ...result, mutantCoverage: { static: {}, perTest: {} } }
+		: result;
 }
 
 function toPosix(file: string): string {
@@ -210,18 +331,27 @@ function createJestRunner(injector: Injector<PluginContext>): TestRunner {
 	const runner = injector.injectFunction(jest.factory) as TestRunner &
 		WithJestConfig;
 	const lastResults = recordResults(runner);
+	const baseline = async (options: DryRunOptions): Promise<DryRunResult> =>
+		withLoadFailures(
+			await runner.dryRun(options),
+			lastResults(),
+			process.cwd(),
+		);
 	return {
 		capabilities: () => runner.capabilities(),
 		init: async () => {
 			await runner.init?.();
-			await withResolvedEnvironment(runner, process.cwd());
+			const reason = unsupportedSetup(runner.jestConfig ?? {});
+			if (reason !== undefined) throw new Error(`${UNSUPPORTED}${reason}`);
+			await prepareEnvironments(runner, process.cwd());
 		},
-		dryRun: async (options) =>
-			withLoadFailures(
-				await runner.dryRun(options),
-				lastResults(),
-				process.cwd(),
-			),
+		dryRun: async (options) => {
+			const result = await baseline(options);
+			if (coverageMissing(result)) {
+				return baseline({ ...options, coverageAnalysis: "off" });
+			}
+			return withMeasuredNothing(result, options.coverageAnalysis);
+		},
 		mutantRun: (options) => runner.mutantRun(options),
 		dispose: async () => runner.dispose?.(),
 	};
