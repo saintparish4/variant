@@ -219,7 +219,8 @@ export function renderCheck(
 				? [`${inconclusive.length.toLocaleString("en-US")} inconclusive`]
 				: []),
 		].join(", ");
-		const unreachedPart = `in code no test executed (${unreachedCount === 1 ? "it runs no tests and does" : "those run no tests and do"} not count toward --max-mutants)`;
+		const one = unreachedCount === 1;
+		const unreachedPart = `not run because no test executes ${one ? "its" : "their"} code (${one ? "it does" : "they do"} not count toward --max-mutants)`;
 		if (unreachedCount === 0) {
 			lines(
 				printer,
@@ -228,7 +229,7 @@ export function renderCheck(
 		} else if (ran === 0) {
 			lines(
 				printer,
-				`${plural(unreachedCount, "mutation")}, all ${unreachedPart}.`,
+				`${plural(unreachedCount, "mutation")}, none run: no test executes ${one ? "its" : "their"} code (${one ? "it does" : "they do"} not count toward --max-mutants).`,
 			);
 		} else {
 			lines(
@@ -248,7 +249,7 @@ function renderFooter(result: CheckResult, printer: Printer): void {
 				? "the Vitest config here"
 				: result.vitestConfig;
 		scope.push(
-			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${result.baseline.skipped.toLocaleString("en-US")} of them skipped` : ""}, from ${config}); ${result.coverageMeasured ? "each mutation then ran against the tests that executed its code" : "which test executes what could not be measured, so each mutation ran against every test and none could be found unreached"}`,
+			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${plural(result.baseline.skipped, "test")} skipped` : ""}, from ${config}); ${result.coverageMeasured ? "each mutation then ran against the tests that executed its code" : "which test executes what could not be measured, so each mutation ran against every test and none could be found unreached"}`,
 		);
 	}
 	if (result.status !== "nothing-to-mutate") {

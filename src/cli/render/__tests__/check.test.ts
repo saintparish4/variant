@@ -226,7 +226,7 @@ describe("renderCheck", () => {
 
 		const out = capture.stdout();
 		expect(out).toContain(
-			"4 mutations: 2 run against the tests (1 detected, 1 undetected), 2 in code no test executed (those run no tests and do not count toward --max-mutants).",
+			"4 mutations: 2 run against the tests (1 detected, 1 undetected), 2 not run because no test executes their code (they do not count toward --max-mutants).",
 		);
 	});
 
@@ -262,7 +262,7 @@ describe("renderCheck", () => {
 		);
 
 		const out = capture.stdout();
-		expect(out).toContain("(5 tests in 2 files, 3 of them skipped,");
+		expect(out).toContain("(5 tests in 2 files, 3 tests skipped,");
 		expect(out).toContain(
 			"3 tests were skipped; code only they would reach reads as reached by no test.",
 		);

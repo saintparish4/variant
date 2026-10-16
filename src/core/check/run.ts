@@ -17,6 +17,8 @@ import {
 } from "../errors.js";
 import { mapLimit } from "../execution/concurrency.js";
 import { createClassifier } from "../semantic/differ.js";
+import type { ProgramComparer } from "../semantic/equivalence.js";
+import { createProgramComparer } from "../semantic/equivalence.js";
 import { defaultIsTestFile } from "../semantic/test-impact.js";
 import { assertBaseRef } from "../vcs/base-ref.js";
 import { changeBaseDeps } from "../vcs/change-base.js";
@@ -129,12 +131,18 @@ async function isWorkspaceRoot(cwd: string): Promise<boolean> {
 	return declaresWorkspaces(pnpmWorkspace, manifest);
 }
 
+/**
+ * The differ, then the tree comparer: the differ reads tokens and calls a
+ * dropped pair of redundant parentheses a change; the comparer reads the
+ * tree and does not. Either saying "no change" is enough.
+ */
 function formattingOnly(
 	classify: ReturnType<typeof createClassifier>,
+	sameProgram: ProgramComparer,
 ): CheckDeps["isFormattingOnly"] {
 	return async (filePath, before, after) =>
 		(await classify({ filePath, before, after })).classification ===
-		"non-impacting";
+			"non-impacting" || (await sameProgram(filePath, before, after));
 }
 
 export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
@@ -152,7 +160,10 @@ export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
 		readDiff: (ref, file) => readZeroContextDiff(cwd, ref, file),
 		readFile: (file) => readText(path.join(cwd, file)),
 		readFileAtBase: (ref, file) => readFileAtRef(cwd, ref, file),
-		isFormattingOnly: formattingOnly(createClassifier()),
+		isFormattingOnly: formattingOnly(
+			createClassifier(),
+			createProgramComparer(),
+		),
 		isWorkspaceRoot: () => isWorkspaceRoot(cwd),
 		detectRunner: async () =>
 			detectRunner(
