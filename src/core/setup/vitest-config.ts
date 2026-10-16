@@ -150,6 +150,13 @@ export async function withAdapter(
 			reason: "its `test` option is not written inline",
 		};
 	}
+	// A `test` block added beside a spread replaces the one the spread brings.
+	if (test === undefined && hasSpread(config, tsm)) {
+		return {
+			kind: "manual",
+			reason: "its options are partly spread from elsewhere",
+		};
+	}
 	// A config naming no reporters runs with Vitest's defaults, and has to
 	// keep them: see `variantReporters`.
 	if (test === undefined) {
@@ -165,6 +172,14 @@ export async function withAdapter(
 		return {
 			kind: "manual",
 			reason: "its `test` option is not an object literal",
+		};
+	}
+	// The spread may set `reporters` itself, and a key added beside it either
+	// overrides it or is overridden by it: a reporter is lost either way.
+	if (hasSpread(test, tsm)) {
+		return {
+			kind: "manual",
+			reason: "its `test` options are partly spread from elsewhere",
 		};
 	}
 
@@ -192,6 +207,12 @@ export async function withAdapter(
 	(existing as ArrayLiteralExpression).addElement(`${name}()`);
 	addImport(file, name, !clash);
 	return { kind: "edited", text: file.getFullText() };
+}
+
+function hasSpread(object: ObjectLiteralExpression, tsm: TsMorph): boolean {
+	return object
+		.getProperties()
+		.some((property) => tsm.Node.isSpreadAssignment(property));
 }
 
 function extensionOf(fileName: string): string {

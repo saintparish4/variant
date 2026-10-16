@@ -22,6 +22,11 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   of the tests it configures, and the pull-request report rated it `high`
   ("no test reaches it"). They now count as configuration, as
   `vitest.config.ts` already did.
+- **`init` leaves a Vitest config with a spread alone.** In
+  `test: { ...shared }` the spread can set `reporters`, and the line `init`
+  added beside it either lost to it, so the adapter never loaded, or replaced
+  the reporters it brought. A `test` block added to a config spread from a base
+  replaced the base's. Such a config now gets the lines to add by hand.
 
 ## [0.3.0-canary.0] - 2026-10-08
 

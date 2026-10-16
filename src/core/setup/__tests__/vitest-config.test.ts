@@ -128,6 +128,24 @@ describe("withAdapter", () => {
 			'import { test } from "./shared";\nexport default { test };',
 			"vitest.config.ts",
 		],
+		// A spread may set `reporters` itself: one added beside it is either
+		// overridden by it or overrides it, and either way a reporter is lost.
+		[
+			"test options partly spread from elsewhere",
+			'import { shared } from "./shared";\nexport default { test: { ...shared, globals: true } };',
+			"vitest.config.ts",
+		],
+		[
+			"reporters set by a conditional spread",
+			'const r = process.env.CI ? ["default"] : undefined;\nexport default { test: { ...(r && { reporters: r }) } };',
+			"vitest.config.ts",
+		],
+		// A `test` block added beside a spread replaces the spread's own.
+		[
+			"a config spread from a base, with no test block of its own",
+			'import { base } from "./base";\nexport default { ...base, root: "." };',
+			"vitest.config.ts",
+		],
 	])("leaves %s alone and says why", async (_, source, fileName) => {
 		const result = await withAdapter(source, fileName);
 		expect(result.kind).toBe("manual");
