@@ -107,6 +107,7 @@ async function run(request: HostRequest): Promise<void> {
 				: { kind: "error", message },
 		);
 	}
-	process.disconnect?.();
-	process.exit(0);
+	// Stays alive until `variant check` ends this process tree. Exiting here
+	// would cut the tree: on Windows a child outlives its parent, and a test
+	// worker or esbuild process left running holds the project directory.
 }

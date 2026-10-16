@@ -58,6 +58,12 @@ export interface StrykerBackendOptions {
 
 const OUTPUT_LINES = 200;
 const KILL_WAIT_MS = 5_000;
+/**
+ * The log naming failing tests reaches us over a pipe, the result over IPC,
+ * with no order between them: a failure is reported this long after its
+ * message, so the log has arrived.
+ */
+const OUTPUT_SETTLE_MS = 250;
 export const CHECK_TMP = path.join(".variant", "check-tmp");
 
 // ------------------------------------------------------------ translation
@@ -495,6 +501,8 @@ function startRun(
 			} else {
 				terminal = message;
 				if (message.kind === "finished") channel.push({ kind: "finished" });
+				// The host stays alive after this, for us to end its whole tree.
+				else setTimeout(report, OUTPUT_SETTLE_MS);
 			}
 		});
 		spawned.on("error", (error) => {
@@ -506,10 +514,11 @@ function startRun(
 			});
 			channel.close();
 		});
-		// A failure is reported once the output is complete: the failing
-		// baseline tests are named only in the log.
-		spawned.on("close", (code, signal) => {
-			if (stopping) return;
+		let reported = false;
+		let exit = "";
+		function report(): void {
+			if (reported || stopping) return;
+			reported = true;
 			const text = withoutSandbox(output.join("\n").trim());
 			if (terminal?.kind === "baseline-failed") {
 				channel.push({
@@ -526,11 +535,15 @@ function startRun(
 			} else if (terminal === undefined) {
 				channel.push({
 					kind: "error",
-					message: `The mutation-testing engine exited (${signal ?? `code ${code}`}) before it finished`,
+					message: `The mutation-testing engine exited (${exit}) before it finished`,
 					output: text,
 				});
 			}
 			channel.close();
+		}
+		spawned.on("close", (code, signal) => {
+			exit = signal ?? `code ${code}`;
+			report();
 		});
 		spawned.send(host);
 	})();

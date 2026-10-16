@@ -319,6 +319,31 @@ describe("variant check", () => {
 		TIMEOUT,
 	);
 
+	// Windows CI could not remove a project after a normal run: a test worker
+	// or esbuild process outlived it, because the host exited by itself and
+	// cut the tree. Linux shows the same thing through /proc.
+	it.skipIf(process.platform !== "linux")(
+		"leaves no process running in the project after a normal run",
+		async () => {
+			const dir = demoRepository();
+
+			await check(dir);
+
+			const real = realpathSync(dir);
+			const inside = readdirSync("/proc")
+				.filter((entry) => /^\d+$/.test(entry))
+				.filter((pid) => {
+					try {
+						return realpathSync(`/proc/${pid}/cwd`).startsWith(real);
+					} catch {
+						return false;
+					}
+				});
+			expect(inside).toEqual([]);
+		},
+		TIMEOUT,
+	);
+
 	it(
 		"keeps the real node_modules intact when a run is killed part-way",
 		async () => {
