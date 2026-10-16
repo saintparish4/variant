@@ -7,7 +7,7 @@ import { DryRunStatus, TestStatus } from "@stryker-mutator/api/test-runner";
 import { describe, expect, it } from "vitest";
 import { DID_NOT_LOAD } from "../../../core/errors.js";
 import { LOAD_FAILURE_SUFFIX } from "../protocol.js";
-import { withLoadFailures } from "../stryker-plugins.js";
+import { withLoadFailures } from "../stryker-vitest.js";
 
 function runnerWith(files: unknown[]): TestRunner {
 	return {

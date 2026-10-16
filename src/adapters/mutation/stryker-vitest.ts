@@ -1,31 +1,22 @@
 /**
  * @module
- * variant's Stryker plugins, loaded by path: Stryker's main process loads
- * the reporter, and each test-runner worker loads the runner.
+ * Stryker's own Vitest runner, loaded by path in each test-runner worker,
+ * with what it leaves out of the baseline added back:
  *
- * - The reporter forwards what happens, as it happens, to the `variant
- *   check` process over IPC. Streaming is what lets a run stopped at the
- *   limit or the budget keep every result it already has.
- * - The runner is Stryker's own Vitest runner with one thing added: a test
- *   file that fails to load counts as a failing baseline test. Stryker's
- *   runner collects tests only, so such a file contributed nothing and the
- *   baseline read as passing without it (found on pyra).
+ * - A test file that fails to load counts as a failing baseline test.
+ *   Stryker's runner collects tests only, so such a file contributed nothing
+ *   and the baseline read as passing without it (found on pyra).
+ * - Skipped tests are counted.
+ * - Coverage of nothing is coverage, not coverage analysis turned off.
  */
 
-import type { MutantResult } from "@stryker-mutator/api/core";
 import type { Injector, PluginContext } from "@stryker-mutator/api/plugin";
 import {
 	commonTokens,
-	declareClassPlugin,
 	declareFactoryPlugin,
 	PluginKind,
 	tokens,
 } from "@stryker-mutator/api/plugin";
-import type {
-	DryRunCompletedEvent,
-	MutationTestingPlanReadyEvent,
-	Reporter,
-} from "@stryker-mutator/api/report";
 import type {
 	DryRunResult,
 	FailedTestResult,
@@ -34,61 +25,7 @@ import type {
 } from "@stryker-mutator/api/test-runner";
 import { DryRunStatus, TestStatus } from "@stryker-mutator/api/test-runner";
 import { strykerPlugins as vitestPlugins } from "@stryker-mutator/vitest-runner";
-import type { HostMessage } from "./protocol.js";
 import { LOAD_FAILURE_SUFFIX } from "./protocol.js";
-
-function send(message: HostMessage): void {
-	process.send?.(message);
-}
-
-class VariantReporter implements Reporter {
-	onDryRunCompleted(event: DryRunCompletedEvent): void {
-		const result = event.result;
-		send({
-			kind: "baseline",
-			tests: (result.status === "complete" ? result.tests : []).map((test) => ({
-				id: test.id,
-				name: test.name,
-				...(test.fileName !== undefined && { fileName: test.fileName }),
-				...(test.status === TestStatus.Skipped && { skipped: true }),
-			})),
-		});
-	}
-
-	onMutationTestingPlanReady(event: MutationTestingPlanReadyEvent): void {
-		send({
-			kind: "plan",
-			mutants: event.mutantPlans.map(({ mutant }) => ({
-				id: mutant.id,
-				fileName: mutant.fileName,
-				mutatorName: mutant.mutatorName,
-				replacement: mutant.replacement,
-				location: mutant.location,
-				...(mutant.coveredBy !== undefined && { coveredBy: mutant.coveredBy }),
-				...(mutant.static !== undefined && { static: mutant.static }),
-			})),
-		});
-	}
-
-	onMutantTested(result: Readonly<MutantResult>): void {
-		send({
-			kind: "tested",
-			mutant: {
-				id: result.id,
-				status: result.status,
-				...(result.statusReason !== undefined && {
-					statusReason: result.statusReason,
-				}),
-				...(result.killedBy !== undefined && {
-					killedBy: [...result.killedBy],
-				}),
-				...(result.testsCompleted !== undefined && {
-					testsCompleted: result.testsCompleted,
-				}),
-			},
-		});
-	}
-}
 
 /** The parts of a Vitest task this reads: a file, a suite or a test. */
 interface VitestTask {
@@ -221,7 +158,6 @@ function createVitestRunner(injector: Injector<PluginContext>): TestRunner {
 createVitestRunner.inject = tokens(commonTokens.injector);
 
 export const strykerPlugins = [
-	declareClassPlugin(PluginKind.Reporter, "variant", VariantReporter),
 	declareFactoryPlugin(
 		PluginKind.TestRunner,
 		"variant-vitest",

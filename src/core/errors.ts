@@ -1,6 +1,7 @@
 // Imported from the leaf module rather than the `types/` barrel, which reaches
 // back into core and would make this a cycle.
 import type { TaskProvenance } from "../types/provenance.js";
+import type { RunnerKind } from "./check/runner.js";
 
 export class VariantError extends Error {
 	hint?: string;
@@ -148,6 +149,12 @@ function baselineMessage(failingTests: readonly FailingTest[]): string {
 		: `${parts.join(" and ")} before any mutation, so no result could be trusted`;
 }
 
+/** How a runner's tests are run by hand, for hints. */
+const RUN_COMMAND: Readonly<Record<RunnerKind, string>> = {
+	vitest: "vitest run",
+	jest: "jest",
+};
+
 /**
  * Tests that fail with no mutation in place. Every later failure would be
  * indistinguishable from one a mutation caused, so nothing is interpreted.
@@ -156,6 +163,7 @@ export class BaselineFailedError extends VariantError {
 	constructor(
 		public failingTests: readonly FailingTest[],
 		public output: string,
+		runner: RunnerKind,
 	) {
 		super("BASELINE_FAILED", baselineMessage(failingTests));
 		this.details = failingTests
@@ -163,8 +171,7 @@ export class BaselineFailedError extends VariantError {
 			.map((test) =>
 				test.message === "" ? test.name : `${test.name}: ${test.message}`,
 			);
-		this.hint =
-			"Make the tests pass first. If `vitest run` already passes outside variant, the copy variant runs them in is the cause: a path outside this directory (such as a tsconfig `extends`), git used by a test, or an absolute path.";
+		this.hint = `Make the tests pass first. If \`${RUN_COMMAND[runner]}\` already passes outside variant, the copy variant runs them in is the cause: a path outside this directory (such as a tsconfig \`extends\`), git used by a test, or an absolute path.`;
 	}
 }
 
@@ -173,14 +180,15 @@ export class CheckBackendError extends VariantError {
 	constructor(
 		message: string,
 		public output: string,
+		runner: RunnerKind,
 	) {
 		super("CHECK_BACKEND", message);
 		const lines = output.split(/\r?\n/).filter((line) => line.trim() !== "");
 		this.details = lines.slice(-12);
 		this.hint =
 			lines.length > 0
-				? "Above is the engine's last output. If the tests pass with `vitest run`, please report this with it."
-				: "If the tests pass with `vitest run`, please report this.";
+				? `Above is the engine's last output. If the tests pass with \`${RUN_COMMAND[runner]}\`, please report this with it.`
+				: `If the tests pass with \`${RUN_COMMAND[runner]}\`, please report this.`;
 	}
 }
 

@@ -15,6 +15,7 @@ import type { CheckBase } from "./base.js";
 import { explainSurvivor } from "./explain.js";
 import type { LineRange } from "./hunks.js";
 import { countLines } from "./hunks.js";
+import type { CheckRunner } from "./runner.js";
 import type { Selection } from "./selection.js";
 import type { CheckTarget, Exclusion } from "./targets.js";
 
@@ -77,7 +78,7 @@ export interface CheckResult {
 	excluded: Exclusion[];
 	deletedLines: number;
 	baseline?: { tests: number; files: number; skipped: number };
-	vitestConfig?: string;
+	runner: CheckRunner;
 	/**
 	 * False when no coverage could be measured: every mutation then ran
 	 * against every test, and none could be found unreached.
@@ -123,7 +124,7 @@ export interface AssembleInput {
 	excluded: readonly Exclusion[];
 	deletedLines: number;
 	baselineTests?: readonly BaselineTest[];
-	vitestConfig?: string;
+	runner: CheckRunner;
 	plan?: readonly PlannedMutant[];
 	selection?: Selection;
 	tested: ReadonlyMap<string, TestedMutant>;
@@ -276,9 +277,7 @@ export function assembleCheckResult(input: AssembleInput): CheckResult {
 				skipped: input.baselineTests.filter((test) => test.skipped).length,
 			},
 		}),
-		...(input.vitestConfig !== undefined && {
-			vitestConfig: input.vitestConfig,
-		}),
+		runner: { ...input.runner },
 		coverageMeasured: input.coverageMeasured ?? true,
 		mutants,
 		counts,

@@ -44,6 +44,7 @@ function result(overrides: Partial<CheckResult> = {}): CheckResult {
 		base: { ref: "HEAD", label: "HEAD: your staged and unstaged changes" },
 		status: "complete",
 		baselineFinished: true,
+		runner: { kind: "vitest" },
 		coverageMeasured: true,
 		files: [
 			{

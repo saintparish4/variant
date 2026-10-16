@@ -24,6 +24,7 @@ import type {
 	PlannedMutant,
 	TestedMutant,
 } from "../../core/check/backend.js";
+import type { RunnerKind } from "../../core/check/runner.js";
 import type { FailingTest } from "../../core/errors.js";
 import type {
 	HostMessage,
@@ -41,11 +42,14 @@ import { EXCLUDED_MUTATORS } from "./protocol.js";
  */
 const EXCLUDED = new Set(EXCLUDED_MUTATORS);
 
+/** variant's Stryker plugins: the reporter, and one module per runner. */
+export type PluginModules = Record<"reporter" | RunnerKind, string>;
+
 export interface StrykerBackendOptions {
 	/** The host script; defaults to the built `stryker-host.js` beside this file. */
 	hostPath?: string;
-	/** variant's plugins; defaults to the built `stryker-plugins.js`. */
-	pluginsPath?: string;
+	/** variant's plugin modules; default to the built ones beside this file. */
+	plugins?: Partial<PluginModules>;
 	/** Node flags for the host, e.g. a TypeScript loader in tests. */
 	execArgv?: string[];
 	/**
@@ -452,15 +456,19 @@ function startRun(
 		// Stopped while preparing: never start a host nothing will end.
 		if (stopping) return;
 
+		const modules: PluginModules = {
+			reporter: builtSibling("stryker-reporter.js"),
+			vitest: builtSibling("stryker-vitest.js"),
+			jest: builtSibling("stryker-jest.js"),
+			...options.plugins,
+		};
 		const host: HostRequest = {
 			mutate: request.mutate,
-			...(request.vitestConfig !== undefined && {
-				vitestConfig: request.vitestConfig,
-			}),
+			runner: request.runner,
 			baselineTimeoutMinutes: request.baselineTimeoutMinutes,
 			tempDirName: toPosix(path.join(CHECK_TMP, runId)),
 			configFile: toPosix(path.join(CHECK_TMP, `${runId}.json`)),
-			plugins: options.pluginsPath ?? builtSibling("stryker-plugins.js"),
+			plugins: [modules.reporter, modules[request.runner.kind]],
 		};
 		const spawned = fork(
 			options.hostPath ?? builtSibling("stryker-host.js"),

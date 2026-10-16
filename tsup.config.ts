@@ -7,9 +7,12 @@ export default defineConfig([
 			cli: "src/cli/index.ts",
 			vitest: "src/reporters/vitest.ts",
 			// `variant check` runs Stryker in a process of its own, and Stryker
-			// loads the reporter by path; both are found beside the CLI.
+			// loads variant's plugins by path; all are found beside the CLI. A
+			// runner's plugin is a module of its own: Stryker loads every plugin
+			// module in each worker, and a Jest package has no Vitest to load.
 			"stryker-host": "src/adapters/mutation/stryker-host.ts",
-			"stryker-plugins": "src/adapters/mutation/stryker-plugins.ts",
+			"stryker-reporter": "src/adapters/mutation/stryker-reporter.ts",
+			"stryker-vitest": "src/adapters/mutation/stryker-vitest.ts",
 		},
 		format: ["esm"],
 		dts: true,

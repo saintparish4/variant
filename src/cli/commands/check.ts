@@ -79,7 +79,7 @@ export async function registerCheckAction(
 				signal: controller.signal,
 				...(opts.base !== undefined && { base: opts.base }),
 				...(opts.vitestConfig !== undefined && {
-					vitestConfig: opts.vitestConfig,
+					runner: { kind: "vitest", configFile: opts.vitestConfig },
 				}),
 			},
 			checkDeps(process.cwd(), backend),

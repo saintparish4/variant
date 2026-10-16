@@ -34,7 +34,12 @@ const backend = createStrykerBackend({ hostPath: CRASHING_HOST });
 describe("the Stryker backend", () => {
 	it("reports a host that cannot start, with its output, and leaves nothing behind", async () => {
 		const cwd = project();
-		const run = backend.start({ cwd, mutate: [], baselineTimeoutMinutes: 1 });
+		const run = backend.start({
+			cwd,
+			mutate: [],
+			runner: { kind: "vitest" },
+			baselineTimeoutMinutes: 1,
+		});
 
 		const events: BackendEvent[] = [];
 		for await (const event of run.events) events.push(event);
@@ -55,7 +60,12 @@ describe("the Stryker backend", () => {
 	// behind: the writes landed after the cleanup.
 	it("leaves nothing behind when stopped while the run is still being prepared", async () => {
 		const cwd = project();
-		const run = backend.start({ cwd, mutate: [], baselineTimeoutMinutes: 1 });
+		const run = backend.start({
+			cwd,
+			mutate: [],
+			runner: { kind: "vitest" },
+			baselineTimeoutMinutes: 1,
+		});
 
 		await run.stop();
 

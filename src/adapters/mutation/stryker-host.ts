@@ -7,24 +7,14 @@
 
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import type { LogLevel } from "@stryker-mutator/api/core";
 import { Stryker } from "@stryker-mutator/core";
 import type { HostMessage, HostRequest } from "./protocol.js";
-import { EXCLUDED_MUTATORS } from "./protocol.js";
+import { RUNNER_PACKAGES, strykerOptions } from "./stryker-options.js";
 import {
 	canRewriteTsconfig,
 	loadTypescriptAsStryker,
 	tsconfigLeavesPackage,
 } from "./tsconfig.js";
-
-/**
- * Stryker types its log levels as a `const enum`, which a bundler compiling
- * one file at a time cannot inline from another package. The values are these
- * strings.
- */
-function logLevel(value: "off" | "error"): LogLevel {
-	return value as unknown as LogLevel;
-}
 
 function send(message: HostMessage): void {
 	process.send?.(message);
@@ -46,13 +36,9 @@ process.once("message", (request: HostRequest) => {
 });
 
 async function run(request: HostRequest): Promise<void> {
-	// Resolved from variant's own install. Setting `plugins` replaces
-	// Stryker's default, which looks only beside Stryker's own package.
-	const vitestRunner = createRequire(import.meta.url).resolve(
-		"@stryker-mutator/vitest-runner",
+	const runnerPlugin = createRequire(import.meta.url).resolve(
+		RUNNER_PACKAGES[request.runner.kind],
 	);
-	// Pointed at a file that does not exist, Stryker's tsconfig preprocessor
-	// skips, which beats failing every run on TypeScript 7.
 	const rewriteTsconfig = await canRewriteTsconfig(loadTypescriptAsStryker);
 	if (
 		!rewriteTsconfig &&
@@ -66,38 +52,9 @@ async function run(request: HostRequest): Promise<void> {
 		});
 	}
 	try {
-		await new Stryker({
-			...(!rewriteTsconfig && {
-				tsconfigFile: `${request.tempDirName}.no-tsconfig.json`,
-			}),
-			configFile: request.configFile,
-			// Stryker's Vitest runner, made to count a test file that fails to
-			// load: see stryker-plugins.ts.
-			testRunner: "variant-vitest",
-			vitest: {
-				// The whole configured suite in the baseline, so each mutant's
-				// tests come from measured coverage, not from Vitest's guess at
-				// which tests relate to the file.
-				related: false,
-				...(request.vitestConfig !== undefined && {
-					configFile: request.vitestConfig,
-				}),
-			},
-			mutate: request.mutate,
-			mutator: { excludedMutations: EXCLUDED_MUTATORS },
-			plugins: [vitestRunner],
-			appendPlugins: [request.plugins],
-			reporters: ["variant"],
-			tempDirName: request.tempDirName,
-			cleanTempDir: "always",
-			ignorePatterns: ["/.variant"],
-			fileLogLevel: logLevel("off"),
-			// Stryker names the failing baseline tests only in its log.
-			logLevel: logLevel("error"),
-			incremental: false,
-			thresholds: { high: 80, low: 60, break: null },
-			dryRunTimeoutMinutes: request.baselineTimeoutMinutes,
-		}).runMutationTest();
+		await new Stryker(
+			strykerOptions(request, { runnerPlugin, rewriteTsconfig }),
+		).runMutationTest();
 		send({ kind: "finished" });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

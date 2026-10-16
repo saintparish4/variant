@@ -5,6 +5,7 @@
  */
 
 import type { FailingTest } from "../errors.js";
+import type { CheckRunner } from "./runner.js";
 
 /** 1-based line and column. */
 export interface Position {
@@ -78,7 +79,7 @@ export interface BackendRequest {
 	cwd: string;
 	/** `path:start-end` entries. */
 	mutate: string[];
-	vitestConfig?: string;
+	runner: CheckRunner;
 	/** How long the baseline may take before the engine gives up on it. */
 	baselineTimeoutMinutes: number;
 }

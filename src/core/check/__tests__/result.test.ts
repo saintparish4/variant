@@ -52,6 +52,7 @@ function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
 			["1", tested("1", "Killed")],
 		]),
 		snapshot: new Map([["src/q.ts", SOURCE]]),
+		runner: { kind: "vitest" },
 		durationMs: 1000,
 		...overrides,
 	};

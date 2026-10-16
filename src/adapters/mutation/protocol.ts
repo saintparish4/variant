@@ -5,16 +5,18 @@
  * core port's.
  */
 
+import type { CheckRunner } from "../../core/check/runner.js";
+
 export interface HostRequest {
 	mutate: string[];
-	vitestConfig?: string;
+	runner: CheckRunner;
 	baselineTimeoutMinutes: number;
 	/** Where Stryker puts its sandboxes, relative to cwd. */
 	tempDirName: string;
 	/** An empty config, so a Stryker config in the project is never merged in. */
 	configFile: string;
-	/** Absolute path of variant's plugin module (reporter and runner). */
-	plugins: string;
+	/** Absolute paths of variant's plugin modules: the reporter and this runner's. */
+	plugins: string[];
 }
 
 export interface RawPosition {

@@ -1,5 +1,6 @@
 import type { CheckResult, MutantOutcome } from "../../core/check/result.js";
 import { allDetected } from "../../core/check/result.js";
+import { RUNNER_NAMES } from "../../core/check/runner.js";
 import type { ExclusionReason } from "../../core/check/targets.js";
 import { getColors } from "../visuals/color.js";
 import type { Printer } from "../visuals/printer.js";
@@ -259,9 +260,8 @@ function renderFooter(result: CheckResult, printer: Printer): void {
 	const scope: string[] = [];
 	if (result.baseline !== undefined) {
 		const config =
-			result.vitestConfig === undefined
-				? "the Vitest config here"
-				: result.vitestConfig;
+			result.runner.configFile ??
+			`the ${RUNNER_NAMES[result.runner.kind]} config here`;
 		scope.push(
 			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${plural(result.baseline.skipped, "test")} skipped` : ""}, from ${config}); ${result.coverageMeasured ? "each mutation then ran against the tests that executed its code" : "which test executes what could not be measured, so each mutation ran against every test and none could be found unreached"}`,
 		);

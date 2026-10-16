@@ -5,6 +5,21 @@
  * and then said only that no tests ran.
  */
 
+/** The test runners `variant check` drives. */
+export type RunnerKind = "vitest" | "jest";
+
+export const RUNNER_NAMES: Readonly<Record<RunnerKind, string>> = {
+	vitest: "Vitest",
+	jest: "Jest",
+};
+
+/** What `variant check` runs the tests with. */
+export interface CheckRunner {
+	kind: RunnerKind;
+	/** The config to run them with, relative to cwd; absent for the runner's own lookup. */
+	configFile?: string;
+}
+
 export type RunnerVerdict =
 	| { kind: "vitest" }
 	/** `evidence` names what shows it, for the error. */

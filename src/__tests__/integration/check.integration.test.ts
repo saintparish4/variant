@@ -38,7 +38,10 @@ const TIMEOUT = 120_000;
 // reporter, through tsx.
 const backend = createStrykerBackend({
 	hostPath: path.join(ADAPTER, "stryker-host.ts"),
-	pluginsPath: path.join(ADAPTER, "stryker-plugins.ts"),
+	plugins: {
+		reporter: path.join(ADAPTER, "stryker-reporter.ts"),
+		vitest: path.join(ADAPTER, "stryker-vitest.ts"),
+	},
 	execArgv: ["--import", import.meta.resolve("tsx")],
 	// Stryker's workers load the plugins too, and do not inherit execArgv.
 	env: { NODE_OPTIONS: `--import ${import.meta.resolve("tsx")}` },

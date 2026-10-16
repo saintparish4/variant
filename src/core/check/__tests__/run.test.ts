@@ -157,12 +157,14 @@ describe("runCheck", () => {
 				},
 			],
 			"",
+			"vitest",
 		);
 		expect(error.message).toBe(
 			"1 test file did not load before any mutation, so no result could be trusted",
 		);
 		expect(
-			new BaselineFailedError([{ name: "a", message: "x" }], "").message,
+			new BaselineFailedError([{ name: "a", message: "x" }], "", "vitest")
+				.message,
 		).toBe("1 test fails before any mutation, so no result could be trusted");
 	});
 
@@ -331,7 +333,7 @@ describe("runCheck", () => {
 		expect(state.request).toBeUndefined();
 	});
 
-	it("takes --vitest-config as saying the package runs Vitest", async () => {
+	it("runs the runner it was given without looking for one", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
 			{ kind: "plan", mutants: [], coverageMeasured: true },
@@ -340,11 +342,17 @@ describe("runCheck", () => {
 
 		await runCheck(
 			"/repo",
-			{ ...options, vitestConfig: "vitest.unit.config.ts" },
+			{
+				...options,
+				runner: { kind: "vitest", configFile: "vitest.unit.config.ts" },
+			},
 			deps(backend, { detectRunner: async () => ({ kind: "none" }) }),
 		);
 
-		expect(state.request?.vitestConfig).toBe("vitest.unit.config.ts");
+		expect(state.request?.runner).toEqual({
+			kind: "vitest",
+			configFile: "vitest.unit.config.ts",
+		});
 	});
 
 	it("passes on what the engine noted about the run", async () => {

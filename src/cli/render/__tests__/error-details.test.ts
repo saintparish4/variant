@@ -21,6 +21,7 @@ describe("renderError details", () => {
 			new BaselineFailedError(
 				[{ name: "discount rejects 50", message: "expected false to be true" }],
 				"",
+				"vitest",
 			),
 		);
 
@@ -33,6 +34,7 @@ describe("renderError details", () => {
 			new CheckBackendError(
 				"No tests were executed",
 				"line 1\n\nline 2\nline 3",
+				"vitest",
 			),
 		);
 
@@ -41,7 +43,7 @@ describe("renderError details", () => {
 	});
 
 	it("does not point at output it does not have", () => {
-		expect(rendered(new CheckBackendError("boom", ""))).not.toMatch(
+		expect(rendered(new CheckBackendError("boom", "", "vitest"))).not.toMatch(
 			/shown above/,
 		);
 	});

@@ -42,7 +42,7 @@ import type { FileHunks } from "./hunks.js";
 import { parseZeroContextDiff } from "./hunks.js";
 import type { CheckResult, StopReason } from "./result.js";
 import { assembleCheckResult } from "./result.js";
-import type { RunnerVerdict } from "./runner.js";
+import type { CheckRunner, RunnerVerdict } from "./runner.js";
 import { detectRunner } from "./runner.js";
 import type { Selection } from "./selection.js";
 import { selectMutants } from "./selection.js";
@@ -60,7 +60,8 @@ export interface CheckOptions {
 	maxMutants: number;
 	/** Wall-clock limit for the whole run, the baseline included. */
 	budgetMs: number;
-	vitestConfig?: string;
+	/** Given by the user; detected when absent. */
+	runner?: CheckRunner;
 	signal?: AbortSignal;
 }
 
@@ -207,6 +208,12 @@ function nextOrStop<T>(
 	});
 }
 
+async function detectedRunner(deps: CheckDeps): Promise<CheckRunner> {
+	const verdict = await deps.detectRunner();
+	if (verdict.kind !== "vitest") throw new CheckRunnerError(verdict);
+	return { kind: verdict.kind };
+}
+
 export async function runCheck(
 	cwd: string,
 	options: CheckOptions,
@@ -216,10 +223,7 @@ export async function runCheck(
 	const base = await deps.resolveBase(options.base);
 	await deps.assertBase(base.ref);
 	if (await deps.isWorkspaceRoot()) throw new CheckWorkspaceRootError();
-	if (options.vitestConfig === undefined) {
-		const runner = await deps.detectRunner();
-		if (runner.kind !== "vitest") throw new CheckRunnerError(runner);
-	}
+	const runner = options.runner ?? (await detectedRunner(deps));
 
 	const [changed, untracked] = await Promise.all([
 		deps.listChangedFiles(base.ref),
@@ -285,9 +289,7 @@ export async function runCheck(
 		targets,
 		excluded,
 		deletedLines,
-		...(options.vitestConfig !== undefined && {
-			vitestConfig: options.vitestConfig,
-		}),
+		runner,
 	};
 	if (targets.length === 0) {
 		return assembleCheckResult({
@@ -319,9 +321,7 @@ export async function runCheck(
 	const run = deps.backend.start({
 		cwd,
 		mutate: mutateEntries(targets),
-		...(options.vitestConfig !== undefined && {
-			vitestConfig: options.vitestConfig,
-		}),
+		runner,
 		// The engine's own limit on the baseline, kept inside the budget so
 		// that the budget is what stops a slow one, with a reason.
 		baselineTimeoutMinutes: Math.max(1, Math.ceil(options.budgetMs / 60_000)),
@@ -380,13 +380,18 @@ export async function runCheck(
 	// die with it; that is the interrupt, not an engine failure.
 	if (options.signal?.aborted === true) stopReason = "interrupted";
 	else if (failure?.kind === "baseline-failed") {
-		throw new BaselineFailedError(failure.failingTests, failure.output);
+		throw new BaselineFailedError(
+			failure.failingTests,
+			failure.output,
+			runner.kind,
+		);
 	} else if (failure?.kind === "error") {
-		throw new CheckBackendError(failure.message, failure.output);
+		throw new CheckBackendError(failure.message, failure.output, runner.kind);
 	} else if (stopReason === undefined && plan === undefined) {
 		throw new CheckBackendError(
 			"The mutation-testing engine stopped without a result",
 			"",
+			runner.kind,
 		);
 	}
 
