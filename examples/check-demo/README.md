@@ -6,17 +6,14 @@ boundary. It takes about a minute, most of it installing.
 ```bash
 cp -r examples/check-demo /tmp/check-demo && cd /tmp/check-demo
 npm install
-npm install -D @blzsky/variant          # once check is released; see below
+npm install -D @blzsky/variant@canary
 
 git init -q
-git add package.json vitest.config.ts && git commit -qm "project setup"
+git add .gitignore package.json vitest.config.ts && git commit -qm "project setup"
 git add src                              # the change you are about to commit
 
 npx @blzsky/variant check
 ```
-
-Until `check` is released, build this repository (`pnpm install && pnpm build`)
-and run `node /path/to/variant/dist/cli.js check` in place of `npx`.
 
 It reports one mutation the tests did not notice:
 

@@ -32,29 +32,21 @@ It works on the first run, with no history and no config. It looks at what you
 have not committed yet, staged or not, and leaves your working tree exactly as
 it was.
 
-> **Status**: `0.x`, and `variant check` is **not published yet**: it is in
-> this repository and arrives in the next release. Until then,
-> run it from a build of this repository (see [Install](#install)). npm serves
-> 0.2.1, and `@blzsky/variant@canary` serves 0.3.0-canary.0; neither has
-> `check`. Any minor release can break, and every break is in the
-> [CHANGELOG](./CHANGELOG.md).
+> **Status**: `0.x`. `variant check` is published as a canary,
+> `0.3.0-canary.1`, under the `canary` tag: install `@blzsky/variant@canary`.
+> Without the tag npm serves 0.2.1, which has no `check`. Any minor release
+> can break, and every break is in the [CHANGELOG](./CHANGELOG.md).
 
 ## Install
 
 variant needs Node 22 or newer, a git repository, and Vitest 4.1.
 
-Once it is released:
-
 ```bash
-npm install -D @blzsky/variant
+npm install -D @blzsky/variant@canary
 ```
 
-Until then, from a clone of this repository:
-
-```bash
-pnpm install && pnpm build
-node /path/to/variant/dist/cli.js check     # run inside your project
-```
+Install it in the package whose code you change, beside its Vitest; the Vitest
+it runs your tests with is yours.
 
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.

@@ -30,8 +30,8 @@ From the package whose code you changed:
 npx @blzsky/variant check
 ```
 
-`check` is not published yet; until the next release, run it from a build of
-this repository with `node /path/to/variant/dist/cli.js check`.
+`check` is published as a canary: install it with
+`npm install -D @blzsky/variant@canary`.
 
 ```
 Compared with HEAD (your staged and unstaged changes).
