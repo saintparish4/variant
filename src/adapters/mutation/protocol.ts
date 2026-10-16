@@ -52,6 +52,7 @@ export type HostMessage =
 	| { kind: "plan"; mutants: RawPlannedMutant[] }
 	| { kind: "tested"; mutant: RawTestedMutant }
 	| { kind: "finished" }
+	| { kind: "note"; text: string }
 	| { kind: "baseline-failed" }
 	| { kind: "error"; message: string };
 

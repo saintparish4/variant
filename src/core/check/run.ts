@@ -264,6 +264,7 @@ export async function runCheck(
 	const tested = new Map<string, TestedMutant>();
 	let stopReason: StopReason | undefined;
 	let failure: BackendEvent | undefined;
+	const engineNotes: string[] = [];
 
 	const countedDone = (): boolean =>
 		selection !== undefined &&
@@ -289,6 +290,7 @@ export async function runCheck(
 				selection = selectMutants(plan, options.maxMutants);
 			} else if (event.kind === "tested")
 				tested.set(event.mutant.id, event.mutant);
+			else if (event.kind === "note") engineNotes.push(event.text);
 			else if (event.kind === "finished") break;
 			else {
 				failure = event;
@@ -317,7 +319,7 @@ export async function runCheck(
 		);
 	}
 
-	const notes: string[] = [];
+	const notes: string[] = [...engineNotes];
 	await Promise.all(
 		targets.map(async (target) => {
 			const now = await deps.readFile(target.file);

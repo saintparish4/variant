@@ -275,6 +275,19 @@ describe("runCheck", () => {
 		expect(state.request?.vitestConfig).toBe("vitest.unit.config.ts");
 	});
 
+	it("passes on what the engine noted about the run", async () => {
+		const { backend } = fakeBackend([
+			{ kind: "note", text: "tsconfig paths were not rewritten" },
+			baseline,
+			{ kind: "plan", mutants: [] },
+			{ kind: "finished" },
+		]);
+
+		const result = await runCheck("/repo", options, deps(backend));
+
+		expect(result.notes).toContain("tsconfig paths were not rewritten");
+	});
+
 	it("notes a file edited during the run, whose report quotes it as it was", async () => {
 		const { backend } = fakeBackend([
 			baseline,

@@ -59,6 +59,8 @@ export type BackendEvent =
 	| { kind: "plan"; mutants: PlannedMutant[] }
 	| { kind: "tested"; mutant: TestedMutant }
 	| { kind: "finished" }
+	/** Something about the run the report should say. */
+	| { kind: "note"; text: string }
 	| { kind: "baseline-failed"; failingTests: FailingTest[]; output: string }
 	| { kind: "error"; message: string; output: string };
 

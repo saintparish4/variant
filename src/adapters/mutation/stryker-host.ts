@@ -10,6 +10,7 @@ import type { LogLevel } from "@stryker-mutator/api/core";
 import { Stryker } from "@stryker-mutator/core";
 import type { HostMessage, HostRequest } from "./protocol.js";
 import { EXCLUDED_MUTATORS } from "./protocol.js";
+import { canRewriteTsconfig, loadTypescriptAsStryker } from "./tsconfig.js";
 
 /**
  * Stryker types its log levels as a `const enum`, which a bundler compiling
@@ -45,8 +46,20 @@ async function run(request: HostRequest): Promise<void> {
 	const vitestRunner = createRequire(import.meta.url).resolve(
 		"@stryker-mutator/vitest-runner",
 	);
+	// Pointed at a file that does not exist, Stryker's tsconfig preprocessor
+	// skips, which beats failing every run on TypeScript 7.
+	const rewriteTsconfig = await canRewriteTsconfig(loadTypescriptAsStryker);
+	if (!rewriteTsconfig) {
+		send({
+			kind: "note",
+			text: "this TypeScript has no JavaScript API (TypeScript 7 does not), so a tsconfig `extends` or `references` outside this package was not adjusted for the copy the tests ran in",
+		});
+	}
 	try {
 		await new Stryker({
+			...(!rewriteTsconfig && {
+				tsconfigFile: `${request.tempDirName}.no-tsconfig.json`,
+			}),
 			configFile: request.configFile,
 			testRunner: "vitest",
 			vitest: {

@@ -466,6 +466,8 @@ function startRun(
 					kind: "tested",
 					mutant: toTestedMutant(message.mutant),
 				});
+			} else if (message.kind === "note") {
+				channel.push({ kind: "note", text: message.text });
 			} else {
 				terminal = message;
 				if (message.kind === "finished") channel.push({ kind: "finished" });
