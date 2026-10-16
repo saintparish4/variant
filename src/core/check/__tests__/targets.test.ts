@@ -40,6 +40,25 @@ describe("selectTargets", () => {
 		]);
 	});
 
+	// A project with no .gitignore has every installed file untracked; none
+	// of them is source anyone forgot to add.
+	it("never lists installed dependencies as untracked source", () => {
+		const result = selectTargets({
+			changed: [],
+			untracked: [
+				"node_modules/zod/src/index.ts",
+				"packages/a/node_modules/x/y.ts",
+				"src/draft.ts",
+			],
+			hunks: new Map(),
+			isTestFile: defaultIsTestFile,
+		});
+
+		expect(result.excluded).toEqual([
+			{ file: "src/draft.ts", reason: "untracked" },
+		]);
+	});
+
 	it("counts deleted lines only in the files it mutates", () => {
 		const result = selectTargets({
 			changed: ["src/a.ts"],

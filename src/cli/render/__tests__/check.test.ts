@@ -188,6 +188,21 @@ describe("renderCheck", () => {
 		expect(capture.stdout()).toContain("timed out: Timed out");
 	});
 
+	it("keeps a long list of files it did not mutate short, with the rest in --json", () => {
+		const capture = captureOutput();
+		const excluded = Array.from({ length: 25 }, (_, i) => ({
+			file: `src/draft-${i}.ts`,
+			reason: "untracked" as const,
+		}));
+
+		renderCheck(result({ excluded }), capture.printer);
+
+		const out = capture.stdout();
+		expect(out).toContain("src/draft-9.ts");
+		expect(out).not.toContain("src/draft-10.ts");
+		expect(out).toContain("… and 15 more (all of them in --json)");
+	});
+
 	it("says when nothing changed that could be mutated", () => {
 		const capture = captureOutput();
 

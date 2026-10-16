@@ -16,6 +16,9 @@ const EXCLUSION: Readonly<Record<ExclusionReason, string>> = {
 	"deleted-lines-only": "only lines removed, which cannot be mutated",
 };
 
+/** The rest are in `--json`; a project with no .gitignore can list thousands. */
+const MAX_EXCLUDED = 10;
+
 const INCONCLUSIVE: Readonly<
 	Partial<Record<MutantOutcome["outcome"], string>>
 > = {
@@ -83,8 +86,15 @@ export function renderCheck(
 	}
 	if (result.excluded.length > 0) {
 		lines(printer, "", "Not mutated:");
-		for (const exclusion of result.excluded) {
+		for (const exclusion of result.excluded.slice(0, MAX_EXCLUDED)) {
 			lines(printer, `  ${exclusion.file}  ${EXCLUSION[exclusion.reason]}`);
+		}
+		const more = result.excluded.length - MAX_EXCLUDED;
+		if (more > 0) {
+			lines(
+				printer,
+				`  … and ${more.toLocaleString("en-US")} more (all of them in --json)`,
+			);
 		}
 	}
 

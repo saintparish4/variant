@@ -43,6 +43,8 @@ export interface Targets {
 
 const TYPESCRIPT = /\.(?:ts|tsx|mts|cts)$/;
 const DECLARATION = /\.d\.(?:ts|mts|cts)$/;
+/** Installed packages: untracked in a project without a .gitignore, never source. */
+const INSTALLED = /(^|\/)node_modules\//;
 
 /** Why a changed file is not mutated, before any diff is read. */
 export function exclusionBeforeDiff(
@@ -76,7 +78,11 @@ export function selectTargets(input: TargetInput): Targets {
 		targets.push({ file, ranges: hunks.added });
 	}
 	for (const file of [...input.untracked].sort()) {
-		if (TYPESCRIPT.test(file) && !DECLARATION.test(file)) {
+		if (
+			TYPESCRIPT.test(file) &&
+			!DECLARATION.test(file) &&
+			!INSTALLED.test(file)
+		) {
 			excluded.push({ file, reason: "untracked" });
 		}
 	}
