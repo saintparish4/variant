@@ -48,6 +48,14 @@ exists so `variant check` can be tried on real projects before 0.3.0.
   - Advisory: exits 0 unless `--fail-on-survivors` is given. `--json` for CI.
   - Built on StrykerJS 10 and its Vitest runner, which are now dependencies.
 
+### Changed
+
+- **A trailing comma is not a change.** A comma right before `)`, `]` or `}`
+  means nothing in TypeScript, and formatters add and drop them when they
+  re-wrap a line, so a reformat that only does that is `non-impacting` for
+  `diff`, `impact` and `pr check`, and is not mutated by `check`. The symbol
+  index is rebuilt once (version 6).
+
 ### Removed
 
 - **Breaking: Node 20 is no longer supported; variant needs Node 22 or newer.**

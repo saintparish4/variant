@@ -26,7 +26,7 @@ import { collectExportedSurface } from "./surface.js";
  * are reused by content hash, so without a bump an unchanged file keeps the
  * edges an older extractor produced (and silently misses the new ones).
  */
-export const SYMBOL_GRAPH_VERSION = 5;
+export const SYMBOL_GRAPH_VERSION = 6;
 
 const GRAPH_FILENAME = "symbols.json";
 

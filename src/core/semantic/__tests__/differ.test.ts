@@ -482,6 +482,44 @@ describe("classifyChange: comments and whitespace around scanner-ambiguous synta
 	});
 });
 
+describe("classifyChange: a formatter re-wrapping code", () => {
+	// pyra: Biome re-wrapped long lines and added trailing commas, and
+	// `variant check` read the file as changed and mutated it: 18 findings on
+	// behaviour nobody touched.
+	it("reads re-wrapped lines with added trailing commas as non-impacting", async () => {
+		const r = await classifyChange({
+			filePath: "src/check.ts",
+			before: [
+				'import { A, B, C } from "./spec";',
+				"export function check(v: string, d: string): void {",
+				"\tif (v === A && d === B) {",
+				"\t\tthrow new Error(`bad ${C}`);",
+				"\t}",
+				"}",
+			].join("\n"),
+			after: [
+				'import {\n\tA,\n\tB,\n\tC,\n} from "./spec";',
+				"export function check(\n\tv: string,\n\td: string,\n): void {",
+				"\tif (\n\t\tv === A &&\n\t\td === B\n\t) {",
+				"\t\tthrow new Error(\n\t\t\t`bad ${C}`,\n\t\t);",
+				"\t}",
+				"}",
+			].join("\n"),
+		});
+		expect(r.classification).toBe("non-impacting");
+	});
+
+	// `[a,,]` has a hole `[a,]` does not.
+	it("keeps an array hole apart from a trailing comma", async () => {
+		const r = await classifyChange({
+			filePath: "x.ts",
+			before: "export const xs = [1,];",
+			after: "export const xs = [1,,];",
+		});
+		expect(r.classification).not.toBe("non-impacting");
+	});
+});
+
 describe("createClassifier", () => {
 	it("classifies many files through one reused project", async () => {
 		const classify = createClassifier();

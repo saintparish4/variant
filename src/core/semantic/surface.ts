@@ -489,6 +489,10 @@ export function significantText(src: string, tsm: TsMorph): string {
 		src,
 	);
 	const parts: string[] = [];
+	// A comma right before `)`, `]` or `}` means nothing, and formatters add
+	// and drop them when they re-wrap a line: held back until the next token
+	// says which it is. (`[a,,]` keeps its first comma: that one is a hole.)
+	let pendingComma = false;
 	// Open `{` count inside each substitution being scanned, innermost last.
 	const substitutionBraces: number[] = [];
 	let previous = SyntaxKind.Unknown;
@@ -523,10 +527,17 @@ export function significantText(src: string, tsm: TsMorph): string {
 		) {
 			substitutionBraces.push(0);
 		}
-		parts.push(scanner.getTokenText());
+		const closes =
+			kind === SyntaxKind.CloseParenToken ||
+			kind === SyntaxKind.CloseBracketToken ||
+			kind === SyntaxKind.CloseBraceToken;
+		if (pendingComma && !closes) parts.push(",");
+		pendingComma = kind === SyntaxKind.CommaToken;
+		if (!pendingComma) parts.push(scanner.getTokenText());
 		previous = kind;
 		kind = scanner.scan();
 	}
+	if (pendingComma) parts.push(",");
 	return parts.join(" ");
 }
 
