@@ -28,9 +28,39 @@ function variant(cwd: string, ...args: string[]) {
 	return execa("node", [cli, ...args], {
 		cwd,
 		reject: false,
-		env: { NO_COLOR: "1" },
+		// pnpm's command shims point NODE_PATH at every package in its store,
+		// which hides a package the project itself does not have.
+		env: { NO_COLOR: "1", NODE_PATH: "" },
 	});
 }
+
+interface Demo {
+	example: string;
+	/**
+	 * Linked into the copy's `node_modules`, as pnpm would install them: the
+	 * runner and the transform, and none of the runner's own dependencies.
+	 */
+	packages: string[];
+	/** Committed before the change. */
+	setup: string[];
+}
+
+const VITEST: Demo = {
+	example: "check-demo",
+	packages: ["vitest"],
+	setup: ["package.json", "vitest.config.ts", ".gitignore"],
+};
+
+const JEST: Demo = {
+	example: "check-demo-jest",
+	packages: [
+		"jest",
+		"@babel/core",
+		"@babel/preset-typescript",
+		"@babel/plugin-transform-modules-commonjs",
+	],
+	setup: ["package.json", "babel.config.js", ".gitignore"],
+};
 
 /** Process ids of this build's Stryker host still running. */
 async function hostsStillRunning(): Promise<string[]> {
@@ -61,21 +91,29 @@ async function hostsStillRunning(): Promise<string[]> {
 		.map((line) => line.trim().split(/\s+/)[0] ?? "");
 }
 
-describe("E2E: would the tests notice?", () => {
+describe.each([
+	["Vitest", VITEST],
+	["Jest", JEST],
+])("E2E: would the %s tests notice?", (_, demo) => {
 	let cwd: string;
 
 	beforeAll(async () => {
 		cwd = mkdtempSync(path.join(tmpdir(), "variant-check-e2e-"));
-		cpSync(path.join(repo, "examples", "check-demo"), cwd, { recursive: true });
-		mkdirSync(path.join(cwd, "node_modules"));
-		symlinkSync(
-			realpathSync(path.join(repo, "node_modules", "vitest")),
-			path.join(cwd, "node_modules", "vitest"),
-			process.platform === "win32" ? "junction" : "dir",
-		);
+		cpSync(path.join(repo, "examples", demo.example), cwd, {
+			recursive: true,
+		});
+		for (const name of demo.packages) {
+			const link = path.join(cwd, "node_modules", name);
+			mkdirSync(path.dirname(link), { recursive: true });
+			symlinkSync(
+				realpathSync(path.join(repo, "node_modules", name)),
+				link,
+				process.platform === "win32" ? "junction" : "dir",
+			);
+		}
 		writeFileSync(path.join(cwd, ".gitignore"), "node_modules/\n");
 		await git(cwd, "init", "-q", "-b", "main");
-		await git(cwd, "add", "package.json", "vitest.config.ts", ".gitignore");
+		await git(cwd, "add", ...demo.setup);
 		await git(cwd, "commit", "-qm", "setup");
 		// The discount rule, staged: the change about to be committed.
 		await git(cwd, "add", "src");
@@ -127,6 +165,18 @@ describe("E2E: would the tests notice?", () => {
 		expect(caught.exitCode).toBe(0);
 		expect(caught.stdout).toContain("were detected by the tests that ran.");
 		expect(caught.stdout).not.toContain("Undetected");
+
+		// The working tree is as the developer left it: the staged change, the
+		// unstaged test and the example's README, never added. Nothing the
+		// runner wrote (snapshots, coverage, a cache) is there.
+		const { stdout: status } = await execa(
+			"git",
+			["status", "--porcelain", "--untracked-files=all"],
+			{ cwd },
+		);
+		expect(status.split("\n").sort()).toEqual(
+			["?? README.md", "AM src/discount.test.ts", "A  src/discount.ts"].sort(),
+		);
 
 		// The engine runs in a host process with workers under it; none may
 		// outlive the command. Matched by this build's host, so the
