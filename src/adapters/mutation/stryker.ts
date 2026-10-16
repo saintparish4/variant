@@ -10,7 +10,7 @@
 
 import type { ChildProcess } from "node:child_process";
 import { fork, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,18 +60,38 @@ function toPosix(file: string): string {
 	return file.replace(/\\/g, "/");
 }
 
-function relativeFile(cwd: string, fileName: string): string {
-	return toPosix(path.relative(cwd, fileName));
+/**
+ * The project directory as given, then as its real path. Stryker names files
+ * by their real path, and on macOS a temp dir under /var is a link to
+ * /private/var: made relative to the link, every file read as `../…`.
+ */
+export function projectRoots(cwd: string): string[] {
+	try {
+		const real = realpathSync(cwd);
+		return real === cwd ? [cwd] : [cwd, real];
+	} catch {
+		return [cwd];
+	}
+}
+
+function relativeFile(roots: readonly string[], fileName: string): string {
+	for (const root of roots) {
+		const relative = path.relative(root, fileName);
+		if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+			return toPosix(relative);
+		}
+	}
+	return toPosix(path.relative(roots[0] ?? "", fileName));
 }
 
 /** Stryker's plan positions are 0-based; the port's are 1-based. */
 export function toPlannedMutant(
-	cwd: string,
+	roots: readonly string[],
 	raw: RawPlannedMutant,
 ): PlannedMutant {
 	return {
 		id: raw.id,
-		file: relativeFile(cwd, raw.fileName),
+		file: relativeFile(roots, raw.fileName),
 		mutator: raw.mutatorName,
 		replacement: raw.replacement,
 		start: {
@@ -113,14 +133,17 @@ export function toTestedMutant(raw: RawTestedMutant): TestedMutant {
 	};
 }
 
-export function toBaselineTest(cwd: string, raw: RawTest): BaselineTest {
+export function toBaselineTest(
+	roots: readonly string[],
+	raw: RawTest,
+): BaselineTest {
 	return {
 		id: raw.id,
 		name: raw.name,
 		file:
 			raw.fileName === undefined
 				? (raw.id.split("#")[0] ?? "")
-				: relativeFile(cwd, raw.fileName),
+				: relativeFile(roots, raw.fileName),
 	};
 }
 
@@ -332,6 +355,7 @@ function startRun(
 	};
 
 	const root = path.join(request.cwd, CHECK_TMP);
+	const roots = projectRoots(request.cwd);
 	const variantDir = path.join(request.cwd, ".variant");
 	const createdVariantDir = !existsSync(variantDir);
 	const runId = `${Date.now().toString(36)}-${process.pid}`;
@@ -424,7 +448,7 @@ function startRun(
 			if (message.kind === "baseline") {
 				channel.push({
 					kind: "baseline",
-					tests: message.tests.map((test) => toBaselineTest(request.cwd, test)),
+					tests: message.tests.map((test) => toBaselineTest(roots, test)),
 				});
 			} else if (message.kind === "plan") {
 				const kept = message.mutants.filter((mutant) => {
@@ -434,7 +458,7 @@ function startRun(
 				});
 				channel.push({
 					kind: "plan",
-					mutants: kept.map((mutant) => toPlannedMutant(request.cwd, mutant)),
+					mutants: kept.map((mutant) => toPlannedMutant(roots, mutant)),
 				});
 			} else if (message.kind === "tested") {
 				if (dropped.has(message.mutant.id)) return;

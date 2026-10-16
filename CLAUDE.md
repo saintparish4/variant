@@ -68,6 +68,7 @@ The request path most commands follow: `createContext()` → `core/graph` builds
   - `--max-mutants` takes the first N covered mutants in plan order, which is the order Stryker runs them; results past them are dropped, so the same change reads the same twice. Uncovered mutants cost no test run and are never cut.
   - `vitest.related` is `false`: the baseline runs the whole configured suite, and each mutant's tests come from Stryker's measured per-test coverage, not from Vitest's guess at related files.
   - Stryker's plan event gives 0-based positions and its results 1-based ones; join by mutant id. Excluded mutators still appear in the plan as Ignored and are dropped in the adapter.
+  - Stryker names files by their real path. Make them relative to the real project path as well as the one given (`projectRoots`): on macOS `/var` links to `/private/var`, and every file once read as `../…`, with nothing to quote.
   - Run from a workspace root, a package imported by name resolves to its real source, not the copy, so its mutants would read unreached: refuse (`CHECK_WORKSPACE_ROOT`).
   - The comparison base is detected (`core/check/base.ts`): CI's named base wins, then uncommitted changes against HEAD, then a clean branch's merge base. Never the `HEAD~1` fallback `resolveChangeBase` uses: with no base, `NO_CHANGE_BASE`.
 - **An adapter runs in someone else's test process, and must never be the reason a run fails.**

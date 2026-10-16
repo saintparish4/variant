@@ -14,7 +14,7 @@ describe("toPlannedMutant", () => {
 	// Measured on Stryker 10: the plan event says line 1, column 8 for the
 	// `total` of `\treturn total >= 100;` on line 2; the results say 2 and 9.
 	it("turns the plan's 0-based positions into 1-based ones", () => {
-		const mutant = toPlannedMutant(cwd, {
+		const mutant = toPlannedMutant([cwd], {
 			id: "2",
 			fileName: path.join(cwd, "src", "discount.ts"),
 			mutatorName: "EqualityOperator",
@@ -39,8 +39,26 @@ describe("toPlannedMutant", () => {
 		});
 	});
 
+	// On macOS the temp dir is /var/…, a link to /private/var/…, and Stryker
+	// names files by their real path. Made relative to the link, every file
+	// came out as ../../private/var/…: no source to quote, no explanation.
+	it("makes a file relative to the project when Stryker names it by its real path", () => {
+		const link = path.resolve("/var/folders/t/project");
+		const real = path.resolve("/private/var/folders/t/project");
+
+		const mutant = toPlannedMutant([link, real], {
+			id: "0",
+			fileName: path.join(real, "src", "discount.ts"),
+			mutatorName: "EqualityOperator",
+			replacement: "total > 100",
+			location: { start: { line: 2, column: 8 }, end: { line: 2, column: 20 } },
+		});
+
+		expect(mutant.file).toBe("src/discount.ts");
+	});
+
 	it("reads an empty coveredBy as code no test executed", () => {
-		const mutant = toPlannedMutant(cwd, {
+		const mutant = toPlannedMutant([cwd], {
 			id: "4",
 			fileName: path.join(cwd, "src", "a.ts"),
 			mutatorName: "ConditionalExpression",
@@ -84,7 +102,7 @@ describe("toTestedMutant", () => {
 describe("toBaselineTest", () => {
 	it("makes the test file relative to the project", () => {
 		expect(
-			toBaselineTest(cwd, {
+			toBaselineTest([cwd], {
 				id: "src/a.test.ts#a works",
 				name: "a works",
 				fileName: path.join(cwd, "src", "a.test.ts"),
