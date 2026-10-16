@@ -14,6 +14,15 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Fixed
+
+- **A named runner config selects every test.** `vitest.integration.config.ts`,
+  `playwright.e2e.config.ts` and the like, which a script passes with
+  `--config`, were read as ordinary code: a change to one alone selected none
+  of the tests it configures, and the pull-request report rated it `high`
+  ("no test reaches it"). They now count as configuration, as
+  `vitest.config.ts` already did.
+
 ## [0.3.0-canary.0] - 2026-10-08
 
 A canary: published under the `canary` tag, not `latest`. Install it by name,
