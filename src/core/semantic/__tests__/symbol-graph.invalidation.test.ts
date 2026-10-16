@@ -36,7 +36,10 @@ import {
 // operation kind many times over.
 const SEQUENCES = 3;
 const ROUNDS = 4;
-const SEQUENCE_BUDGET_MS = 60_000;
+// About 9 s alone. Under `--coverage` every project shares one pool, and
+// this shares the CPU with the integration tier's real Stryker runs: 33 to
+// 60 s in CI once those ran on both Vitest and Jest.
+const SEQUENCE_BUDGET_MS = 120_000;
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
