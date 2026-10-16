@@ -10,7 +10,7 @@ monorepo.
 
 ## Prerequisites
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - A git repository with at least one prior commit
 - TypeScript sources (`.ts`/`.tsx`)
 
@@ -147,7 +147,7 @@ variant doctor
 ```
 
 ```
-[✓] Node v22.4.0 meets requirement ≥20
+[✓] Node v22.4.0 meets requirement ≥22
 [✓] Config found: variant.config.ts
 [✓] Config is valid
 [✓] Cache directory is 0 MB

@@ -56,7 +56,7 @@ that record, and is not built yet.
 
 ## Install
 
-variant needs Node 20 or newer and a git repository.
+variant needs Node 22 or newer and a git repository.
 
 ```bash
 npx @blzsky/variant init            # shows the changes, asks, then applies

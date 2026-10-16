@@ -8,7 +8,7 @@ full in [CLAUDE.md](./CLAUDE.md); this file is the practical version.
 
 | | Version | Notes |
 |---|---|---|
-| Node | ≥ 20 | Enforced via `engines`; CI tests 20, 22 and 24 on Linux, Windows and macOS |
+| Node | ≥ 22 | Enforced via `engines`; CI tests 22 and 24 on Linux, Windows and macOS |
 | pnpm | ≥ 10 | Pinned by `packageManager` |
 | git | ≥ 2.28 | `diff`, `impact` and `pr *` need a repository to compare against, and the tests create them with `git init -b` |
 

@@ -17,7 +17,7 @@ A general guide for working in a codebase. Fill in **Stack** and **Commands** pe
 
 `variant` — autonomous change verification for TypeScript repositories: an AST-level change-intelligence engine (`diff`, `impact`, `pr check`, `workspace check`), a setup command (`init`) and test-runner adapters, on top of a frozen dev orchestration CLI (task DAG, content caching, runtime detection).
 
-- **Language**: TypeScript, ESM only (`"type": "module"`). Node ≥ 20, pnpm ≥ 10.
+- **Language**: TypeScript, ESM only (`"type": "module"`). Node ≥ 22, pnpm ≥ 10.
 - **Build**: tsup — three entry points: `src/index.ts` (library), `src/cli/index.ts` (`variant` binary) and `src/reporters/vitest.ts` (`@blzsky/variant/vitest`). The adapter is built twice, as ESM and as CommonJS; `pnpm build` empties `dist/` first because the two builds run at once.
 - **CLI**: Commander.js.
 - **Key libraries**: zod (config schema and defaults), jiti (loads `variant.config.ts` with no build step), execa (process execution), fast-glob (input hashing), ts-morph (semantic change analysis), picocolors, string-argv.
@@ -144,7 +144,7 @@ pnpm vitest run src/core/graph/__tests__/dag.test.ts
 node dist/cli.js --help
 ```
 
-See `CONTRIBUTORS.md` for full dev-setup steps. Prefer running a single test file (as above) over the full suite while iterating. Never run a blanket `pnpm update` — bump one package at a time so lockfile diffs stay reviewable. Cross-platform correctness is CI's job (`ubuntu`/`windows`/`macos` × Node 20/22/24 in `.github/workflows/ci.yml`), not a local cross-compile step — prefer `node:path` helpers over manual string splitting so the matrix actually catches regressions.
+See `CONTRIBUTORS.md` for full dev-setup steps. Prefer running a single test file (as above) over the full suite while iterating. Never run a blanket `pnpm update` — bump one package at a time so lockfile diffs stay reviewable. Cross-platform correctness is CI's job (`ubuntu`/`windows`/`macos` × Node 22/24 in `.github/workflows/ci.yml`), not a local cross-compile step — prefer `node:path` helpers over manual string splitting so the matrix actually catches regressions.
 
 All PRs must pass `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`. The default branch is `master`, which is expected to be lint-clean — a warning there is from your change, not pre-existing. Commits follow conventional commits: `<type>: <subject>`, imperative mood, ≤ 72 chars, no trailing period.
 

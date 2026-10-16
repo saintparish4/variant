@@ -24,7 +24,7 @@ export interface Diagnostic {
 	detail?: string;
 }
 
-export const MINIMUM_NODE_MAJOR = 20;
+export const MINIMUM_NODE_MAJOR = 22;
 
 /** Cache directories above this are worth a warning, not a failure. */
 const CACHE_WARN_MB = 500;

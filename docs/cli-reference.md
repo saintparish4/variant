@@ -445,12 +445,12 @@ task without asking. If a config already exists, it writes nothing.
 variant doctor
 ```
 
-Checks the Node version (≥ 20), that a config validates, that its task graph
+Checks the Node version (≥ 22), that a config validates, that its task graph
 has no cycle, and the cache size (a warning above 500 MB). Exits 1 if any check fails. A missing config is a
 warning, not a failure: only `build` and `run` read one.
 
 ```
-[✓] Node v22.4.0 meets requirement ≥20
+[✓] Node v22.4.0 meets requirement ≥22
 [✓] Config found: variant.config.ts
 [✓] Config is valid
 [✓] Task graph is valid

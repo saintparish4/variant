@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Diagnostic } from "../diagnostics.js";
 import {
@@ -27,6 +28,17 @@ describe("checkNodeVersion", () => {
 
 	it("fails closed on an unparseable version string", () => {
 		expect(checkNodeVersion("not-a-version").level).toBe("error");
+	});
+
+	it("requires the Node version package.json declares", () => {
+		const manifest = JSON.parse(
+			readFileSync(
+				new URL("../../../../package.json", import.meta.url),
+				"utf8",
+			),
+		) as { engines: { node: string } };
+
+		expect(manifest.engines.node).toBe(`>=${MINIMUM_NODE_MAJOR}`);
 	});
 });
 

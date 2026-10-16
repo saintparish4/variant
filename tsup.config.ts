@@ -13,7 +13,7 @@ export default defineConfig([
 		// what the other had just written. `pnpm build` empties dist/ first.
 		clean: false,
 		shims: false,
-		target: "node20",
+		target: "node22",
 	},
 	// A test config is loaded by its runner, and in a package without
 	// `"type": "module"` Vite bundles it as CommonJS and `require`s what it
@@ -26,6 +26,6 @@ export default defineConfig([
 		clean: false,
 		// `import.meta.url` locates the CLI beside this file.
 		shims: true,
-		target: "node20",
+		target: "node22",
 	},
 ]);

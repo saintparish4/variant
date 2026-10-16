@@ -60,7 +60,7 @@ body:
       render: bash
       placeholder: |
         variant:    1.0.1
-        Node.js:          v20.11.0
+        Node.js:          v22.12.0
         Package manager:  pnpm 9.12.0
         OS:               Linux x64 (Ubuntu 22.04)
         Framework:        Next.js 15.0.0

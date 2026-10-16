@@ -7,7 +7,7 @@ against a real test run, and catch an undeclared dependency.
 
 Everything below was run against the published `@blzsky/variant`; the output
 blocks are what it printed. Commands are for a POSIX shell (on Windows, use Git
-Bash or WSL). You need Node ≥ 20, npm, and git ≥ 2.28.
+Bash or WSL). You need Node ≥ 22, npm, and git ≥ 2.28.
 
 ## 0. Set up the starter workspace
 
