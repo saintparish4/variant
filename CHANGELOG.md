@@ -27,6 +27,10 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
   added beside it either lost to it, so the adapter never loaded, or replaced
   the reporters it brought. A `test` block added to a config spread from a base
   replaced the base's. Such a config now gets the lines to add by hand.
+- **`init` no longer says "variant is configured" when it left a Vitest
+  config alone.** The adapter is in no such config, so its test runs are not
+  checked; `init` now closes with "Test runs are not checked yet", as it does
+  for a Vite config it leaves alone.
 
 ## [0.3.0-canary.0] - 2026-10-08
 

@@ -389,6 +389,21 @@ describe("planSetup and applySetup", () => {
 			),
 		).toBe(true);
 	});
+
+	// The adapter is in no config afterwards, so no test run is checked.
+	it("does not call itself configured when it left the only config alone", async () => {
+		const dir = createGitWorkspace("init", {
+			"package.json": JSON.stringify({ name: "app" }),
+			"vitest.config.ts":
+				'const reporters = ["default"];\nexport default { test: { reporters } };\n',
+		});
+		const output = captureGlobalOutput();
+
+		await withCwd(dir, () => registerInitAction({ yes: true, install: false }));
+
+		expect(output.stdout()).not.toContain("variant is configured");
+		expect(output.stdout()).toContain("Test runs are not checked yet");
+	});
 });
 
 describe("init command", () => {
