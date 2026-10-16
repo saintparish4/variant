@@ -80,8 +80,8 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `NO_CHANGE_BASE` | `check` found nothing that says what the change is: a clean tree on the default branch. Pass `--base` |
 | `BASELINE_FAILED` | `check`: a test fails with no mutation in place, so no result could be trusted. The failing tests are listed |
 | `CHECK_WORKSPACE_ROOT` | `check` was run from a workspace root; run it from the package directory |
-| `CHECK_RUNNER` | `check` was run in a package that tests with Jest, or shows no sign of Vitest. Checked before Stryker starts |
-| `CHECK_BACKEND` | `check`: Stryker or Vitest could not run, or stopped on an error of its own. Its last output is shown |
+| `CHECK_RUNNER` | `check` found no Vitest or Jest in the package (checked before Stryker starts), or a Jest config it does not run: one with `projects`, or a `rootDir` or `roots` outside the package (checked before any test runs) |
+| `CHECK_BACKEND` | `check`: Stryker or the test runner could not run, or stopped on an error of its own. Its last output is shown |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 
 ## Refs and diffs
@@ -177,11 +177,12 @@ static analysis cannot see.
 
 ```
 variant check [--base <ref>] [--max-mutants <n>] [--budget <time>]
-              [--vitest-config <file>] [--fail-on-survivors] [--json]
+              [--runner <name>] [--vitest-config <file>] [--jest-config <file>]
+              [--fail-on-survivors] [--json]
 ```
 
 Mutates the changed lines of TypeScript source files (comparisons, boolean
-conditions, arithmetic), runs the Vitest suite against each mutation, and
+conditions, arithmetic), runs the Vitest or Jest suite against each mutation, and
 reports the ones no test noticed, with the change and what to review. Run it
 from the package directory. See [`check`](./check.md) for how the base is
 chosen, how to read a result, CI, and limitations.
@@ -191,7 +192,9 @@ chosen, how to read a result, CI, and limitations.
 | `--base <ref>` | detected | HEAD with uncommitted changes; a clean branch's merge base with the default branch; on GitHub Actions the pull request's merge base or the push's previous commit |
 | `--max-mutants <n>` | 50 | The first *n* mutations in a fixed order |
 | `--budget <time>` | `5m` | Wall-clock limit, the first test run included: `300`, `90s`, `5m` |
-| `--vitest-config <file>` | Vitest's lookup | The config to run the tests with |
+| `--runner <name>` | detected | `vitest` or `jest`. Detected from the package; where it shows both, its `test` script decides |
+| `--vitest-config <file>` | Vitest's lookup | The Vitest config to run the tests with, inside the package. Implies `--runner vitest` |
+| `--jest-config <file>` | Jest's lookup | The Jest config to run the tests with, inside the package. Implies `--runner jest` |
 | `--fail-on-survivors` | off | Exit 1 on an undetected or unreached mutation, or an incomplete run |
 | `--json` | off | The result as JSON, with `allDetected` |
 

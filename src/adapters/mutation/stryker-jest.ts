@@ -24,8 +24,8 @@
  *   package, is refused before any test runs.
  * - A mutant runs only the test files holding the tests that reach it.
  *   Stryker filters those tests by name alone, and Jest still loaded and set
- *   up every test file to find them: 7 s a mutant on dearly, where its
- *   covering files take 0.3 s.
+ *   up every test file to find them: 2.1 s a mutant against 70 ms, in a
+ *   41-file suite (base/research/2026-10-16-jest-spike).
  */
 
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";

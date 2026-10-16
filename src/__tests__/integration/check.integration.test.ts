@@ -327,8 +327,8 @@ describe.each([
 	);
 
 	// Filtering a mutant's tests by name alone still has the runner load and
-	// set up every test file to find them: on dearly, 7 s a mutant where the
-	// covering files take 0.3 s.
+	// set up every test file to find them: 2.1 s a mutant against 70 ms by
+	// file, in a 41-file suite.
 	it(
 		"runs each mutation against only the test files whose tests reach it",
 		async () => {

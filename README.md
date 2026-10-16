@@ -39,14 +39,14 @@ it was.
 
 ## Install
 
-variant needs Node 22 or newer, a git repository, and Vitest (4.1 is tested; 5.0 has been tried).
+variant needs Node 22 or newer, a git repository, and Vitest (4.1 is tested; 5.0 has been tried) or Jest (30 is tested; 29.3 or newer).
 
 ```bash
 npm install -D @blzsky/variant@canary
 ```
 
-Install it in the package whose code you change, beside its Vitest; the Vitest
-it runs your tests with is yours.
+Install it in the package whose code you change, beside its test runner; the
+Vitest or Jest it runs your tests with is yours.
 
 The package is `@blzsky/variant`; the binary it installs is `variant`.
 `npx variant` fetches an unrelated package, so always use the scope with `npx`.
@@ -68,7 +68,7 @@ npx @blzsky/variant check --base main        # everything this branch changes
 npx @blzsky/variant check --fail-on-survivors --json   # in CI
 ```
 
-Run it from the package whose code changed, where its Vitest config is.
+Run it from the package whose code changed, where its Vitest or Jest config is.
 
 - **What it compares against.** With uncommitted changes, HEAD: your staged
   and unstaged edits. On a clean branch, the commit it left the default branch
@@ -97,7 +97,8 @@ Run it from the package whose code changed, where its Vitest config is.
 
 The [`check` guide](./docs/check.md) has every flag, the CI setup, and how to
 read a result. [`examples/check-demo`](./examples/check-demo) is the example
-above, ready to run.
+above, ready to run, and [`examples/check-demo-jest`](./examples/check-demo-jest)
+is the same with Jest.
 
 ## How it compares
 
@@ -127,14 +128,14 @@ whether or not anything checks the result. The example above is 100% covered.
 - **Deleted lines cannot be mutated.** A change that only removes code gets no
   mutation; the report says how many lines that was.
 - **Mutations are not type-checked.** One that TypeScript would reject still
-  runs, because Vitest does not check types.
+  runs.
 - **Code run in another process reads as unreached.** Coverage is measured in
   the test process, so a test that drives a CLI or a server it starts does not
   count as executing that code.
 - **Flaky tests can count as detection.** A test that fails at random while a
   mutation is in place is read as noticing it.
-- **One Vitest project, run from its package.** Workspace roots, Vitest browser
-  mode and Jest are not supported yet.
+- **One test project, run from its package.** Workspace roots, Vitest browser
+  mode and a Jest config with `projects` are not supported yet.
 
 ## Pull request reports
 

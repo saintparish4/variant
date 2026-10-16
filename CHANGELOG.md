@@ -14,6 +14,50 @@ series are `variant@x.y.z`, and the archived series keeps its bare `vx.y.z` tags
 
 ## [Unreleased]
 
+### Added
+
+- **`variant check` runs Jest packages.** It used to refuse them with
+  `CHECK_RUNNER`. Jest 30 is tested in CI, 29.7 has been tried, and 29.3 is
+  the oldest supported. Tried on Next.js (`next/jest`, Jest 30, bun) and a ts-jest package in
+  Turborepo, where every finding was a real gap or an equivalent mutation.
+  - The runner is detected from the package. Where it shows both, its `test`
+    script decides. `--runner vitest|jest`, `--jest-config` and
+    `--vitest-config` override it.
+  - The same rules as with Vitest: the whole suite passes unmutated first, a
+    test file that fails to load fails that first run, and code no test
+    executes is listed apart.
+  - Each mutation runs the tests measured to execute its code, and only the
+    files that hold them: filtered by name alone, Jest loads every test file
+    to find them. Real runs took 0.5 to 1.2 s a mutation after the first run.
+  - A `@jest-environment node` or `jsdom` comment works as is. A test file
+    naming another environment that way cannot be measured; the first run is
+    repeated without the measurement, and the report says every mutation ran
+    against every test.
+  - Coverage, reporters and results processors are off and Jest's cache stays
+    in the copy, so a `coverageThreshold` or `jest-junit` neither fails the run
+    nor writes a file. A `test` script's `--experimental-vm-modules` is passed
+    on.
+  - A config with `projects`, or with a `rootDir` or `roots` outside the
+    package, is refused before any test runs: in the copy the tests run in, it
+    would run the real, unmutated files.
+  - `@stryker-mutator/jest-runner` 10.0.0 is now a dependency.
+
+### Changed
+
+- **Breaking: `check --json` reports `runner` in place of `vitestConfig`.**
+  It is `{ "kind": "vitest" | "jest", "configFile"?: string }`.
+
+### Fixed
+
+- **`check` mutates a changed file under a Next.js dynamic route.** Stryker
+  reads each path it is given as a glob, so a change under `[id]`,
+  `[...slug]` or `(group)` failed the whole run with a configuration error,
+  with Vitest as with Jest. A path with `{` or `}`, which cannot be escaped
+  there, is listed as not mutated, with the reason.
+- **`check --vitest-config` refuses a config outside the package.** Named by an
+  absolute path, or one leading out of the package, it loaded the real config
+  in place of the copy's and tested the real, unmutated files.
+
 ## [0.3.0-canary.1] - 2026-10-16
 
 A canary: published under the `canary` tag, not `latest`. Install it by name,
