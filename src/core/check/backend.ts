@@ -58,7 +58,15 @@ export interface BaselineTest {
 
 export type BackendEvent =
 	| { kind: "baseline"; tests: BaselineTest[] }
-	| { kind: "plan"; mutants: PlannedMutant[] }
+	| {
+			kind: "plan";
+			mutants: PlannedMutant[];
+			/**
+			 * False when the engine had no coverage information: every mutant
+			 * then ran against every test, and none can read as unreached.
+			 */
+			coverageMeasured: boolean;
+	  }
 	| { kind: "tested"; mutant: TestedMutant }
 	| { kind: "finished" }
 	/** Something about the run the report should say. */

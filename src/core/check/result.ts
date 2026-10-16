@@ -78,6 +78,11 @@ export interface CheckResult {
 	deletedLines: number;
 	baseline?: { tests: number; files: number; skipped: number };
 	vitestConfig?: string;
+	/**
+	 * False when no coverage could be measured: every mutation then ran
+	 * against every test, and none could be found unreached.
+	 */
+	coverageMeasured: boolean;
 	mutants: MutantOutcome[];
 	counts: Record<Outcome, number> & { attempted: number };
 	notes: string[];
@@ -122,6 +127,8 @@ export interface AssembleInput {
 	plan?: readonly PlannedMutant[];
 	selection?: Selection;
 	tested: ReadonlyMap<string, TestedMutant>;
+	/** False when the engine ran every mutant against every test. */
+	coverageMeasured?: boolean;
 	stopReason?: StopReason;
 	/** File contents as the run started, for quoting what was mutated. */
 	snapshot: ReadonlyMap<string, string>;
@@ -272,6 +279,7 @@ export function assembleCheckResult(input: AssembleInput): CheckResult {
 		...(input.vitestConfig !== undefined && {
 			vitestConfig: input.vitestConfig,
 		}),
+		coverageMeasured: input.coverageMeasured ?? true,
 		mutants,
 		counts,
 		notes: [...(input.notes ?? [])],

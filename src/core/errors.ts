@@ -129,6 +129,25 @@ export interface FailingTest {
 	message: string;
 }
 
+/** The runner adapter names a test file that could not run like this. */
+export const DID_NOT_LOAD = " (did not load)";
+
+function baselineMessage(failingTests: readonly FailingTest[]): string {
+	const files = failingTests.filter((test) => test.name.endsWith(DID_NOT_LOAD));
+	const tests = failingTests.length - files.length;
+	const parts = [
+		...(files.length > 0
+			? [
+					`${files.length} test file${files.length === 1 ? "" : "s"} did not load`,
+				]
+			: []),
+		...(tests > 0 ? [`${tests} test${tests === 1 ? " fails" : "s fail"}`] : []),
+	];
+	return parts.length === 0
+		? "The tests fail before any mutation, so no result could be trusted"
+		: `${parts.join(" and ")} before any mutation, so no result could be trusted`;
+}
+
 /**
  * Tests that fail with no mutation in place. Every later failure would be
  * indistinguishable from one a mutation caused, so nothing is interpreted.
@@ -138,12 +157,7 @@ export class BaselineFailedError extends VariantError {
 		public failingTests: readonly FailingTest[],
 		public output: string,
 	) {
-		super(
-			"BASELINE_FAILED",
-			failingTests.length === 0
-				? "The tests fail before any mutation, so no result could be trusted"
-				: `${failingTests.length} test${failingTests.length === 1 ? "" : "s"} fail before any mutation, so no result could be trusted`,
-		);
+		super("BASELINE_FAILED", baselineMessage(failingTests));
 		this.details = failingTests
 			.slice(0, 10)
 			.map((test) =>

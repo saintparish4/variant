@@ -58,6 +58,13 @@ export type HostMessage =
 	| { kind: "error"; message: string };
 
 /**
+ * Appended to a test file's name when the runner adds it as a failed test
+ * because it did not load. Core's `DID_NOT_LOAD` is the same string; a test
+ * keeps them equal, since an adapter imports only types from core.
+ */
+export const LOAD_FAILURE_SUFFIX = " (did not load)";
+
+/**
  * Stryker's mutator groups `variant check` turns off: everything but
  * comparisons, boolean conditions and arithmetic. The names are matched
  * exactly against `allMutators` in `@stryker-mutator/instrumenter` 10.0.0.

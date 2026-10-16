@@ -48,6 +48,12 @@ export interface StrykerBackendOptions {
 	pluginsPath?: string;
 	/** Node flags for the host, e.g. a TypeScript loader in tests. */
 	execArgv?: string[];
+	/**
+	 * Extra environment for the host and every process Stryker starts from
+	 * it. Its test-runner workers do not inherit `execArgv`, so a loader the
+	 * workers need goes in `NODE_OPTIONS` here.
+	 */
+	env?: Record<string, string>;
 }
 
 const OUTPUT_LINES = 200;
@@ -102,7 +108,9 @@ export function toPlannedMutant(
 			line: raw.location.end.line + 1,
 			column: raw.location.end.column + 1,
 		},
-		covered: (raw.coveredBy?.length ?? 0) > 0,
+		// No coverage information at all means Stryker runs every test
+		// against it: it counts toward the limit like any covered mutant.
+		covered: raw.coveredBy === undefined || raw.coveredBy.length > 0,
 		static: raw.static === true,
 	};
 }
@@ -156,8 +164,20 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
  * initial test run:": a tab and the test's name, then two tabs and its
  * message. Its error says only that tests failed.
  */
+/**
+ * A path inside the copy the tests ran in, up to and including the sandbox
+ * directory. What follows it is the file's path in the project.
+ */
+const SANDBOX_PREFIX =
+	/(?:[A-Za-z]:)?[^\s'"`]*?[\\/]\.variant[\\/]check-tmp[\\/][^\\/\s]+[\\/]sandbox-[^\\/\s]+[\\/]/g;
+
+/** Names files where they are in the project, not inside the copy. */
+export function withoutSandbox(text: string): string {
+	return text.replace(SANDBOX_PREFIX, "");
+}
+
 export function parseFailingTests(output: string): FailingTest[] {
-	const lines = output.replace(ANSI, "").split(/\r?\n/);
+	const lines = withoutSandbox(output.replace(ANSI, "")).split(/\r?\n/);
 	const start = lines.findIndex((line) =>
 		/tests failed in the initial test run:\s*$/i.test(line),
 	);
@@ -429,7 +449,7 @@ function startRun(
 			[],
 			{
 				cwd: request.cwd,
-				env: hostEnvironment(process.env, root),
+				env: { ...hostEnvironment(process.env, root), ...options.env },
 				execArgv: options.execArgv ?? [],
 				stdio: ["ignore", "pipe", "pipe", "ipc"],
 				// A process group of its own on POSIX, so one signal ends Stryker's
@@ -460,6 +480,9 @@ function startRun(
 				channel.push({
 					kind: "plan",
 					mutants: kept.map((mutant) => toPlannedMutant(roots, mutant)),
+					coverageMeasured:
+						kept.length === 0 ||
+						kept.some((mutant) => mutant.coveredBy !== undefined),
 				});
 			} else if (message.kind === "tested") {
 				if (dropped.has(message.mutant.id)) return;
@@ -487,7 +510,7 @@ function startRun(
 		// baseline tests are named only in the log.
 		spawned.on("close", (code, signal) => {
 			if (stopping) return;
-			const text = output.join("\n").trim();
+			const text = withoutSandbox(output.join("\n").trim());
 			if (terminal?.kind === "baseline-failed") {
 				channel.push({
 					kind: "baseline-failed",

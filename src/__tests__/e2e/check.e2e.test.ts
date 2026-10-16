@@ -53,7 +53,13 @@ describe("E2E: would the tests notice?", () => {
 	});
 
 	afterAll(() => {
-		rmSync(cwd, { recursive: true, force: true });
+		// Windows releases a killed process tree's handles late.
+		rmSync(cwd, {
+			recursive: true,
+			force: true,
+			maxRetries: 10,
+			retryDelay: 200,
+		});
 	});
 
 	it("names the boundary the tests miss, then sees it caught once a test checks it", async () => {

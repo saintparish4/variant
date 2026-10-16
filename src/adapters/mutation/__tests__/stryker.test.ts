@@ -57,6 +57,20 @@ describe("toPlannedMutant", () => {
 		expect(mutant.file).toBe("src/discount.ts");
 	});
 
+	// With no coverage at all Stryker runs every test against the mutant, so
+	// it must count toward --max-mutants like any covered one.
+	it("reads a mutant with no coverage information as covered", () => {
+		const mutant = toPlannedMutant([cwd], {
+			id: "1",
+			fileName: path.join(cwd, "src", "a.ts"),
+			mutatorName: "EqualityOperator",
+			replacement: "a > b",
+			location: { start: { line: 0, column: 0 }, end: { line: 0, column: 5 } },
+		});
+
+		expect(mutant.covered).toBe(true);
+	});
+
 	it("reads an empty coveredBy as code no test executed", () => {
 		const mutant = toPlannedMutant([cwd], {
 			id: "4",
@@ -139,6 +153,19 @@ describe("parseFailingTests", () => {
 			},
 			{ name: "qualifies accepts 150", message: "expected true to be false" },
 		]);
+	});
+
+	// pyra: the message named the copy the tests ran in, not the real file.
+	it("names files where they are, not inside the copy the tests ran in", () => {
+		const output = [
+			"ERROR DryRunExecutor One or more tests failed in the initial test run:",
+			"\tsrc/dictionary.test.ts (did not load)",
+			"\t\tCannot find module './generated/x.js' imported from /tmp/pyra/packages/neris/.variant/check-tmp/mvaxx94n-48634/sandbox-DuRx0P/src/dictionary.test.ts",
+		].join("\n");
+
+		expect(parseFailingTests(output)[0]?.message).toBe(
+			"Cannot find module './generated/x.js' imported from src/dictionary.test.ts",
+		);
 	});
 
 	it("finds nothing in output that does not list failing tests", () => {

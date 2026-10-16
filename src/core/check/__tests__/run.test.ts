@@ -92,7 +92,7 @@ describe("runCheck", () => {
 	it("mutates only the changed source lines and reports the outcome", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [planned("0")] },
+			{ kind: "plan", mutants: [planned("0")], coverageMeasured: true },
 			{ kind: "tested", mutant: { id: "0", status: "Survived", killedBy: [] } },
 			{ kind: "finished" },
 		]);
@@ -111,7 +111,7 @@ describe("runCheck", () => {
 	it("mutates a new file git does not track yet, all of it", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [] },
+			{ kind: "plan", mutants: [], coverageMeasured: true },
 			{ kind: "finished" },
 		]);
 
@@ -148,6 +148,24 @@ describe("runCheck", () => {
 		expect(state.request).toBeUndefined();
 	});
 
+	it("names a failing baseline of files that did not load for what it is", () => {
+		const error = new BaselineFailedError(
+			[
+				{
+					name: "src/dictionary.test.ts (did not load)",
+					message: "Cannot find module",
+				},
+			],
+			"",
+		);
+		expect(error.message).toBe(
+			"1 test file did not load before any mutation, so no result could be trusted",
+		);
+		expect(
+			new BaselineFailedError([{ name: "a", message: "x" }], "").message,
+		).toBe("1 test fails before any mutation, so no result could be trusted");
+	});
+
 	it("starts no engine when no changed line can be mutated", async () => {
 		const { backend, state } = fakeBackend([]);
 
@@ -164,7 +182,11 @@ describe("runCheck", () => {
 	it("stops once the first --max-mutants have reported, and says the rest were not run", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [planned("0"), planned("1"), planned("2")] },
+			{
+				kind: "plan",
+				mutants: [planned("0"), planned("1"), planned("2")],
+				coverageMeasured: true,
+			},
 			{
 				kind: "tested",
 				mutant: { id: "0", status: "Killed", killedBy: ["t"] },
@@ -187,7 +209,11 @@ describe("runCheck", () => {
 	it("stops at the budget and reports what finished as incomplete", async () => {
 		const { backend } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [planned("0"), planned("1")] },
+			{
+				kind: "plan",
+				mutants: [planned("0"), planned("1")],
+				coverageMeasured: true,
+			},
 			{
 				kind: "tested",
 				mutant: { id: "0", status: "Killed", killedBy: ["t"] },
@@ -210,7 +236,11 @@ describe("runCheck", () => {
 	it("stops when interrupted and keeps what finished", async () => {
 		const { backend } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [planned("0"), planned("1")] },
+			{
+				kind: "plan",
+				mutants: [planned("0"), planned("1")],
+				coverageMeasured: true,
+			},
 			{
 				kind: "tested",
 				mutant: { id: "0", status: "Killed", killedBy: ["t"] },
@@ -304,7 +334,7 @@ describe("runCheck", () => {
 	it("takes --vitest-config as saying the package runs Vitest", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [] },
+			{ kind: "plan", mutants: [], coverageMeasured: true },
 			{ kind: "finished" },
 		]);
 
@@ -321,7 +351,7 @@ describe("runCheck", () => {
 		const { backend } = fakeBackend([
 			{ kind: "note", text: "tsconfig paths were not rewritten" },
 			baseline,
-			{ kind: "plan", mutants: [] },
+			{ kind: "plan", mutants: [], coverageMeasured: true },
 			{ kind: "finished" },
 		]);
 
@@ -333,7 +363,7 @@ describe("runCheck", () => {
 	it("notes a file edited during the run, whose report quotes it as it was", async () => {
 		const { backend } = fakeBackend([
 			baseline,
-			{ kind: "plan", mutants: [planned("0")] },
+			{ kind: "plan", mutants: [planned("0")], coverageMeasured: true },
 			{
 				kind: "tested",
 				mutant: { id: "0", status: "Killed", killedBy: ["t"] },

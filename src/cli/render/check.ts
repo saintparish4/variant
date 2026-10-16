@@ -112,7 +112,11 @@ export function renderCheck(
 		lines(
 			printer,
 			"",
-			"Nothing to check: no TypeScript source line changed here, so there is nothing to mutate.",
+			result.excluded.some(
+				(exclusion) => exclusion.reason === "formatting-only",
+			)
+				? "Nothing to check: the TypeScript here changed only in formatting or comments."
+				: "Nothing to check: no TypeScript source line changed here, so there is nothing to mutate.",
 		);
 		renderFooter(result, printer);
 		return;
@@ -244,7 +248,7 @@ function renderFooter(result: CheckResult, printer: Printer): void {
 				? "the Vitest config here"
 				: result.vitestConfig;
 		scope.push(
-			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${result.baseline.skipped.toLocaleString("en-US")} of them skipped` : ""}, from ${config}); each mutation then ran against the tests that executed its code`,
+			`the tests passed unmutated first (${plural(result.baseline.tests, "test")} in ${plural(result.baseline.files, "file")}${result.baseline.skipped > 0 ? `, ${result.baseline.skipped.toLocaleString("en-US")} of them skipped` : ""}, from ${config}); ${result.coverageMeasured ? "each mutation then ran against the tests that executed its code" : "which test executes what could not be measured, so each mutation ran against every test and none could be found unreached"}`,
 		);
 	}
 	if (result.status !== "nothing-to-mutate") {

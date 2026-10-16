@@ -318,6 +318,7 @@ export async function runCheck(
 
 	let baselineTests: BaselineTest[] | undefined;
 	let plan: PlannedMutant[] | undefined;
+	let coverageMeasured = true;
 	let selection: Selection | undefined;
 	const tested = new Map<string, TestedMutant>();
 	let stopReason: StopReason | undefined;
@@ -345,6 +346,7 @@ export async function runCheck(
 			if (event.kind === "baseline") baselineTests = event.tests;
 			else if (event.kind === "plan") {
 				plan = event.mutants;
+				coverageMeasured = event.coverageMeasured;
 				selection = selectMutants(plan, options.maxMutants);
 			} else if (event.kind === "tested")
 				tested.set(event.mutant.id, event.mutant);
@@ -395,6 +397,7 @@ export async function runCheck(
 		...(plan !== undefined && { plan }),
 		...(selection !== undefined && { selection }),
 		tested,
+		coverageMeasured,
 		...(stopReason !== undefined && { stopReason }),
 		snapshot,
 		symbols,

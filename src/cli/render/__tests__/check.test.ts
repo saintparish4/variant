@@ -44,6 +44,7 @@ function result(overrides: Partial<CheckResult> = {}): CheckResult {
 		base: { ref: "HEAD", label: "HEAD: your staged and unstaged changes" },
 		status: "complete",
 		baselineFinished: true,
+		coverageMeasured: true,
 		files: [
 			{
 				file: "src/discount.ts",
@@ -265,6 +266,34 @@ describe("renderCheck", () => {
 		expect(out).toContain(
 			"3 tests were skipped; code only they would reach reads as reached by no test.",
 		);
+	});
+
+	it("says when the TypeScript here changed only in formatting", () => {
+		const capture = captureOutput();
+
+		renderCheck(
+			result({
+				status: "nothing-to-mutate",
+				files: [],
+				mutants: [],
+				excluded: [{ file: "src/auth.ts", reason: "formatting-only" }],
+			}),
+			capture.printer,
+		);
+
+		expect(capture.stdout()).toContain(
+			"Nothing to check: the TypeScript here changed only in formatting or comments.",
+		);
+	});
+
+	it("does not claim per-test selection when coverage could not be measured", () => {
+		const capture = captureOutput();
+
+		renderCheck(result({ coverageMeasured: false }), capture.printer);
+
+		const out = capture.stdout();
+		expect(out).toContain("each mutation ran against every test");
+		expect(out).not.toContain("the tests that executed its code");
 	});
 
 	it("says when nothing changed that could be mutated", () => {

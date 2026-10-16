@@ -40,6 +40,8 @@ const backend = createStrykerBackend({
 	hostPath: path.join(ADAPTER, "stryker-host.ts"),
 	pluginsPath: path.join(ADAPTER, "stryker-plugins.ts"),
 	execArgv: ["--import", import.meta.resolve("tsx")],
+	// Stryker's workers load the plugins too, and do not inherit execArgv.
+	env: { NODE_OPTIONS: `--import ${import.meta.resolve("tsx")}` },
 });
 
 /** git in `dir`, with a fixed identity, returning what it printed. */
@@ -234,6 +236,29 @@ describe("variant check", () => {
 			expect((error as BaselineFailedError).failingTests).toEqual([
 				expect.objectContaining({ name: "src/broken.test.ts (did not load)" }),
 			]);
+		},
+		TIMEOUT,
+	);
+
+	// pyra: when no mutated code ran in the baseline, Stryker read the empty
+	// coverage as "coverage analysis off", ran every mutation against every
+	// test and called code no test imports "undetected".
+	it(
+		"reports a changed file no test imports as reached by no test",
+		async () => {
+			const dir = demoRepository();
+			git(dir, "commit", "-qm", "discount");
+			writeFileSync(
+				path.join(dir, "src", "shipping.ts"),
+				"export const heavy = (kg: number): boolean => kg > 20;\n",
+			);
+
+			const result = await check(dir);
+
+			expect(result.mutants.length).toBeGreaterThan(0);
+			expect(new Set(result.mutants.map((m) => m.outcome))).toEqual(
+				new Set(["no-coverage"]),
+			);
 		},
 		TIMEOUT,
 	);
