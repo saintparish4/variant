@@ -72,15 +72,16 @@ In order:
 1. `--base <ref>`, or the `VARIANT_BASE` environment variable.
 2. On GitHub Actions: in a pull request, its merge base with the target branch;
    on a push, the commit the push replaced.
-3. Uncommitted changes to tracked files: **HEAD**, so the change is your staged
-   and unstaged edits.
+3. Uncommitted changes, new files included: **HEAD**, so the change is your
+   staged and unstaged edits and the files you have not added yet.
 4. A clean branch: the commit where it left the default branch.
 5. Otherwise, a clean tree on the default branch: it stops with
    `NO_CHANGE_BASE` and asks for `--base`. It does not guess the previous
    commit.
 
-Untracked files are not mutated: `git add` a new file to include it. They are
-still copied, so an untracked test file does run.
+A new file git does not track yet (and does not ignore) is mutated as a whole.
+A changed file whose change the semantic differ finds to be only formatting or
+comments is not mutated at all, so a reformatting commit reports nothing.
 
 ## Reading a result
 

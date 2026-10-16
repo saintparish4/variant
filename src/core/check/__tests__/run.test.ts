@@ -78,6 +78,8 @@ function deps(
 		listUntrackedFiles: async () => [],
 		readDiff: async () => DIFF,
 		readFile: async () => SOURCE,
+		readFileAtBase: async () => SOURCE.replace("total", "sum"),
+		isFormattingOnly: async () => false,
 		isWorkspaceRoot: async () => false,
 		detectRunner: async () => ({ kind: "vitest" }),
 		...overrides,
@@ -104,6 +106,46 @@ describe("runCheck", () => {
 			{ file: "src/q.test.ts", reason: "test" },
 		]);
 		expect(state.stopped).toBe(1);
+	});
+
+	it("mutates a new file git does not track yet, all of it", async () => {
+		const { backend, state } = fakeBackend([
+			baseline,
+			{ kind: "plan", mutants: [] },
+			{ kind: "finished" },
+		]);
+
+		const result = await runCheck(
+			"/repo",
+			options,
+			deps(backend, {
+				listChangedFiles: async () => [],
+				listUntrackedFiles: async () => ["src/new.ts", "notes.md"],
+			}),
+		);
+
+		expect(state.request?.mutate).toEqual(["src/new.ts:1-3"]);
+		expect(result.files[0]).toMatchObject({
+			file: "src/new.ts",
+			untracked: true,
+		});
+	});
+
+	it("leaves out a file whose change the differ calls formatting only", async () => {
+		const { backend, state } = fakeBackend([]);
+
+		const result = await runCheck(
+			"/repo",
+			options,
+			deps(backend, { isFormattingOnly: async () => true }),
+		);
+
+		expect(result.status).toBe("nothing-to-mutate");
+		expect(result.excluded).toContainEqual({
+			file: "src/q.ts",
+			reason: "formatting-only",
+		});
+		expect(state.request).toBeUndefined();
 	});
 
 	it("starts no engine when no changed line can be mutated", async () => {

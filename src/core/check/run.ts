@@ -16,13 +16,15 @@ import {
 	GitRefError,
 } from "../errors.js";
 import { mapLimit } from "../execution/concurrency.js";
+import { createClassifier } from "../semantic/differ.js";
 import { defaultIsTestFile } from "../semantic/test-impact.js";
 import { assertBaseRef } from "../vcs/base-ref.js";
 import { changeBaseDeps } from "../vcs/change-base.js";
 import {
-	hasTrackedChanges,
+	hasLocalChanges,
 	listChangedFiles,
 	listUntrackedFiles,
+	readFileAtRef,
 	readZeroContextDiff,
 } from "../vcs/git.js";
 import type {
@@ -46,6 +48,7 @@ import type { SymbolLookup } from "./symbols.js";
 import { createSymbolReader } from "./symbols.js";
 import {
 	exclusionBeforeDiff,
+	isNewSource,
 	mutateEntries,
 	selectTargets,
 } from "./targets.js";
@@ -72,6 +75,14 @@ export interface CheckDeps {
 	listUntrackedFiles: () => Promise<string[] | null>;
 	readDiff: (ref: string, file: string) => Promise<string | null>;
 	readFile: (file: string) => Promise<string | null>;
+	/** A file as it was at `ref`; null when it did not exist there. */
+	readFileAtBase: (ref: string, file: string) => Promise<string | null>;
+	/** Whether a change to a file is only formatting or comments. */
+	isFormattingOnly: (
+		file: string,
+		before: string,
+		after: string,
+	) => Promise<boolean>;
 	isWorkspaceRoot: () => Promise<boolean>;
 	detectRunner: () => Promise<RunnerVerdict>;
 	symbols?: (
@@ -118,6 +129,14 @@ async function isWorkspaceRoot(cwd: string): Promise<boolean> {
 	return declaresWorkspaces(pnpmWorkspace, manifest);
 }
 
+function formattingOnly(
+	classify: ReturnType<typeof createClassifier>,
+): CheckDeps["isFormattingOnly"] {
+	return async (filePath, before, after) =>
+		(await classify({ filePath, before, after })).classification ===
+		"non-impacting";
+}
+
 export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
 	return {
 		backend,
@@ -125,13 +144,15 @@ export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
 		resolveBase: (explicit) =>
 			resolveCheckBase(explicit, {
 				...changeBaseDeps(cwd),
-				hasTrackedChanges: () => hasTrackedChanges(cwd),
+				hasLocalChanges: () => hasLocalChanges(cwd),
 			}),
 		assertBase: (ref) => assertBaseRef(cwd, ref),
 		listChangedFiles: (ref) => listChangedFiles(cwd, ref),
 		listUntrackedFiles: () => listUntrackedFiles(cwd),
 		readDiff: (ref, file) => readZeroContextDiff(cwd, ref, file),
 		readFile: (file) => readText(path.join(cwd, file)),
+		readFileAtBase: (ref, file) => readFileAtRef(cwd, ref, file),
+		isFormattingOnly: formattingOnly(createClassifier()),
 		isWorkspaceRoot: () => isWorkspaceRoot(cwd),
 		detectRunner: async () =>
 			detectRunner(
@@ -199,18 +220,52 @@ export async function runCheck(
 		);
 	}
 
-	const toDiff = changed.filter(
-		(file) => exclusionBeforeDiff(file, defaultIsTestFile) === null,
-	);
+	const mutable = (file: string): boolean =>
+		exclusionBeforeDiff(file, defaultIsTestFile) === null;
 	const hunks = new Map<string, FileHunks>();
-	await mapLimit(toDiff, 8, async (file) => {
+	const formatting = new Set<string>();
+	// What each file held when it was read here: classified, then quoted in
+	// the report. One read, so the two cannot disagree.
+	const contents = new Map<string, string>();
+	await mapLimit(changed.filter(mutable), 8, async (file) => {
 		const diff = await deps.readDiff(base.ref, file);
-		if (diff !== null) hunks.set(file, parseZeroContextDiff(diff));
+		if (diff === null) return;
+		const fileHunks = parseZeroContextDiff(diff);
+		hunks.set(file, fileHunks);
+		if (fileHunks.added.length === 0) return;
+		// The semantic differ already tells a reformat from a change; without
+		// it a formatting commit read as findings on untouched behaviour.
+		const [before, after] = await Promise.all([
+			deps.readFileAtBase(base.ref, file),
+			deps.readFile(file),
+		]);
+		if (after !== null) contents.set(file, after);
+		if (
+			before !== null &&
+			after !== null &&
+			(await deps.isFormattingOnly(file, before, after).catch(() => false))
+		) {
+			formatting.add(file);
+		}
+	});
+	// A new file git does not track yet is all new lines.
+	const newFiles = untracked.filter(
+		(file) => isNewSource(file) && mutable(file),
+	);
+	await mapLimit(newFiles, 8, async (file) => {
+		const content = await deps.readFile(file);
+		if (content === null) return;
+		contents.set(file, content);
+		const lines = content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+		if (lines > 0) {
+			hunks.set(file, { added: [{ start: 1, end: lines }], deletedLines: 0 });
+		}
 	});
 	const { targets, excluded, deletedLines } = selectTargets({
 		changed,
 		untracked,
 		hunks,
+		formattingOnly: formatting,
 		isTestFile: defaultIsTestFile,
 	});
 
@@ -235,7 +290,10 @@ export async function runCheck(
 	const snapshot = new Map<string, string>();
 	await Promise.all(
 		targets.map(async (target) => {
-			snapshot.set(target.file, (await deps.readFile(target.file)) ?? "");
+			snapshot.set(
+				target.file,
+				contents.get(target.file) ?? (await deps.readFile(target.file)) ?? "",
+			);
 		}),
 	);
 	const symbols = new Map<string, SymbolLookup>();

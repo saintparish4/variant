@@ -77,9 +77,10 @@ Run it from the package whose code changed, where its Vitest config is.
   of guessing.
 - **What it mutates.** Comparisons (`>=` to `>`, `===` to `!==`), boolean
   conditions (`&&` to `||`, a condition forced to `true` or `false`) and
-  arithmetic (`+` to `-`), in the changed lines of TypeScript source files.
-  Test files, declaration files and untracked files are not mutated; the
-  report lists them and why.
+  arithmetic (`+` to `-`), in the changed lines of TypeScript source files,
+  and all of a new file you have not `git add`ed yet. Test files, declaration
+  files and files whose change is only formatting or comments are not
+  mutated; the report lists them and why.
 - **First, the tests must pass as they are.** If one fails, variant stops: a
   failure could not then be told apart from one a mutation caused.
 - **What it reports.** Each mutation the tests did not notice, with the exact

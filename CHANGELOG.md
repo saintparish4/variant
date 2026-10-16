@@ -28,10 +28,14 @@ exists so `variant check` can be tried on real projects before 0.3.0.
   lists the mutations no test noticed, each with the source change and what
   to review: `Changing >= to > went undetected. Review the behavior at total =
   100.` It needs no history and no config.
-  - The change is detected: uncommitted (staged and unstaged) edits against
-    HEAD; a clean branch from where it left the default branch; in CI the pull
-    request's merge base or the push's previous commit. With none of these it
-    asks for `--base` rather than guessing.
+  - The change is detected: uncommitted edits against HEAD, staged or not, new
+    files included; a clean branch from where it left the default branch; in
+    CI the pull request's merge base or the push's previous commit. With none
+    of these it asks for `--base` rather than guessing.
+  - A file whose change is only formatting or comments is not mutated.
+  - A test file that fails to load fails the baseline, and a Jest package is
+    told it is not supported before anything starts.
+  - Works with Vitest 4.1 and 5, and with TypeScript 7.
   - The tests must pass unmutated first, or nothing is interpreted
     (`BASELINE_FAILED`). Timeouts and errors are inconclusive, and code no test
     executed is reported apart from mutations the tests missed.

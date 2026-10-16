@@ -48,6 +48,7 @@ function result(overrides: Partial<CheckResult> = {}): CheckResult {
 			{
 				file: "src/discount.ts",
 				ranges: [{ start: 1, end: 4 }],
+				untracked: false,
 				changedLines: 4,
 				mutants: mutants.length,
 				symbols: ["qualifiesForDiscount"],
@@ -192,7 +193,7 @@ describe("renderCheck", () => {
 		const capture = captureOutput();
 		const excluded = Array.from({ length: 25 }, (_, i) => ({
 			file: `src/draft-${i}.ts`,
-			reason: "untracked" as const,
+			reason: "not-typescript" as const,
 		}));
 
 		renderCheck(result({ excluded }), capture.printer);

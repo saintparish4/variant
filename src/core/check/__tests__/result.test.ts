@@ -32,7 +32,9 @@ function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
 	const plan = [planned("0", "total > 100"), planned("1", "total < 100")];
 	return {
 		base: { ref: "HEAD", label: "HEAD" },
-		targets: [{ file: "src/q.ts", ranges: [{ start: 2, end: 2 }] }],
+		targets: [
+			{ file: "src/q.ts", ranges: [{ start: 2, end: 2 }], untracked: false },
+		],
 		excluded: [],
 		deletedLines: 0,
 		baselineTests: [{ id: "t1", name: "q accepts 150", file: "src/q.test.ts" }],

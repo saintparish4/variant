@@ -8,12 +8,12 @@ import { plural } from "./labels.js";
 import { lines } from "./writer.js";
 
 const EXCLUSION: Readonly<Record<ExclusionReason, string>> = {
-	untracked: "untracked: `git add` it to include it",
 	test: "a test file",
 	declaration: "a declaration file",
 	"not-typescript": "not TypeScript",
 	outside: "outside this directory",
 	"deleted-lines-only": "only lines removed, which cannot be mutated",
+	"formatting-only": "only formatting or comments changed",
 };
 
 /** The rest are in `--json`; a project with no .gitignore can list thousands. */
@@ -78,9 +78,12 @@ export function renderCheck(
 		for (const file of result.files) {
 			const symbols =
 				file.symbols.length > 0 ? `  (${file.symbols.join(", ")})` : "";
+			const lineCount = file.untracked
+				? `new, untracked: ${plural(file.changedLines, "line")}`
+				: plural(file.changedLines, "changed line");
 			lines(
 				printer,
-				`  ${file.file}  ${plural(file.changedLines, "changed line")}, ${plural(file.mutants, "mutation")}${symbols}`,
+				`  ${file.file}  ${lineCount}, ${plural(file.mutants, "mutation")}${symbols}`,
 			);
 		}
 	}

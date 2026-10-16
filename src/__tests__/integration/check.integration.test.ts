@@ -276,17 +276,20 @@ describe("variant check", () => {
 		async () => {
 			const dir = demoRepository();
 			addBoundaryTest(dir); // unstaged, on top of the staged change
-			writeFileSync(path.join(dir, "src", "draft.ts"), "export const x = 1;\n");
+			writeFileSync(
+				path.join(dir, "src", "draft.ts"),
+				"export const big = (n: number) => n > 10;\n",
+			);
 			const before = gitState(dir);
 
 			const result = await check(dir);
 
 			expect(gitState(dir)).toEqual(before);
 			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
-			expect(result.excluded).toContainEqual({
-				file: "src/draft.ts",
-				reason: "untracked",
-			});
+			// A new file git does not track yet is mutated, not ignored.
+			expect(result.files).toContainEqual(
+				expect.objectContaining({ file: "src/draft.ts", untracked: true }),
+			);
 		},
 		TIMEOUT,
 	);

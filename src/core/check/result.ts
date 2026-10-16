@@ -54,6 +54,8 @@ export interface MutantOutcome {
 export interface AnalyzedFile {
 	file: string;
 	ranges: LineRange[];
+	/** A new file git does not track yet, mutated as a whole. */
+	untracked: boolean;
 	changedLines: number;
 	mutants: number;
 	symbols: string[];
@@ -232,6 +234,7 @@ export function assembleCheckResult(input: AssembleInput): CheckResult {
 		return {
 			file: target.file,
 			ranges: target.ranges,
+			untracked: target.untracked,
 			changedLines: countLines(target.ranges),
 			mutants: mutants.filter((mutant) => mutant.file === target.file).length,
 			symbols: [...symbols],

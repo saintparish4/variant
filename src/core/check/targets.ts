@@ -7,12 +7,12 @@
 import type { FileHunks, LineRange } from "./hunks.js";
 
 export type ExclusionReason =
-	| "untracked"
 	| "test"
 	| "declaration"
 	| "not-typescript"
 	| "outside"
-	| "deleted-lines-only";
+	| "deleted-lines-only"
+	| "formatting-only";
 
 export interface Exclusion {
 	file: string;
@@ -22,15 +22,19 @@ export interface Exclusion {
 export interface CheckTarget {
 	file: string;
 	ranges: LineRange[];
+	/** A new file git does not track yet, mutated as a whole. */
+	untracked: boolean;
 }
 
 export interface TargetInput {
 	/** Changed tracked files, relative to cwd (`../…` when outside it). */
 	changed: readonly string[];
-	/** Untracked files under cwd. */
+	/** New files under cwd that git neither tracks nor ignores. */
 	untracked: readonly string[];
-	/** Hunks of each changed TypeScript source file that was diffed. */
+	/** Hunks of each file that was diffed; for a new file, all of it. */
 	hunks: ReadonlyMap<string, FileHunks>;
+	/** Files whose change is only formatting or comments. */
+	formattingOnly: ReadonlySet<string>;
 	isTestFile: (file: string) => boolean;
 }
 
@@ -46,7 +50,7 @@ const DECLARATION = /\.d\.(?:ts|mts|cts)$/;
 /** Installed packages: untracked in a project without a .gitignore, never source. */
 const INSTALLED = /(^|\/)node_modules\//;
 
-/** Why a changed file is not mutated, before any diff is read. */
+/** Why a file is not mutated, before any diff is read. */
 export function exclusionBeforeDiff(
 	file: string,
 	isTestFile: (file: string) => boolean,
@@ -58,33 +62,41 @@ export function exclusionBeforeDiff(
 	return null;
 }
 
+/** New files worth reading: TypeScript someone wrote, not installed packages. */
+export function isNewSource(file: string): boolean {
+	return (
+		TYPESCRIPT.test(file) && !DECLARATION.test(file) && !INSTALLED.test(file)
+	);
+}
+
 export function selectTargets(input: TargetInput): Targets {
 	const targets: CheckTarget[] = [];
 	const excluded: Exclusion[] = [];
 	let deletedLines = 0;
 
-	for (const file of [...input.changed].sort()) {
+	const consider = (file: string, untracked: boolean): void => {
 		const reason = exclusionBeforeDiff(file, input.isTestFile);
 		if (reason !== null) {
 			excluded.push({ file, reason });
-			continue;
+			return;
 		}
 		const hunks = input.hunks.get(file);
 		if (hunks === undefined || hunks.added.length === 0) {
 			excluded.push({ file, reason: "deleted-lines-only" });
-			continue;
+			return;
+		}
+		if (input.formattingOnly.has(file)) {
+			excluded.push({ file, reason: "formatting-only" });
+			return;
 		}
 		deletedLines += hunks.deletedLines;
-		targets.push({ file, ranges: hunks.added });
-	}
+		targets.push({ file, ranges: hunks.added, untracked });
+	};
+
+	for (const file of [...input.changed].sort()) consider(file, false);
+	// Only TypeScript is worth listing: a new image or lockfile is no news.
 	for (const file of [...input.untracked].sort()) {
-		if (
-			TYPESCRIPT.test(file) &&
-			!DECLARATION.test(file) &&
-			!INSTALLED.test(file)
-		) {
-			excluded.push({ file, reason: "untracked" });
-		}
+		if (isNewSource(file)) consider(file, true);
 	}
 	return { targets, excluded, deletedLines };
 }

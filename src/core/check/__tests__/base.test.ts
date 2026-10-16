@@ -13,7 +13,7 @@ function deps(overrides: Partial<CheckBaseDeps> = {}): CheckBaseDeps {
 		resolveCommit: async (ref) => (ref === "HEAD" ? HEAD : `sha-of-${ref}`),
 		mergeBase: async () => FORK,
 		defaultBranch: async () => "origin/main",
-		hasTrackedChanges: async () => false,
+		hasLocalChanges: async () => false,
 		...overrides,
 	};
 }
@@ -22,7 +22,20 @@ describe("resolveCheckBase", () => {
 	it("compares uncommitted changes with HEAD, on a branch too", async () => {
 		const base = await resolveCheckBase(
 			undefined,
-			deps({ hasTrackedChanges: async () => true }),
+			deps({ hasLocalChanges: async () => true }),
+		);
+		expect(base.ref).toBe("HEAD");
+	});
+
+	// A new file not yet added is a change too: on the default branch it would
+	// otherwise read as nothing to compare.
+	it("compares a tree whose only change is a new file with HEAD", async () => {
+		const base = await resolveCheckBase(
+			undefined,
+			deps({
+				mergeBase: async () => "h".repeat(40),
+				hasLocalChanges: async () => true,
+			}),
 		);
 		expect(base.ref).toBe("HEAD");
 	});
@@ -47,7 +60,7 @@ describe("resolveCheckBase", () => {
 	it("takes --base over uncommitted changes", async () => {
 		const base = await resolveCheckBase(
 			"origin/release",
-			deps({ hasTrackedChanges: async () => true }),
+			deps({ hasLocalChanges: async () => true }),
 		);
 		expect(base.ref).toBe("origin/release");
 	});
@@ -63,7 +76,7 @@ describe("resolveCheckBase", () => {
 					GITHUB_EVENT_NAME: "pull_request",
 					GITHUB_BASE_REF: "main",
 				},
-				hasTrackedChanges: async () => true,
+				hasLocalChanges: async () => true,
 			}),
 		);
 		expect(base.ref).toBe(FORK);

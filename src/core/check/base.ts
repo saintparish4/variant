@@ -19,8 +19,8 @@ export interface CheckBase {
 }
 
 export interface CheckBaseDeps extends ChangeBaseDeps {
-	/** Whether a tracked file differs from HEAD; null when git cannot say. */
-	hasTrackedChanges: () => Promise<boolean | null>;
+	/** Whether anything differs from HEAD, new files included; null when git cannot say. */
+	hasLocalChanges: () => Promise<boolean | null>;
 }
 
 /** Sources that name the base outright, whatever the tree looks like. */
@@ -34,8 +34,8 @@ export async function resolveCheckBase(
 	if (NAMED.has(detected.source)) {
 		return { ref: detected.ref, label: detected.label };
 	}
-	if ((await deps.hasTrackedChanges()) === true) {
-		return { ref: "HEAD", label: "HEAD: your staged and unstaged changes" };
+	if ((await deps.hasLocalChanges()) === true) {
+		return { ref: "HEAD", label: "HEAD: your uncommitted changes" };
 	}
 	if (detected.source === "default-branch") {
 		return { ref: detected.ref, label: detected.label };

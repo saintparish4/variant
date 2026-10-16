@@ -323,19 +323,11 @@ export async function defaultBranchRef(cwd: string): Promise<string | null> {
 }
 
 /**
- * Whether a tracked file under `cwd` differs from HEAD, staged or not. Null
- * outside a repository. Untracked files do not count: they are not part of
- * what `git diff HEAD` compares.
+ * Whether anything under `cwd` differs from HEAD: a tracked file, staged or
+ * not, or a new file git does not ignore. Null outside a repository.
  */
-export async function hasTrackedChanges(cwd: string): Promise<boolean | null> {
-	const stdout = await git(cwd, [
-		"status",
-		"--porcelain",
-		"-z",
-		"--untracked-files=no",
-		"--",
-		".",
-	]);
+export async function hasLocalChanges(cwd: string): Promise<boolean | null> {
+	const stdout = await git(cwd, ["status", "--porcelain", "-z", "--", "."]);
 	return stdout === null ? null : stdout.length > 0;
 }
 
