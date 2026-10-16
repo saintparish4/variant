@@ -85,15 +85,18 @@ async function readText(file: string): Promise<string | null> {
 }
 
 /**
- * Declared workspaces only. Package discovery elsewhere guesses `packages/*`
- * when nothing is declared, which would make a single package with such a
- * folder look like a root.
+ * Whether these files declare workspace packages. Declared only: package
+ * discovery elsewhere guesses `packages/*` when nothing is declared, which
+ * would make a single package with such a folder look like a root. And a
+ * `pnpm-workspace.yaml` alone is not one: pnpm 10 keeps its settings there.
  */
-async function declaresWorkspaces(cwd: string): Promise<boolean> {
-	if ((await readText(path.join(cwd, "pnpm-workspace.yaml"))) !== null) {
+export function declaresWorkspaces(
+	pnpmWorkspace: string | null,
+	manifest: string | null,
+): boolean {
+	if (pnpmWorkspace !== null && /^packages\s*:/m.test(pnpmWorkspace)) {
 		return true;
 	}
-	const manifest = await readText(path.join(cwd, "package.json"));
 	if (manifest === null) return false;
 	try {
 		const parsed = JSON.parse(manifest) as { workspaces?: unknown };
@@ -101,6 +104,14 @@ async function declaresWorkspaces(cwd: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+async function isWorkspaceRoot(cwd: string): Promise<boolean> {
+	const [pnpmWorkspace, manifest] = await Promise.all([
+		readText(path.join(cwd, "pnpm-workspace.yaml")),
+		readText(path.join(cwd, "package.json")),
+	]);
+	return declaresWorkspaces(pnpmWorkspace, manifest);
 }
 
 export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
@@ -117,7 +128,7 @@ export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
 		listUntrackedFiles: () => listUntrackedFiles(cwd),
 		readDiff: (ref, file) => readZeroContextDiff(cwd, ref, file),
 		readFile: (file) => readText(path.join(cwd, file)),
-		isWorkspaceRoot: () => declaresWorkspaces(cwd),
+		isWorkspaceRoot: () => isWorkspaceRoot(cwd),
 		symbols: createSymbolReader(),
 	};
 }

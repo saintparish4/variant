@@ -11,7 +11,7 @@ import type {
 	PlannedMutant,
 } from "../backend.js";
 import type { CheckDeps } from "../run.js";
-import { runCheck } from "../run.js";
+import { declaresWorkspaces, runCheck } from "../run.js";
 
 const SOURCE =
 	"export function q(total: number) {\n\treturn total >= 100;\n}\n";
@@ -258,5 +258,28 @@ describe("runCheck", () => {
 			"src/q.ts changed while variant check ran; the report quotes it as it was when the run started.",
 		]);
 		expect(result.mutants[0]?.original).toBe("total >= 100");
+	});
+});
+
+describe("declaresWorkspaces", () => {
+	it("reads a pnpm-workspace.yaml that lists packages as a workspace root", () => {
+		expect(declaresWorkspaces("packages:\n  - packages/*\n", null)).toBe(true);
+	});
+
+	// pnpm 10 keeps its settings in that file, so one with no `packages:` is
+	// an ordinary single package.
+	it("does not read a pnpm-workspace.yaml holding only settings as a workspace", () => {
+		expect(
+			declaresWorkspaces('overrides:\n  "vitest>picomatch": "^4.0.4"\n', null),
+		).toBe(false);
+	});
+
+	it("reads package.json workspaces as a workspace root", () => {
+		expect(declaresWorkspaces(null, '{"workspaces":["web"]}')).toBe(true);
+	});
+
+	it("reads a plain package as no workspace", () => {
+		expect(declaresWorkspaces(null, '{"name":"app"}')).toBe(false);
+		expect(declaresWorkspaces(null, "not json")).toBe(false);
 	});
 });
