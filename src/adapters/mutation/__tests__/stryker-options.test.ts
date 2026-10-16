@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { HostRequest } from "../protocol.js";
 import { EXCLUDED_MUTATORS } from "../protocol.js";
@@ -16,6 +17,7 @@ function request(overrides: Partial<HostRequest> = {}): HostRequest {
 }
 
 const context = {
+	cwd: path.resolve("/repo"),
 	runnerPlugin: "/variant/vitest-runner",
 	rewriteTsconfig: true,
 };
@@ -74,5 +76,53 @@ describe("the options Stryker runs with", () => {
 			strykerOptions(request(), { ...context, rewriteTsconfig: false })
 				.tsconfigFile,
 		).toBe(".variant/check-tmp/run.no-tsconfig.json");
+	});
+});
+
+describe("the options Stryker runs Jest with", () => {
+	const jest = (runner: HostRequest["runner"]) =>
+		strykerOptions(request({ runner }), context);
+
+	it("runs Jest's whole configured suite in the baseline, through variant's runner", () => {
+		const options = jest({ kind: "jest" });
+
+		expect(options.testRunner).toBe("variant-jest");
+		expect(options["jest"]).toMatchObject({
+			projectType: "custom",
+			enableFindRelatedTests: false,
+		});
+	});
+
+	it("keeps Jest's cache and watcher inside the run", () => {
+		expect(jest({ kind: "jest" })["jest"]).toMatchObject({
+			config: {
+				watchman: false,
+				cacheDirectory: path.join(
+					path.resolve("/repo"),
+					".variant/check-tmp/run",
+					"jest-cache",
+				),
+			},
+		});
+	});
+
+	it("passes on the Jest config and the Node flags it was given", () => {
+		const options = jest({
+			kind: "jest",
+			configFile: "jest.unit.config.js",
+			nodeArgs: ["--experimental-vm-modules"],
+		});
+
+		expect(options["jest"]).toMatchObject({
+			configFile: "jest.unit.config.js",
+		});
+		expect(options.testRunnerNodeArgs).toEqual(["--experimental-vm-modules"]);
+	});
+
+	it("gives Vitest none of Jest's options", () => {
+		const options = strykerOptions(request(), context);
+
+		expect(options["jest"]).toBeUndefined();
+		expect(options.testRunnerNodeArgs).toBeUndefined();
 	});
 });

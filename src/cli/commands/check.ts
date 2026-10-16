@@ -7,6 +7,7 @@ import {
 	DEFAULT_MAX_MUTANTS,
 	runCheck,
 } from "../../core/check/run.js";
+import { requestedRunner } from "../../core/check/runner.js";
 import { CliUsageError } from "../../core/errors.js";
 import { renderCheck, renderCheckJson } from "../render/check.js";
 import { errorLines } from "../render/writer.js";
@@ -16,6 +17,8 @@ export interface CheckActionOptions {
 	base?: string;
 	maxMutants?: string;
 	budget?: string;
+	runner?: string;
+	jestConfig?: string;
 	vitestConfig?: string;
 	failOnSurvivors?: boolean;
 	json?: boolean;
@@ -58,6 +61,11 @@ export async function registerCheckAction(
 ): Promise<void> {
 	const maxMutants = parseMaxMutants(opts.maxMutants);
 	const budgetMs = parseBudget(opts.budget);
+	const runner = requestedRunner({
+		...(opts.runner !== undefined && { runner: opts.runner }),
+		...(opts.jestConfig !== undefined && { jestConfig: opts.jestConfig }),
+		...(opts.vitestConfig !== undefined && { vitestConfig: opts.vitestConfig }),
+	});
 
 	// The first Ctrl-C stops the run and still reports what finished; a
 	// second one leaves at once.
@@ -78,9 +86,7 @@ export async function registerCheckAction(
 				budgetMs,
 				signal: controller.signal,
 				...(opts.base !== undefined && { base: opts.base }),
-				...(opts.vitestConfig !== undefined && {
-					runner: { kind: "vitest", configFile: opts.vitestConfig },
-				}),
+				...(runner !== undefined && { runner }),
 			},
 			checkDeps(process.cwd(), backend),
 		);

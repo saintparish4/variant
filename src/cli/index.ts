@@ -75,6 +75,11 @@ program
 		"--budget <time>",
 		"stop after this long, baseline included: 300, 90s or 5m (default: 5m)",
 	)
+	.option(
+		"--runner <name>",
+		"vitest or jest (default: the one the package's test script runs)",
+	)
+	.option("--jest-config <file>", "the Jest config to run the tests with")
 	.option("--vitest-config <file>", "the Vitest config to run the tests with")
 	.option(
 		"--fail-on-survivors",
@@ -86,6 +91,8 @@ program
 			base?: string;
 			maxMutants?: string;
 			budget?: string;
+			runner?: string;
+			jestConfig?: string;
 			vitestConfig?: string;
 			failOnSurvivors?: boolean;
 			json?: boolean;
@@ -95,6 +102,8 @@ program
 				...(opts.base !== undefined && { base: opts.base }),
 				...(opts.maxMutants !== undefined && { maxMutants: opts.maxMutants }),
 				...(opts.budget !== undefined && { budget: opts.budget }),
+				...(opts.runner !== undefined && { runner: opts.runner }),
+				...(opts.jestConfig !== undefined && { jestConfig: opts.jestConfig }),
 				...(opts.vitestConfig !== undefined && {
 					vitestConfig: opts.vitestConfig,
 				}),

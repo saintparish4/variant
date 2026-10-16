@@ -1,8 +1,8 @@
 /**
  * @module
- * Whether the package `variant check` runs in tests with Vitest, decided
- * before Stryker starts: on a Jest package Stryker spent seconds starting up
- * and then said only that no tests ran.
+ * Which runner `variant check` runs the package's tests with, decided before
+ * Stryker starts: on a package it cannot run, Stryker spent seconds starting
+ * up and then said only that no tests ran.
  */
 
 import path from "node:path";
@@ -21,6 +21,8 @@ export interface CheckRunner {
 	kind: RunnerKind;
 	/** The config to run them with, relative to cwd; absent for the runner's own lookup. */
 	configFile?: string;
+	/** Node flags for the processes the tests run in. */
+	nodeArgs?: string[];
 }
 
 /**
@@ -48,14 +50,18 @@ export function withConfigInside(
 			"variant check runs the tests in a copy of this package; a config outside it would run them against the real files.";
 		throw error;
 	}
-	return { kind: runner.kind, configFile: relative.split(path.sep).join("/") };
+	return { ...runner, configFile: relative.split(path.sep).join("/") };
 }
 
-export type RunnerVerdict =
-	| { kind: "vitest" }
-	/** `evidence` names what shows it, for the error. */
-	| { kind: "jest"; evidence: string }
-	| { kind: "none" };
+export interface RunnerVerdict {
+	kind: RunnerKind | "none";
+	/**
+	 * Node flags the package's `test` script runs the tests with that the
+	 * runner's workers need too: Jest's ESM mode is off without
+	 * `--experimental-vm-modules`, and every test file then fails to load.
+	 */
+	nodeArgs: string[];
+}
 
 interface Manifest {
 	dependencies?: Record<string, string>;
@@ -73,10 +79,13 @@ function parse(manifest: string | null): Manifest | null {
 	}
 }
 
+const NODE_FLAGS = ["--experimental-vm-modules"];
+
 /**
  * From the package's own `package.json` and the names of the files beside it.
- * Vitest wins wherever there is any sign of it: a package moving off Jest
- * keeps its Jest config for a while.
+ * Where both runners show, the `test` script says which one the package
+ * runs; where it names neither, Vitest: a package moving off Jest keeps its
+ * Jest config for a while.
  */
 export function detectRunner(
 	manifestText: string | null,
@@ -86,30 +95,67 @@ export function detectRunner(
 	const declares = (name: string): boolean =>
 		name in (manifest?.devDependencies ?? {}) ||
 		name in (manifest?.dependencies ?? {});
-	const scripts = Object.entries(manifest?.scripts ?? {});
-	const scriptRunning = (tool: RegExp): string | undefined =>
-		scripts.find(
-			([, command]) => typeof command === "string" && tool.test(command),
-		)?.[0];
+	const scripts = Object.values(manifest?.scripts ?? {}).filter(
+		(command): command is string => typeof command === "string",
+	);
+	const scriptRuns = (tool: RegExp): boolean =>
+		scripts.some((command) => tool.test(command));
+	const testScript =
+		typeof manifest?.scripts?.["test"] === "string"
+			? manifest.scripts["test"]
+			: "";
+	const nodeArgs = NODE_FLAGS.filter((flag) => testScript.includes(flag));
 
-	if (
+	const vitest =
 		declares("vitest") ||
-		scriptRunning(/\bvitest\b/) !== undefined ||
-		fileNames.some((name) => /^vitest\.(config|workspace)\./.test(name))
-	) {
-		return { kind: "vitest" };
-	}
+		scriptRuns(/\bvitest\b/) ||
+		fileNames.some((name) => /^vitest\.(config|workspace)\./.test(name));
+	const jest =
+		fileNames.some((name) => /^jest\.config\./.test(name)) ||
+		scriptRuns(/\bjest\b/) ||
+		manifest?.jest !== undefined ||
+		declares("jest");
 
-	const jestConfig = fileNames.find((name) => /^jest\.config\./.test(name));
-	if (jestConfig !== undefined) return { kind: "jest", evidence: jestConfig };
-	const jestScript = scriptRunning(/\bjest\b/);
-	if (jestScript !== undefined) {
-		return { kind: "jest", evidence: `the \`${jestScript}\` script` };
+	if (vitest && jest) {
+		const followsJest =
+			/\bjest\b/.test(testScript) && !/\bvitest\b/.test(testScript);
+		return { kind: followsJest ? "jest" : "vitest", nodeArgs };
 	}
-	if (manifest?.jest !== undefined) {
-		return { kind: "jest", evidence: "the `jest` key in package.json" };
+	if (vitest) return { kind: "vitest", nodeArgs };
+	if (jest) return { kind: "jest", nodeArgs };
+	return { kind: "none", nodeArgs };
+}
+
+export interface RunnerFlags {
+	runner?: string;
+	jestConfig?: string;
+	vitestConfig?: string;
+}
+
+/** The runner the command line names, if it names one. */
+export function requestedRunner(flags: RunnerFlags): CheckRunner | undefined {
+	const { runner, jestConfig, vitestConfig } = flags;
+	if (runner !== undefined && runner !== "vitest" && runner !== "jest") {
+		throw new CliUsageError(`--runner takes vitest or jest, not "${runner}"`);
 	}
-	if (declares("jest"))
-		return { kind: "jest", evidence: "a `jest` dependency" };
-	return { kind: "none" };
+	if (jestConfig !== undefined && vitestConfig !== undefined) {
+		throw new CliUsageError(
+			"--jest-config and --vitest-config name different runners; pass one of them",
+		);
+	}
+	const implied: RunnerKind | undefined =
+		jestConfig !== undefined
+			? "jest"
+			: vitestConfig !== undefined
+				? "vitest"
+				: undefined;
+	if (runner !== undefined && implied !== undefined && runner !== implied) {
+		throw new CliUsageError(
+			`--runner ${runner} and --${implied}-config name different runners`,
+		);
+	}
+	const kind = runner ?? implied;
+	if (kind === undefined) return undefined;
+	const configFile = jestConfig ?? vitestConfig;
+	return { kind, ...(configFile !== undefined && { configFile }) };
 }

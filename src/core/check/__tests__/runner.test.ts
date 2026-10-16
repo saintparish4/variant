@@ -1,59 +1,106 @@
 import { describe, expect, it } from "vitest";
-import { detectRunner } from "../runner.js";
+import { CliUsageError } from "../../errors.js";
+import { detectRunner, requestedRunner } from "../runner.js";
 
 const manifest = (fields: Record<string, unknown>): string =>
 	JSON.stringify({ name: "app", ...fields });
 
+const kind = (text: string | null, files: string[] = []) =>
+	detectRunner(text, files).kind;
+
 describe("detectRunner", () => {
 	it("finds Vitest from a dependency, a script or a config", () => {
-		expect(
-			detectRunner(manifest({ devDependencies: { vitest: "4.1.11" } }), []),
-		).toEqual({
-			kind: "vitest",
-		});
-		expect(
-			detectRunner(manifest({ scripts: { test: "vitest run" } }), []),
-		).toEqual({
-			kind: "vitest",
-		});
-		expect(detectRunner(manifest({}), ["vitest.config.mts"])).toEqual({
-			kind: "vitest",
-		});
+		expect(kind(manifest({ devDependencies: { vitest: "4.1.11" } }))).toBe(
+			"vitest",
+		);
+		expect(kind(manifest({ scripts: { test: "vitest run" } }))).toBe("vitest");
+		expect(kind(manifest({}), ["vitest.config.mts"])).toBe("vitest");
 	});
 
-	it("names what shows a package tests with Jest", () => {
-		expect(
-			detectRunner(manifest({ devDependencies: { jest: "30.5.2" } }), [
-				"jest.config.ts",
-			]),
-		).toEqual({ kind: "jest", evidence: "jest.config.ts" });
-		expect(
-			detectRunner(manifest({ scripts: { test: "jest --ci" } }), []),
-		).toEqual({
-			kind: "jest",
-			evidence: "the `test` script",
-		});
-		expect(detectRunner(manifest({ jest: { preset: "ts-jest" } }), [])).toEqual(
-			{
-				kind: "jest",
-				evidence: "the `jest` key in package.json",
-			},
+	it("finds Jest from a config, a script, the jest key or a dependency", () => {
+		expect(kind(manifest({}), ["jest.config.ts"])).toBe("jest");
+		expect(kind(manifest({ scripts: { test: "jest --ci" } }))).toBe("jest");
+		expect(kind(manifest({ jest: { preset: "ts-jest" } }))).toBe("jest");
+		expect(kind(manifest({ devDependencies: { jest: "30.5.2" } }))).toBe(
+			"jest",
 		);
 	});
 
-	// A package moving to Vitest still has its Jest config for a while.
-	it("takes Vitest where both are present", () => {
+	it("follows the test script where both runners show", () => {
 		expect(
-			detectRunner(manifest({ devDependencies: { vitest: "4.1.11" } }), [
-				"jest.config.js",
-			]),
-		).toEqual({ kind: "vitest" });
+			kind(
+				manifest({
+					scripts: { test: "jest", "test:new": "vitest run" },
+					devDependencies: { jest: "30.5.2", vitest: "4.1.11" },
+				}),
+			),
+		).toBe("jest");
+		expect(
+			kind(
+				manifest({
+					scripts: { test: "vitest run" },
+					devDependencies: { jest: "30.5.2", vitest: "4.1.11" },
+				}),
+				["jest.config.js"],
+			),
+		).toBe("vitest");
+	});
+
+	// A package moving to Vitest still has its Jest config for a while.
+	it("takes Vitest where both show and the test script names neither", () => {
+		expect(
+			kind(
+				manifest({
+					scripts: { test: "turbo run test" },
+					devDependencies: { vitest: "4.1.11" },
+				}),
+				["jest.config.js"],
+			),
+		).toBe("vitest");
 	});
 
 	it("finds neither in a package that runs no tests", () => {
-		expect(detectRunner(manifest({}), ["tsconfig.json"])).toEqual({
-			kind: "none",
+		expect(kind(manifest({}), ["tsconfig.json"])).toBe("none");
+		expect(kind(null)).toBe("none");
+	});
+
+	it("keeps the ESM flag a Jest test script runs with", () => {
+		expect(
+			detectRunner(
+				manifest({
+					scripts: { test: "NODE_OPTIONS=--experimental-vm-modules jest" },
+				}),
+				[],
+			),
+		).toEqual({ kind: "jest", nodeArgs: ["--experimental-vm-modules"] });
+		expect(
+			detectRunner(manifest({ scripts: { test: "jest" } }), []).nodeArgs,
+		).toEqual([]);
+	});
+});
+
+describe("requestedRunner", () => {
+	it("names no runner when no flag does", () => {
+		expect(requestedRunner({})).toBeUndefined();
+	});
+
+	it("takes a config flag as naming its runner", () => {
+		expect(requestedRunner({ jestConfig: "jest.unit.config.js" })).toEqual({
+			kind: "jest",
+			configFile: "jest.unit.config.js",
 		});
-		expect(detectRunner(null, [])).toEqual({ kind: "none" });
+		expect(requestedRunner({ vitestConfig: "vitest.unit.ts" })).toEqual({
+			kind: "vitest",
+			configFile: "vitest.unit.ts",
+		});
+		expect(requestedRunner({ runner: "jest" })).toEqual({ kind: "jest" });
+	});
+
+	it.each([
+		[{ runner: "mocha" }],
+		[{ jestConfig: "a.js", vitestConfig: "b.ts" }],
+		[{ runner: "vitest", jestConfig: "a.js" }],
+	])("refuses flags that disagree: %o", (flags) => {
+		expect(() => requestedRunner(flags)).toThrow(CliUsageError);
 	});
 });

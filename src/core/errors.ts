@@ -208,19 +208,15 @@ export class CheckWorkspaceRootError extends VariantError {
 	}
 }
 
-/** The package does not test with Vitest, the one runner `check` supports. */
+/** No runner `check` can run the package's tests with. */
 export class CheckRunnerError extends VariantError {
-	constructor(found: { kind: "jest"; evidence: string } | { kind: "none" }) {
+	constructor() {
 		super(
 			"CHECK_RUNNER",
-			found.kind === "jest"
-				? `This package tests with Jest (${found.evidence}); \`variant check\` runs Vitest only`
-				: "No Vitest here: no `vitest` dependency, script or config in this package",
+			"No test runner here: no Vitest or Jest dependency, script or config in this package",
 		);
 		this.hint =
-			found.kind === "jest"
-				? "Jest support is not built yet. The pull request report (`variant pr report`) and `variant impact` do work with Jest; docs/check.md says what `check` supports."
-				: "Run it from the package that runs Vitest, or pass --vitest-config <file>.";
+			"Run it from the package whose tests cover the change, or name the runner with --runner vitest or --runner jest.";
 	}
 }
 

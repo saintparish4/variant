@@ -4,6 +4,7 @@
  * alone so that what each runner is given can be tested without running it.
  */
 
+import path from "node:path";
 import type {
 	LogLevel,
 	PartialStrykerOptions,
@@ -19,6 +20,8 @@ export const RUNNER_PACKAGES: Readonly<Record<RunnerKind, string>> = {
 };
 
 export interface OptionsContext {
+	/** The package directory, where the host runs. */
+	cwd: string;
 	/** Where this runner's package (`RUNNER_PACKAGES`) resolved. */
 	runnerPlugin: string;
 	/** False where Stryker cannot rewrite the tsconfig (TypeScript 7). */
@@ -34,8 +37,40 @@ function logLevel(value: "off" | "error"): LogLevel {
 	return value as unknown as LogLevel;
 }
 
-function runnerOptions(request: HostRequest): PartialStrykerOptions {
-	const { configFile } = request.runner;
+function runnerOptions(
+	request: HostRequest,
+	context: OptionsContext,
+): PartialStrykerOptions {
+	const { configFile, nodeArgs } = request.runner;
+	if (request.runner.kind === "jest") {
+		return {
+			// Stryker's Jest runner with the environment resolved as Jest
+			// resolves it: see stryker-jest.ts.
+			testRunner: "variant-jest",
+			...(nodeArgs !== undefined && { testRunnerNodeArgs: nodeArgs }),
+			jest: {
+				projectType: "custom",
+				...(configFile !== undefined && { configFile }),
+				// As `vitest.related`: Jest's guess at related tests would
+				// narrow the baseline too, not only each mutant's run.
+				enableFindRelatedTests: false,
+				// Merged over the project's config. Stryker itself already turns
+				// off coverage, reporters and a results processor.
+				config: {
+					// Watchman would watch from the repository root, outside the
+					// copy the tests run in.
+					watchman: false,
+					// Jest caches transformed files across runs; the mutated ones
+					// stay with the run and go with it.
+					cacheDirectory: path.join(
+						context.cwd,
+						request.tempDirName,
+						"jest-cache",
+					),
+				},
+			},
+		};
+	}
 	return {
 		// Stryker's Vitest runner, made to count a test file that fails to
 		// load: see stryker-vitest.ts.
@@ -61,7 +96,7 @@ export function strykerOptions(
 			tsconfigFile: `${request.tempDirName}.no-tsconfig.json`,
 		}),
 		configFile: request.configFile,
-		...runnerOptions(request),
+		...runnerOptions(request, context),
 		mutate: request.mutate,
 		mutator: { excludedMutations: [...EXCLUDED_MUTATORS] },
 		// Setting `plugins` replaces Stryker's default, which looks only

@@ -83,7 +83,7 @@ function deps(
 		readFileAtBase: async () => SOURCE.replace("total", "sum"),
 		isFormattingOnly: async () => false,
 		isWorkspaceRoot: async () => false,
-		detectRunner: async () => ({ kind: "vitest" }),
+		detectRunner: async () => ({ kind: "vitest", nodeArgs: [] }),
 		...overrides,
 	};
 }
@@ -312,30 +312,49 @@ describe("runCheck", () => {
 		).rejects.toBeInstanceOf(CheckWorkspaceRootError);
 	});
 
-	// Stryker took 13 to 17 seconds on a Jest package before saying only that
-	// no tests ran.
-	it("says a Jest package is not supported before starting the engine", async () => {
+	// Stryker took 13 to 17 seconds on a package with no runner before
+	// saying only that no tests ran.
+	it("says there is no runner here before starting the engine", async () => {
 		const { backend, state } = fakeBackend([]);
 
 		const error = await runCheck(
 			"/repo",
 			options,
 			deps(backend, {
-				detectRunner: async () => ({
-					kind: "jest",
-					evidence: "jest.config.ts",
-				}),
+				detectRunner: async () => ({ kind: "none", nodeArgs: [] }),
 			}),
 		).catch((caught: unknown) => caught);
 
 		expect(error).toBeInstanceOf(CheckRunnerError);
-		expect((error as CheckRunnerError).message).toMatch(
-			/Jest \(jest\.config\.ts\)/,
-		);
 		expect(state.request).toBeUndefined();
 	});
 
-	it("runs the runner it was given without looking for one", async () => {
+	it("runs a Jest package's tests with Jest, with the flags its test script uses", async () => {
+		const { backend, state } = fakeBackend([
+			baseline,
+			{ kind: "plan", mutants: [], coverageMeasured: true },
+			{ kind: "finished" },
+		]);
+
+		const result = await runCheck(
+			"/repo",
+			options,
+			deps(backend, {
+				detectRunner: async () => ({
+					kind: "jest",
+					nodeArgs: ["--experimental-vm-modules"],
+				}),
+			}),
+		);
+
+		expect(state.request?.runner).toEqual({
+			kind: "jest",
+			nodeArgs: ["--experimental-vm-modules"],
+		});
+		expect(result.runner.kind).toBe("jest");
+	});
+
+	it("runs the runner it was given over the one it finds", async () => {
 		const { backend, state } = fakeBackend([
 			baseline,
 			{ kind: "plan", mutants: [], coverageMeasured: true },
@@ -348,7 +367,9 @@ describe("runCheck", () => {
 				...options,
 				runner: { kind: "vitest", configFile: "vitest.unit.config.ts" },
 			},
-			deps(backend, { detectRunner: async () => ({ kind: "none" }) }),
+			deps(backend, {
+				detectRunner: async () => ({ kind: "none", nodeArgs: [] }),
+			}),
 		);
 
 		expect(state.request?.runner).toEqual({

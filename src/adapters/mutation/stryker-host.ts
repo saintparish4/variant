@@ -53,7 +53,11 @@ async function run(request: HostRequest): Promise<void> {
 	}
 	try {
 		await new Stryker(
-			strykerOptions(request, { runnerPlugin, rewriteTsconfig }),
+			strykerOptions(request, {
+				cwd: process.cwd(),
+				runnerPlugin,
+				rewriteTsconfig,
+			}),
 		).runMutationTest();
 		send({ kind: "finished" });
 	} catch (error) {

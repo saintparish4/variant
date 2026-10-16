@@ -208,10 +208,26 @@ function nextOrStop<T>(
 	});
 }
 
-async function detectedRunner(deps: CheckDeps): Promise<CheckRunner> {
-	const verdict = await deps.detectRunner();
-	if (verdict.kind !== "vitest") throw new CheckRunnerError(verdict);
-	return { kind: verdict.kind };
+/**
+ * The runner given, else the one found. The `test` script's Node flags come
+ * along either way: they are how the package runs its tests.
+ */
+function chooseRunner(
+	cwd: string,
+	requested: CheckRunner | undefined,
+	verdict: RunnerVerdict,
+): CheckRunner {
+	const kind =
+		requested?.kind ?? (verdict.kind === "none" ? undefined : verdict.kind);
+	if (kind === undefined) throw new CheckRunnerError();
+	const nodeArgs = kind === "jest" ? verdict.nodeArgs : [];
+	return withConfigInside(cwd, {
+		kind,
+		...(requested?.configFile !== undefined && {
+			configFile: requested.configFile,
+		}),
+		...(nodeArgs.length > 0 && { nodeArgs }),
+	});
 }
 
 export async function runCheck(
@@ -223,10 +239,7 @@ export async function runCheck(
 	const base = await deps.resolveBase(options.base);
 	await deps.assertBase(base.ref);
 	if (await deps.isWorkspaceRoot()) throw new CheckWorkspaceRootError();
-	const runner =
-		options.runner === undefined
-			? await detectedRunner(deps)
-			: withConfigInside(cwd, options.runner);
+	const runner = chooseRunner(cwd, options.runner, await deps.detectRunner());
 
 	const [changed, untracked] = await Promise.all([
 		deps.listChangedFiles(base.ref),

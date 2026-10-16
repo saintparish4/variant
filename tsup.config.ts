@@ -13,6 +13,7 @@ export default defineConfig([
 			"stryker-host": "src/adapters/mutation/stryker-host.ts",
 			"stryker-reporter": "src/adapters/mutation/stryker-reporter.ts",
 			"stryker-vitest": "src/adapters/mutation/stryker-vitest.ts",
+			"stryker-jest": "src/adapters/mutation/stryker-jest.ts",
 		},
 		format: ["esm"],
 		dts: true,

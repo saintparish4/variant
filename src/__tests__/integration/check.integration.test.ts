@@ -1,7 +1,7 @@
 /**
  * Boundary: `variant check` meeting real git, a real StrykerJS and a real
- * Vitest, on a copy of `examples/check-demo`. These run the engine for real,
- * so each takes seconds, not milliseconds.
+ * Vitest or Jest, on a copy of `examples/check-demo` or its Jest twin. These
+ * run the engine for real, so each takes seconds, not milliseconds.
  */
 
 import { execFileSync } from "node:child_process";
@@ -30,7 +30,6 @@ import {
 } from "../helpers/cli-harness.js";
 
 const REPO = fileURLToPath(new URL("../../../", import.meta.url));
-const DEMO = path.join(REPO, "examples", "check-demo");
 const ADAPTER = path.join(REPO, "src", "adapters", "mutation");
 const TIMEOUT = 120_000;
 
@@ -41,11 +40,51 @@ const backend = createStrykerBackend({
 	plugins: {
 		reporter: path.join(ADAPTER, "stryker-reporter.ts"),
 		vitest: path.join(ADAPTER, "stryker-vitest.ts"),
+		jest: path.join(ADAPTER, "stryker-jest.ts"),
 	},
 	execArgv: ["--import", import.meta.resolve("tsx")],
-	// Stryker's workers load the plugins too, and do not inherit execArgv.
-	env: { NODE_OPTIONS: `--import ${import.meta.resolve("tsx")}` },
+	env: {
+		// Stryker's workers load the plugins too, and do not inherit execArgv.
+		NODE_OPTIONS: `--import ${import.meta.resolve("tsx")}`,
+		// pnpm's command shims point this at every package in its store, which
+		// a user running variant some other way does not have.
+		NODE_PATH: "",
+	},
 });
+
+interface Demo {
+	runner: "vitest" | "jest";
+	example: string;
+	/** Linked into the copy's `node_modules` from variant's own install. */
+	packages: string[];
+	/** Committed before the change. */
+	setup: string[];
+	/** What a test file starts with to use the runner's API. */
+	header: string;
+}
+
+const VITEST: Demo = {
+	runner: "vitest",
+	example: "check-demo",
+	packages: ["vitest"],
+	setup: ["package.json", "vitest.config.ts", ".gitignore"],
+	header: 'import { it } from "vitest";\n',
+};
+
+// Only Jest and the transform are linked, as pnpm would install them: the
+// test environment, among others, is Jest's dependency and not the project's.
+const JEST: Demo = {
+	runner: "jest",
+	example: "check-demo-jest",
+	packages: [
+		"jest",
+		"@babel/core",
+		"@babel/preset-typescript",
+		"@babel/plugin-transform-modules-commonjs",
+	],
+	setup: ["package.json", "babel.config.js", ".gitignore"],
+	header: "",
+};
 
 /** git in `dir`, with a fixed identity, returning what it printed. */
 function git(dir: string, ...args: string[]): string {
@@ -70,22 +109,25 @@ afterEach(() => {
 /**
  * The demo with its setup committed and the discount rule staged: the change
  * a developer is about to commit. `node_modules` is a real directory holding
- * a link to Vitest and a sentinel, so a cleanup that followed the link out of
- * the sandbox would show.
+ * links to the runner and a sentinel, so a cleanup that followed a link out
+ * of the sandbox would show.
  */
-function demoRepository(): string {
+function demoRepository(demo: Demo = VITEST): string {
 	const dir = createTempWorkspace("check");
-	cpSync(DEMO, dir, { recursive: true });
-	mkdirSync(path.join(dir, "node_modules"));
-	symlinkSync(
-		realpathSync(path.join(REPO, "node_modules", "vitest")),
-		path.join(dir, "node_modules", "vitest"),
-		process.platform === "win32" ? "junction" : "dir",
-	);
+	cpSync(path.join(REPO, "examples", demo.example), dir, { recursive: true });
+	for (const name of demo.packages) {
+		const link = path.join(dir, "node_modules", name);
+		mkdirSync(path.dirname(link), { recursive: true });
+		symlinkSync(
+			realpathSync(path.join(REPO, "node_modules", name)),
+			link,
+			process.platform === "win32" ? "junction" : "dir",
+		);
+	}
 	writeFileSync(path.join(dir, "node_modules", ".sentinel"), "keep\n");
 	writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n");
 	git(dir, "init", "-q", "-b", "main");
-	git(dir, "add", "package.json", "vitest.config.ts", ".gitignore");
+	git(dir, "add", ...demo.setup);
 	git(dir, "commit", "-qm", "setup");
 	git(dir, "add", "src");
 	return dir;
@@ -143,11 +185,14 @@ function gitState(dir: string) {
 	};
 }
 
-describe("variant check", () => {
+describe.each([
+	["Vitest", VITEST],
+	["Jest", JEST],
+])("variant check with %s", (_, demo) => {
 	it(
 		"reports the boundary mutation the tests did not notice",
 		async () => {
-			const dir = demoRepository();
+			const dir = demoRepository(demo);
 
 			const result = await check(dir);
 
@@ -178,7 +223,7 @@ describe("variant check", () => {
 	it(
 		"detects that mutation once a test checks the boundary",
 		async () => {
-			const dir = demoRepository();
+			const dir = demoRepository(demo);
 			addBoundaryTest(dir);
 
 			const result = await check(dir);
@@ -193,7 +238,7 @@ describe("variant check", () => {
 	it(
 		"interprets nothing when a test fails before any mutation",
 		async () => {
-			const dir = demoRepository();
+			const dir = demoRepository(demo);
 			const file = path.join(dir, "src", "discount.test.ts");
 			writeFileSync(
 				file,
@@ -215,6 +260,156 @@ describe("variant check", () => {
 		TIMEOUT,
 	);
 
+	it(
+		"stops at --max-mutants, says so, and picks the same mutants every time",
+		async () => {
+			const dir = demoRepository(demo);
+
+			const first = await check(dir, { maxMutants: 1 });
+			const second = await check(dir, { maxMutants: 1 });
+
+			expect(first.status).toBe("incomplete");
+			expect(first.stopReason).toBe("limit");
+			expect(first.counts.attempted).toBe(1);
+			const tried = (result: typeof first) =>
+				result.mutants
+					.filter((m) => m.outcome !== "not-run")
+					.map((m) => `${m.start.line}:${m.start.column} ${m.replacement}`);
+			expect(tried(second)).toEqual(tried(first));
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"reports a run the budget cut short as incomplete, never as clean",
+		async () => {
+			const dir = demoRepository(demo);
+
+			const result = await check(dir, { budgetMs: 1_000 });
+
+			expect(result.status).toBe("incomplete");
+			expect(result.stopReason).toBe("budget");
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"leaves staged, unstaged and untracked work exactly as it was",
+		async () => {
+			const dir = demoRepository(demo);
+			addBoundaryTest(dir); // unstaged, on top of the staged change
+			writeFileSync(
+				path.join(dir, "src", "draft.ts"),
+				"export const big = (n: number) => n > 10;\n",
+			);
+			const before = gitState(dir);
+
+			const result = await check(dir);
+
+			expect(gitState(dir)).toEqual(before);
+			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
+			// A new file git does not track yet is mutated, not ignored.
+			expect(result.files).toContainEqual(
+				expect.objectContaining({ file: "src/draft.ts", untracked: true }),
+			);
+		},
+		TIMEOUT,
+	);
+
+	// Windows CI could not remove a project after a normal run: a test worker
+	// or esbuild process outlived it, because the host exited by itself and
+	// cut the tree. Linux shows the same thing through /proc.
+	it.skipIf(process.platform !== "linux")(
+		"leaves no process running in the project after a normal run",
+		async () => {
+			const dir = demoRepository(demo);
+
+			await check(dir);
+
+			const real = realpathSync(dir);
+			const inside = readdirSync("/proc")
+				.filter((entry) => /^\d+$/.test(entry))
+				.filter((pid) => {
+					try {
+						return realpathSync(`/proc/${pid}/cwd`).startsWith(real);
+					} catch {
+						return false;
+					}
+				});
+			expect(inside).toEqual([]);
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"keeps the real node_modules intact when a run is killed part-way",
+		async () => {
+			const dir = demoRepository(demo);
+
+			const result = await check(dir, { budgetMs: 2_500 });
+
+			expect(result.status).toBe("incomplete");
+			expect(
+				readFileSync(path.join(dir, "node_modules", ".sentinel"), "utf8"),
+			).toBe("keep\n");
+			for (const name of demo.packages) {
+				expect(existsSync(path.join(dir, "node_modules", name))).toBe(true);
+			}
+			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
+		},
+		TIMEOUT,
+	);
+
+	// A pre-commit hook runs with these set, pointing at the real repository.
+	// A test that runs git inside the sandbox must not reach it.
+	it(
+		"keeps git run by the tests away from the real repository's index",
+		async () => {
+			const dir = demoRepository(demo);
+			writeFileSync(
+				path.join(dir, "src", "uses-git.test.ts"),
+				[
+					`import { execSync } from "node:child_process";\n${demo.header}`,
+					'it("stages whatever it can see", () => {',
+					"\ttry {",
+					'\t\texecSync("git add -A", { stdio: "ignore" });',
+					"\t} catch {}",
+					"});",
+					"",
+				].join("\n"),
+			);
+			git(dir, "add", "src/uses-git.test.ts");
+			const staged = git(dir, "diff", "--cached", "--name-only");
+			vi.stubEnv("GIT_DIR", path.join(dir, ".git"));
+			vi.stubEnv("GIT_INDEX_FILE", path.join(dir, ".git", "index"));
+
+			await check(dir);
+
+			vi.unstubAllEnvs();
+			expect(git(dir, "diff", "--cached", "--name-only")).toBe(staged);
+		},
+		TIMEOUT,
+	);
+
+	it(
+		"ignores a Stryker config in the project",
+		async () => {
+			const dir = demoRepository(demo);
+			writeFileSync(
+				path.join(dir, "stryker.config.json"),
+				JSON.stringify({ mutate: ["nothing/**"], reporters: ["html"] }),
+			);
+
+			const result = await check(dir);
+
+			expect(result.counts.undetected).toBe(1);
+			expect(existsSync(path.join(dir, "reports"))).toBe(false);
+		},
+		TIMEOUT,
+	);
+});
+
+describe("variant check with Vitest only", () => {
 	// pyra: a test file importing a module that did not exist yet produced no
 	// tests, and the baseline read as passing without it.
 	it(
@@ -262,154 +457,6 @@ describe("variant check", () => {
 			expect(new Set(result.mutants.map((m) => m.outcome))).toEqual(
 				new Set(["no-coverage"]),
 			);
-		},
-		TIMEOUT,
-	);
-
-	it(
-		"stops at --max-mutants, says so, and picks the same mutants every time",
-		async () => {
-			const dir = demoRepository();
-
-			const first = await check(dir, { maxMutants: 1 });
-			const second = await check(dir, { maxMutants: 1 });
-
-			expect(first.status).toBe("incomplete");
-			expect(first.stopReason).toBe("limit");
-			expect(first.counts.attempted).toBe(1);
-			const tried = (result: typeof first) =>
-				result.mutants
-					.filter((m) => m.outcome !== "not-run")
-					.map((m) => `${m.start.line}:${m.start.column} ${m.replacement}`);
-			expect(tried(second)).toEqual(tried(first));
-		},
-		TIMEOUT,
-	);
-
-	it(
-		"reports a run the budget cut short as incomplete, never as clean",
-		async () => {
-			const dir = demoRepository();
-
-			const result = await check(dir, { budgetMs: 1_000 });
-
-			expect(result.status).toBe("incomplete");
-			expect(result.stopReason).toBe("budget");
-		},
-		TIMEOUT,
-	);
-
-	it(
-		"leaves staged, unstaged and untracked work exactly as it was",
-		async () => {
-			const dir = demoRepository();
-			addBoundaryTest(dir); // unstaged, on top of the staged change
-			writeFileSync(
-				path.join(dir, "src", "draft.ts"),
-				"export const big = (n: number) => n > 10;\n",
-			);
-			const before = gitState(dir);
-
-			const result = await check(dir);
-
-			expect(gitState(dir)).toEqual(before);
-			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
-			// A new file git does not track yet is mutated, not ignored.
-			expect(result.files).toContainEqual(
-				expect.objectContaining({ file: "src/draft.ts", untracked: true }),
-			);
-		},
-		TIMEOUT,
-	);
-
-	// Windows CI could not remove a project after a normal run: a test worker
-	// or esbuild process outlived it, because the host exited by itself and
-	// cut the tree. Linux shows the same thing through /proc.
-	it.skipIf(process.platform !== "linux")(
-		"leaves no process running in the project after a normal run",
-		async () => {
-			const dir = demoRepository();
-
-			await check(dir);
-
-			const real = realpathSync(dir);
-			const inside = readdirSync("/proc")
-				.filter((entry) => /^\d+$/.test(entry))
-				.filter((pid) => {
-					try {
-						return realpathSync(`/proc/${pid}/cwd`).startsWith(real);
-					} catch {
-						return false;
-					}
-				});
-			expect(inside).toEqual([]);
-		},
-		TIMEOUT,
-	);
-
-	it(
-		"keeps the real node_modules intact when a run is killed part-way",
-		async () => {
-			const dir = demoRepository();
-
-			const result = await check(dir, { budgetMs: 2_500 });
-
-			expect(result.status).toBe("incomplete");
-			expect(
-				readFileSync(path.join(dir, "node_modules", ".sentinel"), "utf8"),
-			).toBe("keep\n");
-			expect(existsSync(path.join(dir, "node_modules", "vitest"))).toBe(true);
-			expect(existsSync(path.join(dir, ".variant"))).toBe(false);
-		},
-		TIMEOUT,
-	);
-
-	// A pre-commit hook runs with these set, pointing at the real repository.
-	// A test that runs git inside the sandbox must not reach it.
-	it(
-		"keeps git run by the tests away from the real repository's index",
-		async () => {
-			const dir = demoRepository();
-			writeFileSync(
-				path.join(dir, "src", "uses-git.test.ts"),
-				[
-					'import { execSync } from "node:child_process";',
-					'import { it } from "vitest";',
-					"",
-					'it("stages whatever it can see", () => {',
-					"\ttry {",
-					'\t\texecSync("git add -A", { stdio: "ignore" });',
-					"\t} catch {}",
-					"});",
-					"",
-				].join("\n"),
-			);
-			git(dir, "add", "src/uses-git.test.ts");
-			const staged = git(dir, "diff", "--cached", "--name-only");
-			vi.stubEnv("GIT_DIR", path.join(dir, ".git"));
-			vi.stubEnv("GIT_INDEX_FILE", path.join(dir, ".git", "index"));
-
-			await check(dir);
-
-			vi.unstubAllEnvs();
-			expect(git(dir, "diff", "--cached", "--name-only")).toBe(staged);
-		},
-		TIMEOUT,
-	);
-
-	it(
-		"ignores a Stryker config in the project",
-		async () => {
-			const dir = demoRepository();
-			writeFileSync(
-				path.join(dir, "stryker.config.json"),
-				JSON.stringify({ mutate: ["nothing/**"], reporters: ["html"] }),
-			);
-
-			const result = await check(dir);
-
-			expect(result.counts.undetected).toBe(1);
-			expect(existsSync(path.join(dir, "reports"))).toBe(false);
 		},
 		TIMEOUT,
 	);
