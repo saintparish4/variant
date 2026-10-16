@@ -38,6 +38,14 @@ describe("parseZeroContextDiff", () => {
 		expect(parseZeroContextDiff(diff)).toEqual({ added: [], deletedLines: 2 });
 	});
 
+	// git omits a count of 1: `-5` is one old line. Found by `variant check`
+	// on this module: nothing here covered the omitted count.
+	it("counts a one-line deletion, whose old count git leaves out", () => {
+		const diff = [...header, "@@ -5 +4,0 @@", "-gone"].join("\n");
+
+		expect(parseZeroContextDiff(diff)).toEqual({ added: [], deletedLines: 1 });
+	});
+
 	it("treats a new file as one range covering it", () => {
 		const diff = [
 			"diff --git a/new.ts b/new.ts",
