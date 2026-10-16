@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	ResolvedVariantConfig,
 	TaskProvenance,
@@ -15,9 +15,20 @@ import type { TaskExecutor } from "../executor.js";
 import type { TaskRunResult } from "../runner.js";
 import { runTasksWithDeps } from "../runner.js";
 
+const tempDirs: string[] = [];
+
 function makeTempDir(): string {
-	return mkdtempSync(path.join(tmpdir(), "variant-runner-test-"));
+	const dir = mkdtempSync(path.join(tmpdir(), "variant-runner-test-"));
+	tempDirs.push(dir);
+	return dir;
 }
+
+// Two per test, never removed: /tmp held 714 of them after a day of runs.
+afterEach(() => {
+	for (const dir of tempDirs.splice(0)) {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 function makeConfig(
 	strategy: "adaptive" | "strict" = "adaptive",
