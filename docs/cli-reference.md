@@ -80,6 +80,7 @@ Errors go to stderr as a code, a message and, usually, a hint:
 | `NO_CHANGE_BASE` | `check` found nothing that says what the change is: a clean tree on the default branch. Pass `--base` |
 | `BASELINE_FAILED` | `check`: a test fails with no mutation in place, so no result could be trusted. The failing tests are listed |
 | `CHECK_WORKSPACE_ROOT` | `check` was run from a workspace root; run it from the package directory |
+| `CHECK_RUNNER` | `check` was run in a package that tests with Jest, or shows no sign of Vitest. Checked before Stryker starts |
 | `CHECK_BACKEND` | `check`: Stryker or Vitest could not run, or stopped on an error of its own. Its last output is shown |
 | `CLI_USAGE` | An option value is invalid, such as a non-numeric `--concurrency` |
 

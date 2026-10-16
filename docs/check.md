@@ -179,6 +179,7 @@ are in the log. Add `--fail-on-survivors` to fail the job on them, and
 | `NO_CHANGE_BASE` | Nothing says what the change is. Pass `--base` |
 | `BASELINE_FAILED` | Tests fail with no mutation; the failing tests are listed |
 | `CHECK_WORKSPACE_ROOT` | Run from a workspace root; run it in the package |
+| `CHECK_RUNNER` | The package tests with Jest, or with nothing variant can find; it names what it saw |
 | `CHECK_BACKEND` | Stryker or Vitest could not run; its last output is shown |
 | `GIT_REF_ERROR` | The base is not a commit in this clone (in CI: `fetch-depth: 0`) |
 

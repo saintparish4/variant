@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	BaselineFailedError,
 	CheckBackendError,
+	CheckRunnerError,
 	CheckWorkspaceRootError,
 } from "../../errors.js";
 import type {
@@ -78,6 +79,7 @@ function deps(
 		readDiff: async () => DIFF,
 		readFile: async () => SOURCE,
 		isWorkspaceRoot: async () => false,
+		detectRunner: async () => ({ kind: "vitest" }),
 		...overrides,
 	};
 }
@@ -232,6 +234,45 @@ describe("runCheck", () => {
 				deps(backend, { isWorkspaceRoot: async () => true }),
 			),
 		).rejects.toBeInstanceOf(CheckWorkspaceRootError);
+	});
+
+	// Stryker took 13 to 17 seconds on a Jest package before saying only that
+	// no tests ran.
+	it("says a Jest package is not supported before starting the engine", async () => {
+		const { backend, state } = fakeBackend([]);
+
+		const error = await runCheck(
+			"/repo",
+			options,
+			deps(backend, {
+				detectRunner: async () => ({
+					kind: "jest",
+					evidence: "jest.config.ts",
+				}),
+			}),
+		).catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(CheckRunnerError);
+		expect((error as CheckRunnerError).message).toMatch(
+			/Jest \(jest\.config\.ts\)/,
+		);
+		expect(state.request).toBeUndefined();
+	});
+
+	it("takes --vitest-config as saying the package runs Vitest", async () => {
+		const { backend, state } = fakeBackend([
+			baseline,
+			{ kind: "plan", mutants: [] },
+			{ kind: "finished" },
+		]);
+
+		await runCheck(
+			"/repo",
+			{ ...options, vitestConfig: "vitest.unit.config.ts" },
+			deps(backend, { detectRunner: async () => ({ kind: "none" }) }),
+		);
+
+		expect(state.request?.vitestConfig).toBe("vitest.unit.config.ts");
 	});
 
 	it("notes a file edited during the run, whose report quotes it as it was", async () => {

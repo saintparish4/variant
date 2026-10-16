@@ -4,6 +4,8 @@ import type { TaskProvenance } from "../types/provenance.js";
 
 export class VariantError extends Error {
 	hint?: string;
+	/** Lines of evidence printed between the message and the hint. */
+	details?: string[];
 	/**
 	 * Why the task that produced this failure was running. Attached by the
 	 * runner so the failure and its reason travel together; absent on errors
@@ -142,6 +144,11 @@ export class BaselineFailedError extends VariantError {
 				? "The tests fail before any mutation, so no result could be trusted"
 				: `${failingTests.length} test${failingTests.length === 1 ? "" : "s"} fail before any mutation, so no result could be trusted`,
 		);
+		this.details = failingTests
+			.slice(0, 10)
+			.map((test) =>
+				test.message === "" ? test.name : `${test.name}: ${test.message}`,
+			);
 		this.hint =
 			"Make the tests pass first. If `vitest run` already passes outside variant, the copy variant runs them in is the cause: a path outside this directory (such as a tsconfig `extends`), git used by a test, or an absolute path.";
 	}
@@ -154,8 +161,12 @@ export class CheckBackendError extends VariantError {
 		public output: string,
 	) {
 		super("CHECK_BACKEND", message);
+		const lines = output.split(/\r?\n/).filter((line) => line.trim() !== "");
+		this.details = lines.slice(-12);
 		this.hint =
-			"The engine's last output is shown above. If the tests pass with `vitest run`, please report this with that output.";
+			lines.length > 0
+				? "Above is the engine's last output. If the tests pass with `vitest run`, please report this with it."
+				: "If the tests pass with `vitest run`, please report this.";
 	}
 }
 
@@ -172,6 +183,22 @@ export class CheckWorkspaceRootError extends VariantError {
 		);
 		this.hint =
 			"cd into the package whose code changed and run `variant check` there.";
+	}
+}
+
+/** The package does not test with Vitest, the one runner `check` supports. */
+export class CheckRunnerError extends VariantError {
+	constructor(found: { kind: "jest"; evidence: string } | { kind: "none" }) {
+		super(
+			"CHECK_RUNNER",
+			found.kind === "jest"
+				? `This package tests with Jest (${found.evidence}); \`variant check\` runs Vitest only`
+				: "No Vitest here: no `vitest` dependency, script or config in this package",
+		);
+		this.hint =
+			found.kind === "jest"
+				? "Jest support is not built yet; see docs/check.md for what is supported."
+				: "Run it from the package that runs Vitest, or pass --vitest-config <file>.";
 	}
 }
 

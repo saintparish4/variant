@@ -21,6 +21,7 @@ export function renderError(
 ): void {
 	const colors = getColors();
 	write(`${colors.red(`[${err.code}]`)} ${err.message}\n`);
+	for (const line of err.details ?? []) write(`${colors.dim(`  ${line}`)}\n`);
 	// Context between the failure and the fix: what happened, why this task was
 	// running, then what to do about it.
 	if (err.provenance) {

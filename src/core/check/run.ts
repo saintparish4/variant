@@ -6,11 +6,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
 	BaselineFailedError,
 	CheckBackendError,
+	CheckRunnerError,
 	CheckWorkspaceRootError,
 	GitRefError,
 } from "../errors.js";
@@ -37,6 +38,8 @@ import type { FileHunks } from "./hunks.js";
 import { parseZeroContextDiff } from "./hunks.js";
 import type { CheckResult, StopReason } from "./result.js";
 import { assembleCheckResult } from "./result.js";
+import type { RunnerVerdict } from "./runner.js";
+import { detectRunner } from "./runner.js";
 import type { Selection } from "./selection.js";
 import { selectMutants } from "./selection.js";
 import type { SymbolLookup } from "./symbols.js";
@@ -70,6 +73,7 @@ export interface CheckDeps {
 	readDiff: (ref: string, file: string) => Promise<string | null>;
 	readFile: (file: string) => Promise<string | null>;
 	isWorkspaceRoot: () => Promise<boolean>;
+	detectRunner: () => Promise<RunnerVerdict>;
 	symbols?: (
 		file: string,
 		content: string,
@@ -129,6 +133,11 @@ export function checkDeps(cwd: string, backend: MutationBackend): CheckDeps {
 		readDiff: (ref, file) => readZeroContextDiff(cwd, ref, file),
 		readFile: (file) => readText(path.join(cwd, file)),
 		isWorkspaceRoot: () => isWorkspaceRoot(cwd),
+		detectRunner: async () =>
+			detectRunner(
+				await readText(path.join(cwd, "package.json")),
+				await readdir(cwd).catch(() => []),
+			),
 		symbols: createSymbolReader(),
 	};
 }
@@ -175,6 +184,10 @@ export async function runCheck(
 	const base = await deps.resolveBase(options.base);
 	await deps.assertBase(base.ref);
 	if (await deps.isWorkspaceRoot()) throw new CheckWorkspaceRootError();
+	if (options.vitestConfig === undefined) {
+		const runner = await deps.detectRunner();
+		if (runner.kind !== "vitest") throw new CheckRunnerError(runner);
+	}
 
 	const [changed, untracked] = await Promise.all([
 		deps.listChangedFiles(base.ref),
