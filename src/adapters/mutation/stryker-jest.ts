@@ -225,9 +225,14 @@ export async function prepareJest(
 	return undefined;
 }
 
+/**
+ * Native, as Jest's own: on Windows the JavaScript one keeps an 8.3 short
+ * name (`RUNNER~1`) that Jest's rootDir has expanded, and every package
+ * read as outside itself.
+ */
 function realOrResolved(file: string): string {
 	try {
-		return realpathSync(file);
+		return realpathSync.native(file);
 	} catch {
 		return path.resolve(file);
 	}
