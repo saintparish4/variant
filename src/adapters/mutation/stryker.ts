@@ -256,17 +256,61 @@ function isAlive(pid: number): boolean {
 }
 
 /**
- * Removes a run's files. Refuses any path outside the check directory: the
- * sandboxes hold a link to the real `node_modules`, and a removal that
- * followed it would delete the user's dependencies.
+ * Retries of a removal that finds a file still held, waiting 100 ms longer
+ * each time: about 5.5 s in all. Windows frees a killed process's files a
+ * while after taskkill returns, and antivirus holds files just written.
  */
-async function removeInside(root: string, target: string): Promise<void> {
+const REMOVE_RETRIES = 10;
+
+/**
+ * Removes a run's files, and says whether they are gone. Refuses any path
+ * outside the check directory: the sandboxes hold a link to the real
+ * `node_modules`, and a removal that followed it would delete the user's
+ * dependencies.
+ */
+async function removeInside(root: string, target: string): Promise<boolean> {
 	const resolved = path.resolve(target);
-	if (!resolved.startsWith(path.resolve(root) + path.sep)) return;
-	await rm(resolved, { recursive: true, force: true, maxRetries: 5 });
+	if (!resolved.startsWith(path.resolve(root) + path.sep)) return false;
+	try {
+		await rm(resolved, {
+			recursive: true,
+			force: true,
+			maxRetries: REMOVE_RETRIES,
+		});
+		return true;
+	} catch {
+		return false;
+	}
 }
 
-/** Removes what a run killed outright left behind. */
+/**
+ * Removes a run's files, its owner file last: that file is how a later run
+ * finds what this one could not remove, so it goes only once the rest has.
+ * Never throws: files still held must not cost a finished run its result.
+ */
+async function removeRun(root: string, runId: string): Promise<void> {
+	const removed = await Promise.all([
+		removeInside(root, path.join(root, runId)),
+		removeInside(root, path.join(root, `${runId}.json`)),
+	]);
+	if (removed.every(Boolean)) {
+		await removeInside(root, path.join(root, `${runId}.owner`));
+	}
+}
+
+/** Removes a directory if nothing but `keep` is left in it. Never throws. */
+async function removeIfEmpty(
+	directory: string,
+	keep: readonly string[] = [],
+): Promise<void> {
+	const left = await readdir(directory).catch(() => undefined);
+	if (left === undefined || !left.every((name) => keep.includes(name))) {
+		return;
+	}
+	await rm(directory, { recursive: true, force: true }).catch(() => {});
+}
+
+/** Removes what a run killed outright, or not yet removable, left behind. */
 async function sweep(root: string): Promise<void> {
 	const names = await readdir(root).catch(() => [] as string[]);
 	await Promise.all(
@@ -279,12 +323,7 @@ async function sweep(root: string): Promise<void> {
 					).trim(),
 				);
 				if (Number.isInteger(pid) && pid > 0 && isAlive(pid)) return;
-				const runId = name.slice(0, -".owner".length);
-				await Promise.all([
-					removeInside(root, path.join(root, runId)),
-					removeInside(root, path.join(root, `${runId}.json`)),
-					removeInside(root, path.join(root, name)),
-				]);
+				await removeRun(root, name.slice(0, -".owner".length));
 			}),
 	);
 }
@@ -398,20 +437,9 @@ function startRun(
 	let stopped: Promise<void> | undefined;
 
 	const cleanup = async (): Promise<void> => {
-		await Promise.all([
-			removeInside(root, path.join(root, runId)),
-			removeInside(root, path.join(root, `${runId}.json`)),
-			removeInside(root, path.join(root, `${runId}.owner`)),
-		]);
-		const left = await readdir(root).catch(() => [] as string[]);
-		if (left.every((name) => name === ".gitignore")) {
-			await rm(root, { recursive: true, force: true });
-		}
-		if (createdVariantDir) {
-			const rest = await readdir(variantDir).catch(() => [] as string[]);
-			if (rest.length === 0)
-				await rm(variantDir, { recursive: true, force: true });
-		}
+		await removeRun(root, runId);
+		await removeIfEmpty(root, [".gitignore"]);
+		if (createdVariantDir) await removeIfEmpty(variantDir);
 	};
 
 	// The run's files, written before the host starts. Settles either way.

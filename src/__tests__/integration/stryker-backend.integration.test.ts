@@ -3,7 +3,15 @@
  * that cannot start. No Stryker runs here.
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+	chmodSync,
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +21,9 @@ import type { BackendEvent } from "../../core/check/backend.js";
 
 const CRASHING_HOST = fileURLToPath(
 	new URL("../fixtures/mutation/crash-host.mjs", import.meta.url),
+);
+const LOCKING_HOST = fileURLToPath(
+	new URL("../fixtures/mutation/locking-host.mjs", import.meta.url),
 );
 const dirs: string[] = [];
 
@@ -30,6 +41,13 @@ function project(): string {
 }
 
 const backend = createStrykerBackend({ hostPath: CRASHING_HOST });
+const lockingBackend = createStrykerBackend({ hostPath: LOCKING_HOST });
+
+/** A process id nothing runs under any more. */
+function deadPid(): number {
+	const { pid } = spawnSync(process.execPath, ["-e", ""]);
+	return pid;
+}
 
 describe("the Stryker backend", () => {
 	it("reports a host that cannot start, with its output, and leaves nothing behind", async () => {
@@ -71,4 +89,53 @@ describe("the Stryker backend", () => {
 
 		expect(existsSync(path.join(cwd, ".variant"))).toBe(false);
 	});
+
+	// Windows frees a killed process's files after taskkill returns, and
+	// antivirus holds new ones: a sandbox still held when the run was removed
+	// threw EBUSY, and a finished check failed with it. Made unremovable here
+	// by permissions, which neither Windows nor root honours for this.
+	it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+		"finishes a run whose files cannot be removed yet, and leaves them for the next run to remove",
+		async () => {
+			const cwd = project();
+			const request = {
+				cwd,
+				mutate: [],
+				runner: { kind: "vitest" as const },
+				baselineTimeoutMinutes: 1,
+			};
+			const run = lockingBackend.start(request);
+			const events: BackendEvent[] = [];
+			for await (const event of run.events) {
+				events.push(event);
+				if (event.kind === "finished") break;
+			}
+
+			await run.stop();
+
+			expect(events).toEqual([{ kind: "finished" }]);
+			const root = path.join(cwd, ".variant", "check-tmp");
+			const owners = readdirSync(root).filter((name) =>
+				name.endsWith(".owner"),
+			);
+			expect(owners).toHaveLength(1);
+
+			// Once this run's process is gone and the files are free, the next
+			// run removes them.
+			const owner = owners[0] ?? "";
+			chmodSync(
+				path.join(root, owner.slice(0, -".owner".length), "locked"),
+				0o700,
+			);
+			writeFileSync(path.join(root, owner), String(deadPid()));
+			const next = backend.start(request);
+			for await (const _ of next.events) {
+				// Drained: the crashing host reports and exits.
+			}
+			await next.stop();
+
+			// `.variant/` itself stays: a run removes only one it created.
+			expect(existsSync(root)).toBe(false);
+		},
+	);
 });
