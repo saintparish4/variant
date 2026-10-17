@@ -12,6 +12,10 @@ import type { HostMessage, HostRequest } from "./protocol.js";
 import { UNSUPPORTED } from "./protocol.js";
 import { RUNNER_PACKAGES, strykerOptions } from "./stryker-options.js";
 import {
+	strykerObjectUtils,
+	tolerateFailedKills,
+} from "./stryker-worker-kill.js";
+import {
 	canRewriteTsconfig,
 	loadTypescriptAsStryker,
 	tsconfigLeavesPackage,
@@ -52,6 +56,8 @@ async function run(request: HostRequest): Promise<void> {
 			text: "the tsconfig here points outside this package (a relative `extends` or `references`). This TypeScript has no JavaScript API (TypeScript 7 does not), so that path was not adjusted for the copy the tests ran in.",
 		});
 	}
+	const objectUtils = await strykerObjectUtils();
+	if (objectUtils !== undefined) tolerateFailedKills(objectUtils);
 	try {
 		await new Stryker(
 			strykerOptions(request, {
